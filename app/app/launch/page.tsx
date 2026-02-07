@@ -117,6 +117,17 @@ export default function LaunchPage() {
     }
   }, [mintInput, connection]);
 
+  // Helper: send tx and confirm with proper blockhash ordering
+  const sendAndConfirm = useCallback(async (tx: Transaction, signers?: Keypair[]) => {
+    const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash("confirmed");
+    tx.recentBlockhash = blockhash;
+    tx.feePayer = publicKey!;
+    if (signers) signers.forEach((s) => tx.partialSign(s));
+    const sig = await sendTransaction(tx, connection);
+    await connection.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight }, "confirmed");
+    return sig;
+  }, [connection, publicKey, sendTransaction]);
+
   const deploy = useCallback(async () => {
     if (!publicKey || !tokenInfo) return;
     setDeploying(true);
@@ -162,12 +173,7 @@ export default function LaunchPage() {
         space: config.slabSize,
         programId,
       }));
-      const { blockhash: bh0, lastValidBlockHeight: lv0 } = await connection.getLatestBlockhash("confirmed");
-      createSlabTx.recentBlockhash = bh0;
-      createSlabTx.feePayer = publicKey;
-      createSlabTx.partialSign(slab);
-      const sig0 = await sendTransaction(createSlabTx, connection);
-      await connection.confirmTransaction({ signature: sig0, blockhash: bh0, lastValidBlockHeight: lv0 }, "confirmed");
+      const sig0 = await sendAndConfirm(createSlabTx, [slab]);
       updateStep(0, { status: "done", sig: sig0 });
 
       const slabPk = slab.publicKey;
@@ -182,9 +188,7 @@ export default function LaunchPage() {
       const createAtaTx = new Transaction();
       createAtaTx.add(ComputeBudgetProgram.setComputeUnitPrice({ microLamports: config.priorityFee }));
       createAtaTx.add(createAssociatedTokenAccountInstruction(publicKey, vaultAta, vaultPda, collateralMint));
-      const sig1 = await sendTransaction(createAtaTx, connection);
-      const { blockhash: bh1, lastValidBlockHeight: lv1 } = await connection.getLatestBlockhash("confirmed");
-      await connection.confirmTransaction({ signature: sig1, blockhash: bh1, lastValidBlockHeight: lv1 }, "confirmed");
+      const sig1 = await sendAndConfirm(createAtaTx);
       updateStep(1, { status: "done", sig: sig1 });
 
       // Step 2: Init market
@@ -225,9 +229,7 @@ export default function LaunchPage() {
       initTx.add(ComputeBudgetProgram.setComputeUnitPrice({ microLamports: config.priorityFee }));
       initTx.add(ComputeBudgetProgram.setComputeUnitLimit({ units: 200_000 }));
       initTx.add(buildIx({ programId, keys: initMarketKeys, data: initMarketData }));
-      const sig2 = await sendTransaction(initTx, connection);
-      const { blockhash: bh2, lastValidBlockHeight: lv2 } = await connection.getLatestBlockhash("confirmed");
-      await connection.confirmTransaction({ signature: sig2, blockhash: bh2, lastValidBlockHeight: lv2 }, "confirmed");
+      const sig2 = await sendAndConfirm(initTx);
       updateStep(2, { status: "done", sig: sig2 });
 
       // Step 3: Set oracle authority
@@ -240,9 +242,7 @@ export default function LaunchPage() {
         keys: buildAccountMetas(ACCOUNTS_SET_ORACLE_AUTHORITY, [publicKey, slabPk]),
         data: encodeSetOracleAuthority({ newAuthority: publicKey }),
       }));
-      const sig3 = await sendTransaction(setAuthTx, connection);
-      const { blockhash: bh3, lastValidBlockHeight: lv3 } = await connection.getLatestBlockhash("confirmed");
-      await connection.confirmTransaction({ signature: sig3, blockhash: bh3, lastValidBlockHeight: lv3 }, "confirmed");
+      const sig3 = await sendAndConfirm(setAuthTx);
       updateStep(3, { status: "done", sig: sig3 });
 
       // Step 4: Push price
@@ -256,9 +256,7 @@ export default function LaunchPage() {
         keys: buildAccountMetas(ACCOUNTS_PUSH_ORACLE_PRICE, [publicKey, slabPk]),
         data: encodePushOraclePrice({ priceE6, timestamp: now.toString() }),
       }));
-      const sig4 = await sendTransaction(pushTx, connection);
-      const { blockhash: bh4, lastValidBlockHeight: lv4 } = await connection.getLatestBlockhash("confirmed");
-      await connection.confirmTransaction({ signature: sig4, blockhash: bh4, lastValidBlockHeight: lv4 }, "confirmed");
+      const sig4 = await sendAndConfirm(pushTx);
       updateStep(4, { status: "done", sig: sig4 });
 
       // Step 5: Funding params
@@ -285,9 +283,7 @@ export default function LaunchPage() {
           threshMinStep: "1",
         }),
       }));
-      const sig5 = await sendTransaction(cfgTx, connection);
-      const { blockhash: bh5, lastValidBlockHeight: lv5 } = await connection.getLatestBlockhash("confirmed");
-      await connection.confirmTransaction({ signature: sig5, blockhash: bh5, lastValidBlockHeight: lv5 }, "confirmed");
+      const sig5 = await sendAndConfirm(cfgTx);
       updateStep(5, { status: "done", sig: sig5 });
 
       // Step 6: Initial crank
@@ -300,9 +296,7 @@ export default function LaunchPage() {
         keys: buildAccountMetas(ACCOUNTS_KEEPER_CRANK, [publicKey, slabPk, SYSVAR_CLOCK_PUBKEY, slabPk]),
         data: encodeKeeperCrank({ callerIdx: 65535, allowPanic: false }),
       }));
-      const sig6 = await sendTransaction(crank1Tx, connection);
-      const { blockhash: bh6, lastValidBlockHeight: lv6 } = await connection.getLatestBlockhash("confirmed");
-      await connection.confirmTransaction({ signature: sig6, blockhash: bh6, lastValidBlockHeight: lv6 }, "confirmed");
+      const sig6 = await sendAndConfirm(crank1Tx);
       updateStep(6, { status: "done", sig: sig6 });
 
       // Step 7: Create matcher context
@@ -350,12 +344,7 @@ export default function LaunchPage() {
         data: initVammData,
       });
 
-      const { blockhash: bh7, lastValidBlockHeight: lv7 } = await connection.getLatestBlockhash("confirmed");
-      createMatcherTx.recentBlockhash = bh7;
-      createMatcherTx.feePayer = publicKey;
-      createMatcherTx.partialSign(matcherCtxKp);
-      const sig7 = await sendTransaction(createMatcherTx, connection);
-      await connection.confirmTransaction({ signature: sig7, blockhash: bh7, lastValidBlockHeight: lv7 }, "confirmed");
+      const sig7 = await sendAndConfirm(createMatcherTx, [matcherCtxKp]);
       updateStep(7, { status: "done", sig: sig7 });
 
       // Step 8: Init LP
@@ -375,9 +364,7 @@ export default function LaunchPage() {
           feePayment: "2000000",
         }),
       }));
-      const sig8 = await sendTransaction(initLpTx, connection);
-      const { blockhash: bh8, lastValidBlockHeight: lv8 } = await connection.getLatestBlockhash("confirmed");
-      await connection.confirmTransaction({ signature: sig8, blockhash: bh8, lastValidBlockHeight: lv8 }, "confirmed");
+      const sig8 = await sendAndConfirm(initLpTx);
       updateStep(8, { status: "done", sig: sig8 });
 
       // Step 9: Deposit LP collateral
@@ -394,9 +381,7 @@ export default function LaunchPage() {
         ]),
         data: encodeDepositCollateral({ userIdx: lpIndex, amount: collateralAmount.toString() }),
       }));
-      const sig9 = await sendTransaction(depositTx, connection);
-      const { blockhash: bh9, lastValidBlockHeight: lv9 } = await connection.getLatestBlockhash("confirmed");
-      await connection.confirmTransaction({ signature: sig9, blockhash: bh9, lastValidBlockHeight: lv9 }, "confirmed");
+      const sig9 = await sendAndConfirm(depositTx);
       updateStep(9, { status: "done", sig: sig9 });
 
       // Step 10: Final crank
@@ -415,9 +400,7 @@ export default function LaunchPage() {
         keys: buildAccountMetas(ACCOUNTS_KEEPER_CRANK, [publicKey, slabPk, SYSVAR_CLOCK_PUBKEY, slabPk]),
         data: encodeKeeperCrank({ callerIdx: 65535, allowPanic: false }),
       }));
-      const sig10 = await sendTransaction(finalTx, connection);
-      const { blockhash: bh10, lastValidBlockHeight: lv10 } = await connection.getLatestBlockhash("confirmed");
-      await connection.confirmTransaction({ signature: sig10, blockhash: bh10, lastValidBlockHeight: lv10 }, "confirmed");
+      const sig10 = await sendAndConfirm(finalTx);
       updateStep(10, { status: "done", sig: sig10 });
 
       // Register market in Supabase
@@ -450,7 +433,7 @@ export default function LaunchPage() {
     } finally {
       setDeploying(false);
     }
-  }, [publicKey, sendTransaction, connection, tokenInfo, initialPrice, maxLeverage, tradingFeeBps, lpCollateral]);
+  }, [publicKey, sendAndConfirm, connection, tokenInfo, initialPrice, maxLeverage, tradingFeeBps, lpCollateral]);
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-12">
