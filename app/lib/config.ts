@@ -5,7 +5,7 @@ function getNetwork(): Network {
     const stored = localStorage.getItem("percolator_network");
     if (stored === "devnet" || stored === "mainnet") return stored;
   }
-  return (process.env.NEXT_PUBLIC_DEFAULT_NETWORK as Network) ?? "mainnet";
+  return (process.env.NEXT_PUBLIC_DEFAULT_NETWORK as Network) ?? "devnet";
 }
 
 const CONFIGS = {
@@ -28,8 +28,9 @@ export function getConfig() {
   return {
     ...CONFIGS[network],
     network,
-    // Smaller slab = cheaper rent. 128 accounts = ~0.22 SOL, plenty for early markets
-    slabSize: 31_296,  // 128 max accounts
+    // Slab size is fixed by the program — next_free array is hardcoded [u16; 4096]
+    // 9136 (engine+header) + 240 * 4096 (accounts) + padding = 992,560
+    slabSize: 992_560,
     matcherCtxSize: 320,
     priorityFee: 50_000,
   };

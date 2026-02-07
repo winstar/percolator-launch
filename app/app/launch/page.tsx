@@ -73,7 +73,7 @@ export default function LaunchPage() {
   const [maxLeverage, setMaxLeverage] = useState(10);
   const [tradingFeeBps, setTradingFeeBps] = useState(10);
   const [lpCollateral, setLpCollateral] = useState("1000000");
-  const [maxAccounts, setMaxAccounts] = useState(128);
+  const maxAccounts = 4096; // Fixed by on-chain program
 
   // Deploy
   const [deploySteps, setDeploySteps] = useState<DeployStep[]>([]);
@@ -196,8 +196,7 @@ export default function LaunchPage() {
     const programId = new PublicKey(config.programId);
     const matcherProgramId = new PublicKey(config.matcherProgramId);
     const collateralMint = new PublicKey(tokenInfo.mint);
-    // Calculate slab size based on maxAccounts: ~240 bytes per account + 560 header + 16 alignment
-    const slabSize = 560 + (maxAccounts * 240) + 16;
+    const slabSize = config.slabSize;
 
     const steps: DeployStep[] = [
       { label: "Create slab account", status: "pending" },
@@ -514,7 +513,7 @@ export default function LaunchPage() {
     } finally {
       setDeploying(false);
     }
-  }, [publicKey, sendAndConfirm, connection, tokenInfo, initialPrice, maxLeverage, tradingFeeBps, lpCollateral, maxAccounts]);
+  }, [publicKey, sendAndConfirm, connection, tokenInfo, initialPrice, maxLeverage, tradingFeeBps, lpCollateral]);
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-12">
@@ -635,22 +634,8 @@ export default function LaunchPage() {
               />
             </div>
 
-            <div>
-              <label className="mb-1 block text-sm text-slate-400">Max Traders (slab size)</label>
-              <select
-                value={maxAccounts}
-                onChange={(e) => setMaxAccounts(parseInt(e.target.value))}
-                className="w-full rounded-xl border border-[#1e2433] bg-[#0a0b0f] px-4 py-3 text-white focus:border-emerald-500 focus:outline-none"
-              >
-                <option value={64}>64 accounts (~0.11 SOL)</option>
-                <option value={128}>128 accounts (~0.22 SOL)</option>
-                <option value={256}>256 accounts (~0.43 SOL)</option>
-                <option value={512}>512 accounts (~0.86 SOL)</option>
-                <option value={1024}>1,024 accounts (~1.7 SOL)</option>
-                <option value={2048}>2,048 accounts (~3.4 SOL)</option>
-                <option value={4096}>4,096 accounts (~6.9 SOL)</option>
-              </select>
-              <p className="mt-1 text-xs text-slate-600">SOL is refundable if you close the market later</p>
+            <div className="rounded-xl border border-yellow-500/10 bg-yellow-500/5 p-4">
+              <p className="text-sm text-yellow-400">⚠️ Deploying a market requires ~6.9 SOL for on-chain storage (refundable if you close the market later). Supports up to 4,096 traders.</p>
             </div>
           </div>
 
