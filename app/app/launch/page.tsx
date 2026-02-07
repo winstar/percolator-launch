@@ -438,7 +438,11 @@ export default function LaunchPage() {
       // Step 9: Deposit LP collateral
       updateStep(9, { status: "active" });
       const decimals = tokenInfo.decimals;
-      const collateralAmount = BigInt(Math.round(parseFloat(lpCollateral) * (10 ** decimals)));
+      // Query actual balance to avoid insufficient funds (InitLP fee reduces balance)
+      const { getAccount } = await import("@solana/spl-token");
+      const userTokenAccount = await getAccount(connection, userAta);
+      const requestedAmount = BigInt(Math.round(parseFloat(lpCollateral) * (10 ** decimals)));
+      const collateralAmount = requestedAmount > userTokenAccount.amount ? userTokenAccount.amount : requestedAmount;
       const depositTx = new Transaction();
       depositTx.add(ComputeBudgetProgram.setComputeUnitPrice({ microLamports: config.priorityFee }));
       depositTx.add(ComputeBudgetProgram.setComputeUnitLimit({ units: 100_000 }));
