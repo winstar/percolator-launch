@@ -337,9 +337,9 @@ export default function LaunchPage() {
         data: encodeUpdateConfig({
           fundingHorizonSlots: "500",
           fundingKBps: "100",
-          fundingInvScaleNotionalE6: "1000000000000",
-          fundingMaxPremiumBps: "500",
-          fundingMaxBpsPerSlot: "5",
+          fundingInvScaleNotionalE6: "1000000",
+          fundingMaxPremiumBps: "5000",
+          fundingMaxBpsPerSlot: "50",
           threshFloor: "0",
           threshRiskBps: "50",
           threshUpdateIntervalSlots: "10",
