@@ -314,26 +314,27 @@ export default function LaunchPage() {
         programId: matcherProgramId,
       }));
 
-      // Init vAMM
+      // Init vAMM — use Uint8Array + DataView (browser-safe, no Buffer.writeBigUInt64LE)
       const lpIndex = 0;
       const [lpPda] = deriveLpPda(programId, slabPk, lpIndex);
-      const initVammData = Buffer.alloc(66);
+      const initVammData = new Uint8Array(66);
+      const vammView = new DataView(initVammData.buffer);
       {
         let off = 0;
-        initVammData.writeUInt8(2, off); off += 1;
-        initVammData.writeUInt8(0, off); off += 1;
-        initVammData.writeUInt32LE(50, off); off += 4;
-        initVammData.writeUInt32LE(50, off); off += 4;
-        initVammData.writeUInt32LE(200, off); off += 4;
-        initVammData.writeUInt32LE(0, off); off += 4;
+        initVammData[off] = 2; off += 1;                          // tag
+        initVammData[off] = 0; off += 1;                          // sub-tag
+        vammView.setUint32(off, 50, true); off += 4;              // spread_bps
+        vammView.setUint32(off, 50, true); off += 4;              // spread_bps_2
+        vammView.setUint32(off, 200, true); off += 4;             // max_spread_bps
+        vammView.setUint32(off, 0, true); off += 4;               // reserved
         const liq = 10_000_000_000_000n;
-        initVammData.writeBigUInt64LE(liq & 0xFFFFFFFFFFFFFFFFn, off); off += 8;
-        initVammData.writeBigUInt64LE(liq >> 64n, off); off += 8;
+        vammView.setBigUint64(off, liq, true); off += 8;          // liquidity lo
+        vammView.setBigUint64(off, 0n, true); off += 8;           // liquidity hi
         const maxFill = 1_000_000_000_000n;
-        initVammData.writeBigUInt64LE(maxFill & 0xFFFFFFFFFFFFFFFFn, off); off += 8;
-        initVammData.writeBigUInt64LE(maxFill >> 64n, off); off += 8;
-        initVammData.writeBigUInt64LE(0n, off); off += 8;
-        initVammData.writeBigUInt64LE(0n, off); off += 8;
+        vammView.setBigUint64(off, maxFill, true); off += 8;      // max_fill lo
+        vammView.setBigUint64(off, 0n, true); off += 8;           // max_fill hi
+        vammView.setBigUint64(off, 0n, true); off += 8;           // reserved
+        vammView.setBigUint64(off, 0n, true); off += 8;           // reserved
       }
       createMatcherTx.add({
         programId: matcherProgramId,
@@ -341,7 +342,7 @@ export default function LaunchPage() {
           { pubkey: lpPda, isSigner: false, isWritable: false },
           { pubkey: matcherCtxKp.publicKey, isSigner: false, isWritable: true },
         ],
-        data: initVammData,
+        data: Buffer.from(initVammData),
       });
 
       const sig7 = await sendAndConfirm(createMatcherTx, [matcherCtxKp]);
