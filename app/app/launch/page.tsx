@@ -427,14 +427,26 @@ export default function LaunchPage() {
 
       setStep(3);
     } catch (e) {
-      const errMsg = e instanceof Error ? e.message : String(e);
+      let errMsg: string;
+      if (e instanceof Error) {
+        errMsg = e.message;
+      } else if (typeof e === "object" && e !== null) {
+        // Handle Solana transaction errors (InstructionError, etc.)
+        try { errMsg = JSON.stringify(e); } catch { errMsg = String(e); }
+        // Extract useful info from SendTransactionError
+        if ("logs" in e && Array.isArray((e as any).logs)) {
+          const logs = (e as any).logs as string[];
+          const errorLog = logs.find((l: string) => l.includes("Error") || l.includes("failed"));
+          if (errorLog) errMsg = errorLog;
+        }
+        if ("message" in e) errMsg = (e as any).message;
+      } else {
+        errMsg = String(e);
+      }
       console.error("Deploy error:", e);
+      console.error("Error details:", JSON.stringify(e, null, 2));
       const activeIdx = steps.findIndex((s) => s.status === "active");
       if (activeIdx >= 0) updateStep(activeIdx, { status: "error", error: errMsg });
-      // Also show in a user-visible way
-      if (errMsg.includes("User rejected")) {
-        if (activeIdx >= 0) updateStep(activeIdx, { status: "error", error: "Transaction rejected by wallet" });
-      }
     } finally {
       setDeploying(false);
     }
