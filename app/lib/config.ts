@@ -28,10 +28,9 @@ export function getConfig() {
   return {
     ...CONFIGS[network],
     network,
-    // Slab size: ~560 byte header + ~240 bytes per account
-    // Devnet: use 256 accounts (61,999 bytes, ~0.43 SOL) for cheap testing
-    // Mainnet: full 4096 accounts (992,560 bytes, ~6.85 SOL)
-    slabSize: network === "devnet" ? 61_999 : 992_560,
+    // Slab size is fixed by the program — next_free array is hardcoded [u16; 4096]
+    // 992,560 bytes = ~6.85 SOL rent. Cannot use smaller sizes.
+    slabSize: 992_560,
     matcherCtxSize: 320,
     priorityFee: 50_000,
   };
