@@ -1,5 +1,0 @@
-{
-  "buildCommand": "pnpm --filter @percolator/core build && cd app && pnpm next build",
-  "outputDirectory": "app/.next",
-  "installCommand": "pnpm install"
-}
