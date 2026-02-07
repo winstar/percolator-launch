@@ -73,11 +73,81 @@ export default function LaunchPage() {
   const [maxLeverage, setMaxLeverage] = useState(10);
   const [tradingFeeBps, setTradingFeeBps] = useState(10);
   const [lpCollateral, setLpCollateral] = useState("1000000");
+  const [maxAccounts, setMaxAccounts] = useState(128);
 
   // Deploy
   const [deploySteps, setDeploySteps] = useState<DeployStep[]>([]);
   const [deploying, setDeploying] = useState(false);
   const [slabAddress, setSlabAddress] = useState("");
+  const [slabKeypair, setSlabKeypair] = useState<Keypair | null>(null);
+  const [recovering, setRecovering] = useState(false);
+
+  // Helper: send tx and confirm with proper blockhash ordering
+  const sendAndConfirm = useCallback(async (tx: Transaction, signers?: Keypair[]) => {
+    const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash("confirmed");
+    tx.recentBlockhash = blockhash;
+    tx.feePayer = publicKey!;
+    if (signers) signers.forEach((s) => tx.partialSign(s));
+    const sig = await sendTransaction(tx, connection);
+    await connection.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight }, "confirmed");
+    return sig;
+  }, [connection, publicKey, sendTransaction]);
+
+  // Recover SOL from failed slab — closes the account and returns rent to wallet
+  const recoverSlab = useCallback(async () => {
+    if (!publicKey || !slabKeypair) return;
+    setRecovering(true);
+    try {
+      const slabPk = slabKeypair.publicKey;
+      const info = await connection.getAccountInfo(slabPk);
+      if (!info) {
+        alert("Slab account not found — SOL may have already been recovered.");
+        setRecovering(false);
+        return;
+      }
+
+      // Transfer all lamports from slab to wallet, then assign to system program
+      const tx = new Transaction();
+      tx.add(ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 50_000 }));
+      // We need to use the system program to transfer lamports and close
+      // Since the slab is owned by the percolator program after init, we can only close
+      // if the market hasn't been initialized. If it has, use CloseSlab instruction.
+      const config = getConfig();
+      const programId = new PublicKey(config.programId);
+
+      if (info.owner.equals(programId)) {
+        // Market was initialized — use CloseSlab instruction (tag 13)
+        // CloseSlab: admin(signer,writable) + slab(writable)
+        const closeData = new Uint8Array([13]); // CloseSlab tag
+        tx.add({
+          programId,
+          keys: [
+            { pubkey: publicKey, isSigner: true, isWritable: true },
+            { pubkey: slabPk, isSigner: false, isWritable: true },
+          ],
+          data: Buffer.from(closeData),
+        });
+      } else {
+        // Still owned by system program — just transfer lamports back
+        tx.add(SystemProgram.transfer({
+          fromPubkey: slabPk,
+          toPubkey: publicKey,
+          lamports: info.lamports,
+        }));
+      }
+
+      await sendAndConfirm(tx, info.owner.equals(programId) ? [] : [slabKeypair]);
+      alert(`Recovered ${(info.lamports / 1e9).toFixed(4)} SOL!`);
+      setSlabKeypair(null);
+      setStep(0);
+      setDeploySteps([]);
+    } catch (e) {
+      console.error("Recovery error:", e);
+      alert(`Recovery failed: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setRecovering(false);
+    }
+  }, [publicKey, slabKeypair, connection, sendAndConfirm]);
 
   const fetchToken = useCallback(async () => {
     setFetchingToken(true);
@@ -117,17 +187,6 @@ export default function LaunchPage() {
     }
   }, [mintInput, connection]);
 
-  // Helper: send tx and confirm with proper blockhash ordering
-  const sendAndConfirm = useCallback(async (tx: Transaction, signers?: Keypair[]) => {
-    const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash("confirmed");
-    tx.recentBlockhash = blockhash;
-    tx.feePayer = publicKey!;
-    if (signers) signers.forEach((s) => tx.partialSign(s));
-    const sig = await sendTransaction(tx, connection);
-    await connection.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight }, "confirmed");
-    return sig;
-  }, [connection, publicKey, sendTransaction]);
-
   const deploy = useCallback(async () => {
     if (!publicKey || !tokenInfo) return;
     setDeploying(true);
@@ -137,6 +196,8 @@ export default function LaunchPage() {
     const programId = new PublicKey(config.programId);
     const matcherProgramId = new PublicKey(config.matcherProgramId);
     const collateralMint = new PublicKey(tokenInfo.mint);
+    // Calculate slab size based on maxAccounts: ~240 bytes per account + 560 header + 16 alignment
+    const slabSize = 560 + (maxAccounts * 240) + 16;
 
     const steps: DeployStep[] = [
       { label: "Create slab account", status: "pending" },
@@ -162,7 +223,8 @@ export default function LaunchPage() {
       // Step 0: Create slab
       updateStep(0, { status: "active" });
       const slab = Keypair.generate();
-      const rentExempt = await connection.getMinimumBalanceForRentExemption(config.slabSize);
+      setSlabKeypair(slab);
+      const rentExempt = await connection.getMinimumBalanceForRentExemption(slabSize);
 
       const createSlabTx = new Transaction();
       createSlabTx.add(ComputeBudgetProgram.setComputeUnitPrice({ microLamports: config.priorityFee }));
@@ -171,7 +233,7 @@ export default function LaunchPage() {
         fromPubkey: publicKey,
         newAccountPubkey: slab.publicKey,
         lamports: rentExempt,
-        space: config.slabSize,
+        space: slabSize,
         programId,
       }));
       const sig0 = await sendAndConfirm(createSlabTx, [slab]);
@@ -211,7 +273,7 @@ export default function LaunchPage() {
         maintenanceMarginBps,
         initialMarginBps,
         tradingFeeBps: tradingFeeBps.toString(),
-        maxAccounts: "128",
+        maxAccounts: maxAccounts.toString(),
         newAccountFee: "1000000",
         riskReductionThreshold: "0",
         maintenanceFeePerSlot: "0",
@@ -452,7 +514,7 @@ export default function LaunchPage() {
     } finally {
       setDeploying(false);
     }
-  }, [publicKey, sendAndConfirm, connection, tokenInfo, initialPrice, maxLeverage, tradingFeeBps, lpCollateral]);
+  }, [publicKey, sendAndConfirm, connection, tokenInfo, initialPrice, maxLeverage, tradingFeeBps, lpCollateral, maxAccounts]);
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-12">
@@ -572,6 +634,24 @@ export default function LaunchPage() {
                 className="w-full rounded-xl border border-[#1e2433] bg-[#0a0b0f] px-4 py-3 text-white focus:border-emerald-500 focus:outline-none"
               />
             </div>
+
+            <div>
+              <label className="mb-1 block text-sm text-slate-400">Max Traders (slab size)</label>
+              <select
+                value={maxAccounts}
+                onChange={(e) => setMaxAccounts(parseInt(e.target.value))}
+                className="w-full rounded-xl border border-[#1e2433] bg-[#0a0b0f] px-4 py-3 text-white focus:border-emerald-500 focus:outline-none"
+              >
+                <option value={64}>64 accounts (~0.11 SOL)</option>
+                <option value={128}>128 accounts (~0.22 SOL)</option>
+                <option value={256}>256 accounts (~0.43 SOL)</option>
+                <option value={512}>512 accounts (~0.86 SOL)</option>
+                <option value={1024}>1,024 accounts (~1.7 SOL)</option>
+                <option value={2048}>2,048 accounts (~3.4 SOL)</option>
+                <option value={4096}>4,096 accounts (~6.9 SOL)</option>
+              </select>
+              <p className="mt-1 text-xs text-slate-600">SOL is refundable if you close the market later</p>
+            </div>
           </div>
 
           <div className="mt-6 flex gap-3">
@@ -626,6 +706,30 @@ export default function LaunchPage() {
               </div>
             ))}
           </div>
+
+          {/* Recovery buttons on failure */}
+          {!deploying && deploySteps.some((s) => s.status === "error") && (
+            <div className="mt-6 space-y-3 border-t border-[#1e2433] pt-6">
+              <p className="text-sm text-slate-400">Deployment failed. You can recover your SOL or try again.</p>
+              <div className="flex gap-3">
+                {slabKeypair && (
+                  <button
+                    onClick={recoverSlab}
+                    disabled={recovering}
+                    className="flex-1 rounded-xl border border-yellow-500/30 bg-yellow-500/10 py-3 text-sm font-semibold text-yellow-400 transition-colors hover:bg-yellow-500/20 disabled:opacity-50"
+                  >
+                    {recovering ? "Recovering..." : "🔄 Recover SOL from Slab"}
+                  </button>
+                )}
+                <button
+                  onClick={() => { setStep(1); setDeploySteps([]); setSlabKeypair(null); }}
+                  className="flex-1 rounded-xl border border-slate-700 py-3 text-sm font-semibold text-slate-400 hover:bg-slate-800"
+                >
+                  ← Back to Settings
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
