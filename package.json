@@ -1,0 +1,16 @@
+{
+  "name": "percolator-launch",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "build": "pnpm -r build",
+    "dev": "pnpm --filter @percolator/app dev",
+    "build:app": "pnpm --filter @percolator/app build",
+    "build:core": "pnpm --filter @percolator/core build"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

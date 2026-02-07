@@ -1,0 +1,640 @@
+"use client";
+
+import { useState, useCallback } from "react";
+import { useWallet } from "@solana/wallet-adapter-react";
+import { useConnection } from "@solana/wallet-adapter-react";
+import {
+  PublicKey,
+  Keypair,
+  Transaction,
+  SystemProgram,
+  SYSVAR_CLOCK_PUBKEY,
+  SYSVAR_RENT_PUBKEY,
+  ComputeBudgetProgram,
+} from "@solana/web3.js";
+import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
+import {
+  encodeInitMarket,
+  encodeInitLP,
+  encodeDepositCollateral,
+  encodeTopUpInsurance,
+  encodeKeeperCrank,
+  encodeSetOracleAuthority,
+  encodePushOraclePrice,
+  encodeUpdateConfig,
+  ACCOUNTS_INIT_MARKET,
+  ACCOUNTS_INIT_LP,
+  ACCOUNTS_DEPOSIT_COLLATERAL,
+  ACCOUNTS_TOPUP_INSURANCE,
+  ACCOUNTS_KEEPER_CRANK,
+  ACCOUNTS_SET_ORACLE_AUTHORITY,
+  ACCOUNTS_PUSH_ORACLE_PRICE,
+  ACCOUNTS_UPDATE_CONFIG,
+  buildAccountMetas,
+  deriveVaultAuthority,
+  deriveLpPda,
+  buildIx,
+  getAta,
+} from "@percolator/core";
+import { config } from "@/lib/config";
+import { addMarket } from "@/lib/markets";
+import dynamic from "next/dynamic";
+
+const WalletMultiButton = dynamic(
+  () => import("@solana/wallet-adapter-react-ui").then((m) => m.WalletMultiButton),
+  { ssr: false }
+);
+
+interface TokenInfo {
+  mint: string;
+  name: string;
+  symbol: string;
+  decimals: number;
+}
+
+interface DeployStep {
+  label: string;
+  status: "pending" | "active" | "done" | "error";
+  sig?: string;
+  error?: string;
+}
+
+export default function LaunchPage() {
+  const { publicKey, sendTransaction, connected } = useWallet();
+  const { connection } = useConnection();
+
+  const [step, setStep] = useState(0); // 0=token, 1=params, 2=deploy, 3=done
+  const [mintInput, setMintInput] = useState("");
+  const [tokenInfo, setTokenInfo] = useState<TokenInfo | null>(null);
+  const [fetchingToken, setFetchingToken] = useState(false);
+  const [tokenError, setTokenError] = useState("");
+
+  // Params
+  const [initialPrice, setInitialPrice] = useState("1.00");
+  const [maxLeverage, setMaxLeverage] = useState(10);
+  const [tradingFeeBps, setTradingFeeBps] = useState(10);
+  const [lpCollateral, setLpCollateral] = useState("1000000");
+
+  // Deploy
+  const [deploySteps, setDeploySteps] = useState<DeployStep[]>([]);
+  const [deploying, setDeploying] = useState(false);
+  const [slabAddress, setSlabAddress] = useState("");
+
+  const fetchToken = useCallback(async () => {
+    setFetchingToken(true);
+    setTokenError("");
+    try {
+      const mintPk = new PublicKey(mintInput);
+      const info = await connection.getParsedAccountInfo(mintPk);
+      if (!info.value) throw new Error("Mint not found");
+
+      const parsed = (info.value.data as any)?.parsed;
+      if (!parsed || parsed.type !== "mint") throw new Error("Not a valid SPL token mint");
+
+      const decimals = parsed.info.decimals;
+
+      // Try Jupiter price
+      let price = "1.00";
+      try {
+        const resp = await fetch(`https://api.jup.ag/price/v2?ids=${mintInput}`);
+        const data = await resp.json();
+        if (data.data?.[mintInput]?.price) {
+          price = parseFloat(data.data[mintInput].price).toFixed(6);
+        }
+      } catch { /* use default */ }
+
+      setTokenInfo({
+        mint: mintInput,
+        name: `Token ${mintInput.slice(0, 6)}`,
+        symbol: mintInput.slice(0, 4).toUpperCase(),
+        decimals,
+      });
+      setInitialPrice(price);
+      setStep(1);
+    } catch (e) {
+      setTokenError(e instanceof Error ? e.message : "Invalid mint");
+    } finally {
+      setFetchingToken(false);
+    }
+  }, [mintInput, connection]);
+
+  const deploy = useCallback(async () => {
+    if (!publicKey || !tokenInfo) return;
+    setDeploying(true);
+    setStep(2);
+
+    const programId = new PublicKey(config.programId);
+    const matcherProgramId = new PublicKey(config.matcherProgramId);
+    const collateralMint = new PublicKey(tokenInfo.mint);
+
+    const steps: DeployStep[] = [
+      { label: "Create slab account", status: "pending" },
+      { label: "Create vault ATA", status: "pending" },
+      { label: "Initialize market", status: "pending" },
+      { label: "Set oracle authority", status: "pending" },
+      { label: "Push initial price", status: "pending" },
+      { label: "Set funding parameters", status: "pending" },
+      { label: "Initial crank", status: "pending" },
+      { label: "Create matcher context", status: "pending" },
+      { label: "Initialize LP", status: "pending" },
+      { label: "Deposit LP collateral", status: "pending" },
+      { label: "Final crank", status: "pending" },
+    ];
+    setDeploySteps([...steps]);
+
+    const updateStep = (idx: number, update: Partial<DeployStep>) => {
+      steps[idx] = { ...steps[idx], ...update };
+      setDeploySteps([...steps]);
+    };
+
+    try {
+      // Step 0: Create slab
+      updateStep(0, { status: "active" });
+      const slab = Keypair.generate();
+      const rentExempt = await connection.getMinimumBalanceForRentExemption(config.slabSize);
+
+      const createSlabTx = new Transaction();
+      createSlabTx.add(ComputeBudgetProgram.setComputeUnitPrice({ microLamports: config.priorityFee }));
+      createSlabTx.add(ComputeBudgetProgram.setComputeUnitLimit({ units: 100_000 }));
+      createSlabTx.add(SystemProgram.createAccount({
+        fromPubkey: publicKey,
+        newAccountPubkey: slab.publicKey,
+        lamports: rentExempt,
+        space: config.slabSize,
+        programId,
+      }));
+      const { blockhash: bh0, lastValidBlockHeight: lv0 } = await connection.getLatestBlockhash("confirmed");
+      createSlabTx.recentBlockhash = bh0;
+      createSlabTx.feePayer = publicKey;
+      createSlabTx.partialSign(slab);
+      const sig0 = await sendTransaction(createSlabTx, connection);
+      await connection.confirmTransaction({ signature: sig0, blockhash: bh0, lastValidBlockHeight: lv0 }, "confirmed");
+      updateStep(0, { status: "done", sig: sig0 });
+
+      const slabPk = slab.publicKey;
+      setSlabAddress(slabPk.toBase58());
+
+      // Step 1: Vault ATA
+      updateStep(1, { status: "active" });
+      const [vaultPda] = deriveVaultAuthority(programId, slabPk);
+      const vaultAta = await getAta(vaultPda, collateralMint);
+      // Create ATA via spl-token (the init market ix expects it to exist)
+      const { createAssociatedTokenAccountInstruction } = await import("@solana/spl-token");
+      const createAtaTx = new Transaction();
+      createAtaTx.add(ComputeBudgetProgram.setComputeUnitPrice({ microLamports: config.priorityFee }));
+      createAtaTx.add(createAssociatedTokenAccountInstruction(publicKey, vaultAta, vaultPda, collateralMint));
+      const sig1 = await sendTransaction(createAtaTx, connection);
+      const { blockhash: bh1, lastValidBlockHeight: lv1 } = await connection.getLatestBlockhash("confirmed");
+      await connection.confirmTransaction({ signature: sig1, blockhash: bh1, lastValidBlockHeight: lv1 }, "confirmed");
+      updateStep(1, { status: "done", sig: sig1 });
+
+      // Step 2: Init market
+      updateStep(2, { status: "active" });
+      const priceE6 = Math.round(parseFloat(initialPrice) * 1_000_000).toString();
+      const initialMarginBps = Math.round(10000 / maxLeverage).toString();
+      const maintenanceMarginBps = Math.round(10000 / maxLeverage / 2).toString();
+
+      const initMarketData = encodeInitMarket({
+        admin: publicKey,
+        collateralMint,
+        indexFeedId: "0".repeat(64),
+        maxStalenessSecs: "86400",
+        confFilterBps: 0,
+        invert: 1,
+        unitScale: 0,
+        initialMarkPriceE6: priceE6,
+        warmupPeriodSlots: "100",
+        maintenanceMarginBps,
+        initialMarginBps,
+        tradingFeeBps: tradingFeeBps.toString(),
+        maxAccounts: "4096",
+        newAccountFee: "1000000",
+        riskReductionThreshold: "0",
+        maintenanceFeePerSlot: "0",
+        maxCrankStalenessSlots: "400",
+        liquidationFeeBps: "100",
+        liquidationFeeCap: "100000000000",
+        liquidationBufferBps: "50",
+        minLiquidationAbs: "1000000",
+      });
+      const initMarketKeys = buildAccountMetas(ACCOUNTS_INIT_MARKET, [
+        publicKey, slabPk, collateralMint, vaultAta,
+        TOKEN_PROGRAM_ID, SYSVAR_CLOCK_PUBKEY, SYSVAR_RENT_PUBKEY,
+        vaultPda, SystemProgram.programId,
+      ]);
+      const initTx = new Transaction();
+      initTx.add(ComputeBudgetProgram.setComputeUnitPrice({ microLamports: config.priorityFee }));
+      initTx.add(ComputeBudgetProgram.setComputeUnitLimit({ units: 200_000 }));
+      initTx.add(buildIx({ programId, keys: initMarketKeys, data: initMarketData }));
+      const sig2 = await sendTransaction(initTx, connection);
+      const { blockhash: bh2, lastValidBlockHeight: lv2 } = await connection.getLatestBlockhash("confirmed");
+      await connection.confirmTransaction({ signature: sig2, blockhash: bh2, lastValidBlockHeight: lv2 }, "confirmed");
+      updateStep(2, { status: "done", sig: sig2 });
+
+      // Step 3: Set oracle authority
+      updateStep(3, { status: "active" });
+      const setAuthTx = new Transaction();
+      setAuthTx.add(ComputeBudgetProgram.setComputeUnitPrice({ microLamports: config.priorityFee }));
+      setAuthTx.add(ComputeBudgetProgram.setComputeUnitLimit({ units: 50_000 }));
+      setAuthTx.add(buildIx({
+        programId,
+        keys: buildAccountMetas(ACCOUNTS_SET_ORACLE_AUTHORITY, [publicKey, slabPk]),
+        data: encodeSetOracleAuthority({ newAuthority: publicKey }),
+      }));
+      const sig3 = await sendTransaction(setAuthTx, connection);
+      const { blockhash: bh3, lastValidBlockHeight: lv3 } = await connection.getLatestBlockhash("confirmed");
+      await connection.confirmTransaction({ signature: sig3, blockhash: bh3, lastValidBlockHeight: lv3 }, "confirmed");
+      updateStep(3, { status: "done", sig: sig3 });
+
+      // Step 4: Push price
+      updateStep(4, { status: "active" });
+      const now = Math.floor(Date.now() / 1000);
+      const pushTx = new Transaction();
+      pushTx.add(ComputeBudgetProgram.setComputeUnitPrice({ microLamports: config.priorityFee }));
+      pushTx.add(ComputeBudgetProgram.setComputeUnitLimit({ units: 50_000 }));
+      pushTx.add(buildIx({
+        programId,
+        keys: buildAccountMetas(ACCOUNTS_PUSH_ORACLE_PRICE, [publicKey, slabPk]),
+        data: encodePushOraclePrice({ priceE6, timestamp: now.toString() }),
+      }));
+      const sig4 = await sendTransaction(pushTx, connection);
+      const { blockhash: bh4, lastValidBlockHeight: lv4 } = await connection.getLatestBlockhash("confirmed");
+      await connection.confirmTransaction({ signature: sig4, blockhash: bh4, lastValidBlockHeight: lv4 }, "confirmed");
+      updateStep(4, { status: "done", sig: sig4 });
+
+      // Step 5: Funding params
+      updateStep(5, { status: "active" });
+      const cfgTx = new Transaction();
+      cfgTx.add(ComputeBudgetProgram.setComputeUnitPrice({ microLamports: config.priorityFee }));
+      cfgTx.add(ComputeBudgetProgram.setComputeUnitLimit({ units: 50_000 }));
+      cfgTx.add(buildIx({
+        programId,
+        keys: buildAccountMetas(ACCOUNTS_UPDATE_CONFIG, [publicKey, slabPk]),
+        data: encodeUpdateConfig({
+          fundingHorizonSlots: "500",
+          fundingKBps: "100",
+          fundingInvScaleNotionalE6: "1000000000000",
+          fundingMaxPremiumBps: "500",
+          fundingMaxBpsPerSlot: "5",
+          threshFloor: "0",
+          threshRiskBps: "50",
+          threshUpdateIntervalSlots: "10",
+          threshStepBps: "500",
+          threshAlphaBps: "1000",
+          threshMin: "0",
+          threshMax: "10000000000000000000",
+          threshMinStep: "1",
+        }),
+      }));
+      const sig5 = await sendTransaction(cfgTx, connection);
+      const { blockhash: bh5, lastValidBlockHeight: lv5 } = await connection.getLatestBlockhash("confirmed");
+      await connection.confirmTransaction({ signature: sig5, blockhash: bh5, lastValidBlockHeight: lv5 }, "confirmed");
+      updateStep(5, { status: "done", sig: sig5 });
+
+      // Step 6: Initial crank
+      updateStep(6, { status: "active" });
+      const crank1Tx = new Transaction();
+      crank1Tx.add(ComputeBudgetProgram.setComputeUnitPrice({ microLamports: config.priorityFee }));
+      crank1Tx.add(ComputeBudgetProgram.setComputeUnitLimit({ units: 400_000 }));
+      crank1Tx.add(buildIx({
+        programId,
+        keys: buildAccountMetas(ACCOUNTS_KEEPER_CRANK, [publicKey, slabPk, SYSVAR_CLOCK_PUBKEY, slabPk]),
+        data: encodeKeeperCrank({ callerIdx: 65535, allowPanic: false }),
+      }));
+      const sig6 = await sendTransaction(crank1Tx, connection);
+      const { blockhash: bh6, lastValidBlockHeight: lv6 } = await connection.getLatestBlockhash("confirmed");
+      await connection.confirmTransaction({ signature: sig6, blockhash: bh6, lastValidBlockHeight: lv6 }, "confirmed");
+      updateStep(6, { status: "done", sig: sig6 });
+
+      // Step 7: Create matcher context
+      updateStep(7, { status: "active" });
+      const matcherCtxKp = Keypair.generate();
+      const matcherRent = await connection.getMinimumBalanceForRentExemption(config.matcherCtxSize);
+      const createMatcherTx = new Transaction();
+      createMatcherTx.add(ComputeBudgetProgram.setComputeUnitPrice({ microLamports: config.priorityFee }));
+      createMatcherTx.add(ComputeBudgetProgram.setComputeUnitLimit({ units: 50_000 }));
+      createMatcherTx.add(SystemProgram.createAccount({
+        fromPubkey: publicKey,
+        newAccountPubkey: matcherCtxKp.publicKey,
+        lamports: matcherRent,
+        space: config.matcherCtxSize,
+        programId: matcherProgramId,
+      }));
+
+      // Init vAMM
+      const lpIndex = 0;
+      const [lpPda] = deriveLpPda(programId, slabPk, lpIndex);
+      const initVammData = Buffer.alloc(66);
+      {
+        let off = 0;
+        initVammData.writeUInt8(2, off); off += 1;
+        initVammData.writeUInt8(0, off); off += 1;
+        initVammData.writeUInt32LE(50, off); off += 4;
+        initVammData.writeUInt32LE(50, off); off += 4;
+        initVammData.writeUInt32LE(200, off); off += 4;
+        initVammData.writeUInt32LE(0, off); off += 4;
+        const liq = 10_000_000_000_000n;
+        initVammData.writeBigUInt64LE(liq & 0xFFFFFFFFFFFFFFFFn, off); off += 8;
+        initVammData.writeBigUInt64LE(liq >> 64n, off); off += 8;
+        const maxFill = 1_000_000_000_000n;
+        initVammData.writeBigUInt64LE(maxFill & 0xFFFFFFFFFFFFFFFFn, off); off += 8;
+        initVammData.writeBigUInt64LE(maxFill >> 64n, off); off += 8;
+        initVammData.writeBigUInt64LE(0n, off); off += 8;
+        initVammData.writeBigUInt64LE(0n, off); off += 8;
+      }
+      createMatcherTx.add({
+        programId: matcherProgramId,
+        keys: [
+          { pubkey: lpPda, isSigner: false, isWritable: false },
+          { pubkey: matcherCtxKp.publicKey, isSigner: false, isWritable: true },
+        ],
+        data: initVammData,
+      });
+
+      const { blockhash: bh7, lastValidBlockHeight: lv7 } = await connection.getLatestBlockhash("confirmed");
+      createMatcherTx.recentBlockhash = bh7;
+      createMatcherTx.feePayer = publicKey;
+      createMatcherTx.partialSign(matcherCtxKp);
+      const sig7 = await sendTransaction(createMatcherTx, connection);
+      await connection.confirmTransaction({ signature: sig7, blockhash: bh7, lastValidBlockHeight: lv7 }, "confirmed");
+      updateStep(7, { status: "done", sig: sig7 });
+
+      // Step 8: Init LP
+      updateStep(8, { status: "active" });
+      const userAta = await getAta(publicKey, collateralMint);
+      const initLpTx = new Transaction();
+      initLpTx.add(ComputeBudgetProgram.setComputeUnitPrice({ microLamports: config.priorityFee }));
+      initLpTx.add(ComputeBudgetProgram.setComputeUnitLimit({ units: 100_000 }));
+      initLpTx.add(buildIx({
+        programId,
+        keys: buildAccountMetas(ACCOUNTS_INIT_LP, [
+          publicKey, slabPk, userAta, vaultAta, TOKEN_PROGRAM_ID,
+        ]),
+        data: encodeInitLP({
+          matcherProgram: matcherProgramId,
+          matcherContext: matcherCtxKp.publicKey,
+          feePayment: "2000000",
+        }),
+      }));
+      const sig8 = await sendTransaction(initLpTx, connection);
+      const { blockhash: bh8, lastValidBlockHeight: lv8 } = await connection.getLatestBlockhash("confirmed");
+      await connection.confirmTransaction({ signature: sig8, blockhash: bh8, lastValidBlockHeight: lv8 }, "confirmed");
+      updateStep(8, { status: "done", sig: sig8 });
+
+      // Step 9: Deposit LP collateral
+      updateStep(9, { status: "active" });
+      const decimals = tokenInfo.decimals;
+      const collateralAmount = BigInt(Math.round(parseFloat(lpCollateral) * (10 ** decimals)));
+      const depositTx = new Transaction();
+      depositTx.add(ComputeBudgetProgram.setComputeUnitPrice({ microLamports: config.priorityFee }));
+      depositTx.add(ComputeBudgetProgram.setComputeUnitLimit({ units: 100_000 }));
+      depositTx.add(buildIx({
+        programId,
+        keys: buildAccountMetas(ACCOUNTS_DEPOSIT_COLLATERAL, [
+          publicKey, slabPk, userAta, vaultAta, TOKEN_PROGRAM_ID, SYSVAR_CLOCK_PUBKEY,
+        ]),
+        data: encodeDepositCollateral({ userIdx: lpIndex, amount: collateralAmount.toString() }),
+      }));
+      const sig9 = await sendTransaction(depositTx, connection);
+      const { blockhash: bh9, lastValidBlockHeight: lv9 } = await connection.getLatestBlockhash("confirmed");
+      await connection.confirmTransaction({ signature: sig9, blockhash: bh9, lastValidBlockHeight: lv9 }, "confirmed");
+      updateStep(9, { status: "done", sig: sig9 });
+
+      // Step 10: Final crank
+      updateStep(10, { status: "active" });
+      const now2 = Math.floor(Date.now() / 1000);
+      const finalTx = new Transaction();
+      finalTx.add(ComputeBudgetProgram.setComputeUnitPrice({ microLamports: config.priorityFee }));
+      finalTx.add(ComputeBudgetProgram.setComputeUnitLimit({ units: 500_000 }));
+      finalTx.add(buildIx({
+        programId,
+        keys: buildAccountMetas(ACCOUNTS_PUSH_ORACLE_PRICE, [publicKey, slabPk]),
+        data: encodePushOraclePrice({ priceE6, timestamp: now2.toString() }),
+      }));
+      finalTx.add(buildIx({
+        programId,
+        keys: buildAccountMetas(ACCOUNTS_KEEPER_CRANK, [publicKey, slabPk, SYSVAR_CLOCK_PUBKEY, slabPk]),
+        data: encodeKeeperCrank({ callerIdx: 65535, allowPanic: false }),
+      }));
+      const sig10 = await sendTransaction(finalTx, connection);
+      const { blockhash: bh10, lastValidBlockHeight: lv10 } = await connection.getLatestBlockhash("confirmed");
+      await connection.confirmTransaction({ signature: sig10, blockhash: bh10, lastValidBlockHeight: lv10 }, "confirmed");
+      updateStep(10, { status: "done", sig: sig10 });
+
+      // Save to registry
+      addMarket({
+        slab: slabPk.toBase58(),
+        mint: tokenInfo.mint,
+        symbol: tokenInfo.symbol,
+        name: tokenInfo.name,
+        decimals: tokenInfo.decimals,
+        createdAt: new Date().toISOString(),
+        deployer: publicKey.toBase58(),
+      });
+
+      setStep(3);
+    } catch (e) {
+      const errMsg = e instanceof Error ? e.message : String(e);
+      const activeIdx = steps.findIndex((s) => s.status === "active");
+      if (activeIdx >= 0) updateStep(activeIdx, { status: "error", error: errMsg });
+    } finally {
+      setDeploying(false);
+    }
+  }, [publicKey, sendTransaction, connection, tokenInfo, initialPrice, maxLeverage, tradingFeeBps, lpCollateral]);
+
+  return (
+    <div className="mx-auto max-w-2xl px-4 py-12">
+      <h1 className="mb-2 text-3xl font-bold text-white">Launch a Perp Market</h1>
+      <p className="mb-8 text-slate-400">Deploy a perpetual futures market for any Solana token.</p>
+
+      {/* Steps indicator */}
+      <div className="mb-8 flex items-center gap-2">
+        {["Token", "Parameters", "Deploy", "Done"].map((label, i) => (
+          <div key={label} className="flex items-center gap-2">
+            <div className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-bold ${
+              i === step ? "bg-emerald-500 text-white" :
+              i < step ? "bg-emerald-500/20 text-emerald-400" :
+              "bg-slate-800 text-slate-500"
+            }`}>
+              {i < step ? "✓" : i + 1}
+            </div>
+            <span className={`text-sm ${i === step ? "text-white" : "text-slate-500"}`}>{label}</span>
+            {i < 3 && <div className={`h-px w-8 ${i < step ? "bg-emerald-500" : "bg-slate-700"}`} />}
+          </div>
+        ))}
+      </div>
+
+      {/* Step 0: Token selection */}
+      {step === 0 && (
+        <div className="rounded-2xl border border-[#1e2433] bg-[#111318] p-8">
+          {!connected ? (
+            <div className="text-center">
+              <p className="mb-4 text-slate-400">Connect your wallet to get started</p>
+              <WalletMultiButton />
+            </div>
+          ) : (
+            <>
+              <label className="mb-2 block text-sm text-slate-400">Token Mint Address</label>
+              <input
+                type="text"
+                value={mintInput}
+                onChange={(e) => setMintInput(e.target.value)}
+                placeholder="Enter Solana token mint address..."
+                className="mb-4 w-full rounded-xl border border-[#1e2433] bg-[#0a0b0f] px-4 py-3 text-white placeholder-slate-600 focus:border-emerald-500 focus:outline-none"
+              />
+              {tokenError && <p className="mb-4 text-sm text-red-400">{tokenError}</p>}
+              <button
+                onClick={fetchToken}
+                disabled={fetchingToken || !mintInput}
+                className="w-full rounded-xl bg-emerald-500 py-3 font-semibold text-white transition-colors hover:bg-emerald-400 disabled:opacity-50"
+              >
+                {fetchingToken ? "Fetching..." : "Continue"}
+              </button>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* Step 1: Parameters */}
+      {step === 1 && tokenInfo && (
+        <div className="rounded-2xl border border-[#1e2433] bg-[#111318] p-8">
+          {/* Token card */}
+          <div className="mb-6 rounded-xl border border-[#1e2433] bg-[#0a0b0f] p-4">
+            <p className="text-sm text-slate-400">Token</p>
+            <p className="text-lg font-bold text-white">{tokenInfo.symbol}</p>
+            <p className="font-mono text-xs text-slate-500">{tokenInfo.mint}</p>
+            <p className="text-xs text-slate-500">{tokenInfo.decimals} decimals</p>
+          </div>
+
+          <div className="space-y-6">
+            <div>
+              <label className="mb-1 block text-sm text-slate-400">Initial Price (USD)</label>
+              <input
+                type="text"
+                value={initialPrice}
+                onChange={(e) => setInitialPrice(e.target.value)}
+                className="w-full rounded-xl border border-[#1e2433] bg-[#0a0b0f] px-4 py-3 text-white focus:border-emerald-500 focus:outline-none"
+              />
+            </div>
+
+            <div>
+              <label className="mb-1 block text-sm text-slate-400">
+                Max Leverage: {maxLeverage}x
+              </label>
+              <input
+                type="range"
+                min={2}
+                max={20}
+                value={maxLeverage}
+                onChange={(e) => setMaxLeverage(parseInt(e.target.value))}
+                className="w-full accent-emerald-500"
+              />
+              <div className="flex justify-between text-xs text-slate-500">
+                <span>2x</span><span>20x</span>
+              </div>
+            </div>
+
+            <div>
+              <label className="mb-1 block text-sm text-slate-400">
+                Trading Fee: {tradingFeeBps} bps ({(tradingFeeBps / 100).toFixed(2)}%)
+              </label>
+              <input
+                type="range"
+                min={1}
+                max={50}
+                value={tradingFeeBps}
+                onChange={(e) => setTradingFeeBps(parseInt(e.target.value))}
+                className="w-full accent-emerald-500"
+              />
+              <div className="flex justify-between text-xs text-slate-500">
+                <span>1 bps</span><span>50 bps</span>
+              </div>
+            </div>
+
+            <div>
+              <label className="mb-1 block text-sm text-slate-400">LP Collateral (tokens to seed)</label>
+              <input
+                type="text"
+                value={lpCollateral}
+                onChange={(e) => setLpCollateral(e.target.value)}
+                className="w-full rounded-xl border border-[#1e2433] bg-[#0a0b0f] px-4 py-3 text-white focus:border-emerald-500 focus:outline-none"
+              />
+            </div>
+          </div>
+
+          <div className="mt-6 flex gap-3">
+            <button
+              onClick={() => setStep(0)}
+              className="flex-1 rounded-xl border border-slate-700 py-3 text-slate-400 hover:bg-slate-800"
+            >
+              Back
+            </button>
+            <button
+              onClick={deploy}
+              className="flex-1 rounded-xl bg-emerald-500 py-3 font-semibold text-white hover:bg-emerald-400"
+            >
+              🚀 Deploy Market
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Step 2: Deploying */}
+      {step === 2 && (
+        <div className="rounded-2xl border border-[#1e2433] bg-[#111318] p-8">
+          <h3 className="mb-4 text-lg font-semibold text-white">Deploying Market...</h3>
+          <div className="space-y-3">
+            {deploySteps.map((s, i) => (
+              <div key={i} className="flex items-center gap-3">
+                <div className={`h-3 w-3 rounded-full ${
+                  s.status === "done" ? "bg-emerald-500" :
+                  s.status === "active" ? "bg-yellow-500 animate-pulse" :
+                  s.status === "error" ? "bg-red-500" :
+                  "bg-slate-700"
+                }`} />
+                <span className={`text-sm ${
+                  s.status === "done" ? "text-emerald-400" :
+                  s.status === "active" ? "text-yellow-400" :
+                  s.status === "error" ? "text-red-400" :
+                  "text-slate-500"
+                }`}>
+                  {s.label}
+                </span>
+                {s.sig && (
+                  <a
+                    href={`https://explorer.solana.com/tx/${s.sig}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-mono text-xs text-slate-500 hover:text-emerald-400"
+                  >
+                    {s.sig.slice(0, 8)}...
+                  </a>
+                )}
+                {s.error && <span className="text-xs text-red-400">{s.error}</span>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Step 3: Done */}
+      {step === 3 && (
+        <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/5 p-8 text-center">
+          <div className="mb-4 text-5xl">🎉</div>
+          <h3 className="mb-2 text-2xl font-bold text-white">Market Deployed!</h3>
+          <p className="mb-4 text-slate-400">Your perpetual futures market is live on Solana mainnet.</p>
+          <div className="mb-6 rounded-xl bg-[#0a0b0f] p-4">
+            <p className="text-xs text-slate-500">Market Address (Slab)</p>
+            <p className="font-mono text-sm text-emerald-400">{slabAddress}</p>
+          </div>
+          <a
+            href={`/trade/${slabAddress}`}
+            className="inline-block rounded-xl bg-emerald-500 px-8 py-3 font-semibold text-white hover:bg-emerald-400"
+          >
+            Start Trading →
+          </a>
+        </div>
+      )}
+    </div>
+  );
+}
