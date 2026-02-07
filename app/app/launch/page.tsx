@@ -37,7 +37,6 @@ import {
   getAta,
 } from "@percolator/core";
 import { config } from "@/lib/config";
-import { addMarket } from "@/lib/markets";
 import dynamic from "next/dynamic";
 
 const WalletMultiButton = dynamic(
@@ -421,16 +420,27 @@ export default function LaunchPage() {
       await connection.confirmTransaction({ signature: sig10, blockhash: bh10, lastValidBlockHeight: lv10 }, "confirmed");
       updateStep(10, { status: "done", sig: sig10 });
 
-      // Save to registry
-      addMarket({
-        slab: slabPk.toBase58(),
-        mint: tokenInfo.mint,
-        symbol: tokenInfo.symbol,
-        name: tokenInfo.name,
-        decimals: tokenInfo.decimals,
-        createdAt: new Date().toISOString(),
-        deployer: publicKey.toBase58(),
-      });
+      // Register market in Supabase
+      try {
+        await fetch("/api/markets", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            slab_address: slabPk.toBase58(),
+            mint_address: tokenInfo.mint,
+            symbol: tokenInfo.symbol,
+            name: tokenInfo.name,
+            decimals: tokenInfo.decimals,
+            deployer: publicKey.toBase58(),
+            oracle_authority: publicKey.toBase58(),
+            initial_price_e6: Math.round(parseFloat(initialPrice) * 1_000_000),
+            max_leverage: maxLeverage,
+            trading_fee_bps: tradingFeeBps,
+            lp_collateral: parseFloat(lpCollateral),
+            matcher_context: matcherCtxKp.publicKey.toBase58(),
+          }),
+        });
+      } catch { /* non-fatal — market is deployed on-chain regardless */ }
 
       setStep(3);
     } catch (e) {
