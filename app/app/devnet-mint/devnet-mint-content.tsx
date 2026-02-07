@@ -20,7 +20,7 @@ import {
   createMintToInstruction,
 } from "@solana/spl-token";
 
-const DEVNET_RPC = "https://api.devnet.solana.com";
+const DEVNET_RPC = "https://devnet.helius-rpc.com/?api-key=e568033d-06d6-49d1-ba90-b3564c91851b";
 const DEFAULT_RECIPIENT = "HoibauLv7EPDTr3oCAwE1UETuUio6w8DZjKM5AoTWsUM";
 
 const DevnetMintContent: FC = () => {
