@@ -25,7 +25,7 @@ export interface AccountSpec {
  * InitMarket: 9 accounts (Pyth Pull - feed_id is in instruction data, not as accounts)
  */
 export const ACCOUNTS_INIT_MARKET: readonly AccountSpec[] = [
-  { name: "admin", signer: true, writable: false },
+  { name: "admin", signer: true, writable: true },
   { name: "slab", signer: false, writable: true },
   { name: "mint", signer: false, writable: false },
   { name: "vault", signer: false, writable: false },
@@ -40,7 +40,7 @@ export const ACCOUNTS_INIT_MARKET: readonly AccountSpec[] = [
  * InitUser: 5 accounts (clock/oracle removed in commit 410f947)
  */
 export const ACCOUNTS_INIT_USER: readonly AccountSpec[] = [
-  { name: "user", signer: true, writable: false },
+  { name: "user", signer: true, writable: true },
   { name: "slab", signer: false, writable: true },
   { name: "userAta", signer: false, writable: true },
   { name: "vault", signer: false, writable: true },
@@ -51,7 +51,7 @@ export const ACCOUNTS_INIT_USER: readonly AccountSpec[] = [
  * InitLP: 5 accounts (clock/oracle removed in commit 410f947)
  */
 export const ACCOUNTS_INIT_LP: readonly AccountSpec[] = [
-  { name: "user", signer: true, writable: false },
+  { name: "user", signer: true, writable: true },
   { name: "slab", signer: false, writable: true },
   { name: "userAta", signer: false, writable: true },
   { name: "vault", signer: false, writable: true },
@@ -62,7 +62,7 @@ export const ACCOUNTS_INIT_LP: readonly AccountSpec[] = [
  * DepositCollateral: 6 accounts
  */
 export const ACCOUNTS_DEPOSIT_COLLATERAL: readonly AccountSpec[] = [
-  { name: "user", signer: true, writable: false },
+  { name: "user", signer: true, writable: true },
   { name: "slab", signer: false, writable: true },
   { name: "userAta", signer: false, writable: true },
   { name: "vault", signer: false, writable: true },
@@ -74,7 +74,7 @@ export const ACCOUNTS_DEPOSIT_COLLATERAL: readonly AccountSpec[] = [
  * WithdrawCollateral: 8 accounts
  */
 export const ACCOUNTS_WITHDRAW_COLLATERAL: readonly AccountSpec[] = [
-  { name: "user", signer: true, writable: false },
+  { name: "user", signer: true, writable: true },
   { name: "slab", signer: false, writable: true },
   { name: "vault", signer: false, writable: true },
   { name: "userAta", signer: false, writable: true },
@@ -88,7 +88,7 @@ export const ACCOUNTS_WITHDRAW_COLLATERAL: readonly AccountSpec[] = [
  * KeeperCrank: 4 accounts
  */
 export const ACCOUNTS_KEEPER_CRANK: readonly AccountSpec[] = [
-  { name: "caller", signer: true, writable: false },
+  { name: "caller", signer: true, writable: true },
   { name: "slab", signer: false, writable: true },
   { name: "clock", signer: false, writable: false },
   { name: "oracle", signer: false, writable: false },
@@ -98,8 +98,8 @@ export const ACCOUNTS_KEEPER_CRANK: readonly AccountSpec[] = [
  * TradeNoCpi: 5 accounts
  */
 export const ACCOUNTS_TRADE_NOCPI: readonly AccountSpec[] = [
-  { name: "user", signer: true, writable: false },
-  { name: "lp", signer: true, writable: false },
+  { name: "user", signer: true, writable: true },
+  { name: "lp", signer: true, writable: true },
   { name: "slab", signer: false, writable: true },
   { name: "clock", signer: false, writable: false },
   { name: "oracle", signer: false, writable: false },
@@ -120,7 +120,7 @@ export const ACCOUNTS_LIQUIDATE_AT_ORACLE: readonly AccountSpec[] = [
  * CloseAccount: 8 accounts
  */
 export const ACCOUNTS_CLOSE_ACCOUNT: readonly AccountSpec[] = [
-  { name: "user", signer: true, writable: false },
+  { name: "user", signer: true, writable: true },
   { name: "slab", signer: false, writable: true },
   { name: "vault", signer: false, writable: true },
   { name: "userAta", signer: false, writable: true },
@@ -134,7 +134,7 @@ export const ACCOUNTS_CLOSE_ACCOUNT: readonly AccountSpec[] = [
  * TopUpInsurance: 5 accounts
  */
 export const ACCOUNTS_TOPUP_INSURANCE: readonly AccountSpec[] = [
-  { name: "user", signer: true, writable: false },
+  { name: "user", signer: true, writable: true },
   { name: "slab", signer: false, writable: true },
   { name: "userAta", signer: false, writable: true },
   { name: "vault", signer: false, writable: true },
@@ -145,7 +145,7 @@ export const ACCOUNTS_TOPUP_INSURANCE: readonly AccountSpec[] = [
  * TradeCpi: 8 accounts
  */
 export const ACCOUNTS_TRADE_CPI: readonly AccountSpec[] = [
-  { name: "user", signer: true, writable: false },
+  { name: "user", signer: true, writable: true },
   { name: "lpOwner", signer: false, writable: false },  // LP delegated to matcher - no signature needed
   { name: "slab", signer: false, writable: true },
   { name: "clock", signer: false, writable: false },
@@ -159,7 +159,7 @@ export const ACCOUNTS_TRADE_CPI: readonly AccountSpec[] = [
  * SetRiskThreshold: 2 accounts
  */
 export const ACCOUNTS_SET_RISK_THRESHOLD: readonly AccountSpec[] = [
-  { name: "admin", signer: true, writable: false },
+  { name: "admin", signer: true, writable: true },
   { name: "slab", signer: false, writable: true },
 ] as const;
 
@@ -167,7 +167,7 @@ export const ACCOUNTS_SET_RISK_THRESHOLD: readonly AccountSpec[] = [
  * UpdateAdmin: 2 accounts
  */
 export const ACCOUNTS_UPDATE_ADMIN: readonly AccountSpec[] = [
-  { name: "admin", signer: true, writable: false },
+  { name: "admin", signer: true, writable: true },
   { name: "slab", signer: false, writable: true },
 ] as const;
 
@@ -183,7 +183,7 @@ export const ACCOUNTS_CLOSE_SLAB: readonly AccountSpec[] = [
  * UpdateConfig: 2 accounts
  */
 export const ACCOUNTS_UPDATE_CONFIG: readonly AccountSpec[] = [
-  { name: "admin", signer: true, writable: false },
+  { name: "admin", signer: true, writable: true },
   { name: "slab", signer: false, writable: true },
 ] as const;
 
@@ -191,7 +191,7 @@ export const ACCOUNTS_UPDATE_CONFIG: readonly AccountSpec[] = [
  * SetMaintenanceFee: 2 accounts
  */
 export const ACCOUNTS_SET_MAINTENANCE_FEE: readonly AccountSpec[] = [
-  { name: "admin", signer: true, writable: false },
+  { name: "admin", signer: true, writable: true },
   { name: "slab", signer: false, writable: true },
 ] as const;
 
@@ -200,7 +200,7 @@ export const ACCOUNTS_SET_MAINTENANCE_FEE: readonly AccountSpec[] = [
  * Sets the oracle price authority (admin only)
  */
 export const ACCOUNTS_SET_ORACLE_AUTHORITY: readonly AccountSpec[] = [
-  { name: "admin", signer: true, writable: false },
+  { name: "admin", signer: true, writable: true },
   { name: "slab", signer: false, writable: true },
 ] as const;
 
@@ -209,7 +209,7 @@ export const ACCOUNTS_SET_ORACLE_AUTHORITY: readonly AccountSpec[] = [
  * Push oracle price (oracle authority only)
  */
 export const ACCOUNTS_PUSH_ORACLE_PRICE: readonly AccountSpec[] = [
-  { name: "authority", signer: true, writable: false },
+  { name: "authority", signer: true, writable: true },
   { name: "slab", signer: false, writable: true },
 ] as const;
 
@@ -218,7 +218,7 @@ export const ACCOUNTS_PUSH_ORACLE_PRICE: readonly AccountSpec[] = [
  * Resolves a binary/premarket (admin only)
  */
 export const ACCOUNTS_RESOLVE_MARKET: readonly AccountSpec[] = [
-  { name: "admin", signer: true, writable: false },
+  { name: "admin", signer: true, writable: true },
   { name: "slab", signer: false, writable: true },
 ] as const;
 
@@ -227,7 +227,7 @@ export const ACCOUNTS_RESOLVE_MARKET: readonly AccountSpec[] = [
  * Withdraw insurance fund after market resolution (admin only)
  */
 export const ACCOUNTS_WITHDRAW_INSURANCE: readonly AccountSpec[] = [
-  { name: "admin", signer: true, writable: false },
+  { name: "admin", signer: true, writable: true },
   { name: "slab", signer: false, writable: true },
   { name: "adminAta", signer: false, writable: true },
   { name: "vault", signer: false, writable: true },
