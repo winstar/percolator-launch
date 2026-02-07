@@ -118,16 +118,24 @@ const DevnetMintContent: FC = () => {
         createMintToInstruction(mintKeypair.publicKey, ata, publicKey, rawSupply)
       );
 
+      // Get fresh blockhash with lastValidBlockHeight for proper confirmation
+      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash("confirmed");
       tx.feePayer = publicKey;
-      tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
+      tx.recentBlockhash = blockhash;
 
       // Partially sign with mint keypair
       tx.partialSign(mintKeypair);
 
-      // Send via wallet adapter (wallet signs as payer)
-      const sig = await sendTransaction(tx, connection);
-      setStatus("Confirming transaction…");
-      await connection.confirmTransaction(sig, "confirmed");
+      // Send via wallet adapter — skip preflight to avoid simulation issues
+      const sig = await sendTransaction(tx, connection, {
+        skipPreflight: false,
+        preflightCommitment: "confirmed",
+      });
+      setStatus(`Tx sent: ${sig.slice(0, 12)}… Confirming…`);
+      await connection.confirmTransaction(
+        { signature: sig, blockhash, lastValidBlockHeight },
+        "confirmed"
+      );
 
       setMintAddress(mintKeypair.publicKey.toBase58());
       setStatus("Done! Token created and minted.");
