@@ -9,8 +9,8 @@ const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
 const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Percolator Launch",
-  description: "Launch perpetual futures markets for any Solana token in one click.",
+  title: "Percolator — Perpetual Futures for Any Token",
+  description: "Deploy a perpetual futures market on Solana in one click. No smart contract. No permission. Up to 20x leverage on any SPL token.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
