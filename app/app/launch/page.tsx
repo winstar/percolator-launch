@@ -59,7 +59,7 @@ interface DeployStep {
 }
 
 export default function LaunchPage() {
-  const { publicKey, sendTransaction, connected } = useWallet();
+  const { publicKey, signTransaction, connected } = useWallet();
   const { connection } = useConnection();
 
   const [step, setStep] = useState(0); // 0=token, 1=params, 2=deploy, 3=done
@@ -88,10 +88,15 @@ export default function LaunchPage() {
     tx.recentBlockhash = blockhash;
     tx.feePayer = publicKey!;
     if (signers) signers.forEach((s) => tx.partialSign(s));
-    const sig = await sendTransaction(tx, connection);
+    if (!signTransaction) throw new Error("Wallet does not support signTransaction");
+    const signed = await signTransaction(tx);
+    const sig = await connection.sendRawTransaction(signed.serialize(), {
+      skipPreflight: false,
+      preflightCommitment: "confirmed",
+    });
     await connection.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight }, "confirmed");
     return sig;
-  }, [connection, publicKey, sendTransaction]);
+  }, [connection, publicKey, signTransaction]);
 
   // Recover SOL from failed slab — closes the account and returns rent to wallet
   const recoverSlab = useCallback(async () => {
