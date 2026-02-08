@@ -4,6 +4,7 @@ import {
   encodeKeeperCrank,
   buildAccountMetas,
   buildIx,
+  derivePythPushOraclePDA,
   ACCOUNTS_KEEPER_CRANK,
   type DiscoveredMarket,
 } from "@percolator/core";
@@ -79,9 +80,15 @@ export class CrankService {
 
       // ACCOUNTS_KEEPER_CRANK: [caller, slab, clock, oracle]
       // For admin oracle: oracle = slab (unused but required)
-      const oracleKey = this.isAdminOracle(market)
-        ? market.slabAddress
-        : market.config.indexFeedId;
+      // For Pyth oracle: derive the push oracle PDA from the feed ID
+      let oracleKey: PublicKey;
+      if (this.isAdminOracle(market)) {
+        oracleKey = market.slabAddress;
+      } else {
+        const feedHex = Array.from(market.config.indexFeedId.toBytes())
+          .map(b => b.toString(16).padStart(2, "0")).join("");
+        oracleKey = derivePythPushOraclePDA(feedHex)[0];
+      }
 
       const keys = buildAccountMetas(ACCOUNTS_KEEPER_CRANK, [
         keypair.publicKey,

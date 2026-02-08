@@ -3,7 +3,10 @@ import { getConnection } from "../utils/solana.js";
 
 const startTime = Date.now();
 
-export function healthRoutes(deps: { crankService: { getStatus: () => Record<string, unknown> } }): Hono {
+export function healthRoutes(deps: {
+  crankService: { getStatus: () => Record<string, unknown> };
+  liquidationService?: { getStatus: () => Record<string, unknown> };
+}): Hono {
   const app = new Hono();
 
   app.get("/health", async (c) => {
@@ -23,6 +26,7 @@ export function healthRoutes(deps: { crankService: { getStatus: () => Record<str
       rpcLatencyMs,
       connectedMarkets: Object.keys(crankStatus).length,
       crankStatus,
+      liquidation: deps.liquidationService?.getStatus() ?? null,
     });
   });
 

@@ -1,11 +1,9 @@
 export type Network = "mainnet" | "devnet";
 
 function getNetwork(): Network {
-  if (typeof window !== "undefined") {
-    const stored = localStorage.getItem("percolator_network");
-    if (stored === "devnet" || stored === "mainnet") return stored;
-  }
-  return (process.env.NEXT_PUBLIC_DEFAULT_NETWORK as Network) ?? "devnet"; // default devnet until mainnet launch
+  // Network is controlled by env var only — no localStorage override
+  // This prevents users from manually switching to mainnet on a devnet deployment
+  return (process.env.NEXT_PUBLIC_DEFAULT_NETWORK as Network) ?? "devnet";
 }
 
 const CONFIGS = {
@@ -37,11 +35,10 @@ export function getConfig() {
   };
 }
 
-export function setNetwork(network: Network) {
-  if (typeof window !== "undefined") {
-    localStorage.setItem("percolator_network", network);
-    window.location.reload();
-  }
+export function setNetwork(_network: Network) {
+  // Network switching disabled — controlled by NEXT_PUBLIC_DEFAULT_NETWORK env var
+  // To switch networks, redeploy with the correct env var
+  console.warn("Network switching is disabled. Set NEXT_PUBLIC_DEFAULT_NETWORK env var instead.");
 }
 
 // For backward compat

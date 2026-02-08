@@ -361,7 +361,7 @@ function slabLayout(maxAccounts: number) {
 }
 
 // Detect maxAccounts from slab data length
-function detectLayout(dataLen: number) {
+export function detectLayout(dataLen: number) {
   // Try each known tier
   for (const n of [64, 256, 1024, 4096]) {
     const layout = slabLayout(n);
