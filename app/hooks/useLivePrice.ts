@@ -11,6 +11,8 @@ const POLL_FALLBACK_MS = 10_000;
 
 interface PriceState {
   price: number | null;
+  /** Alias for `price` — backward compat */
+  priceUsd: number | null;
   priceE6: bigint | null;
   change24h: number | null;
   high24h: number | null;
@@ -25,6 +27,7 @@ interface PriceState {
 export function useLivePrice(): PriceState {
   const [state, setState] = useState<PriceState>({
     price: null,
+    priceUsd: null,
     priceE6: null,
     change24h: null,
     high24h: null,
@@ -57,6 +60,7 @@ export function useLivePrice(): PriceState {
         setState((prev) => ({
           ...prev,
           price: p,
+          priceUsd: p,
           priceE6: BigInt(Math.round(p * 1_000_000)),
           loading: false,
         }));
@@ -106,6 +110,7 @@ export function useLivePrice(): PriceState {
             if (mountedRef.current) {
               setState((prev) => ({
                 price: usd,
+                priceUsd: usd,
                 priceE6: e6,
                 change24h: prev.change24h,
                 high24h: prev.high24h !== null ? Math.max(prev.high24h, usd) : usd,
