@@ -259,7 +259,17 @@ export function useCreateMarket() {
           const instructions: TransactionInstruction[] = [];
 
           if (isAdminOracle) {
-            // 1. PushOraclePrice FIRST (while user is still authority)
+            // After InitMarket, oracle_authority = PublicKey::default (all zeros)
+            // Must set authority to user FIRST before pushing any prices
+
+            // 1. SetOracleAuthority → user becomes authority
+            const setAuthToUserData = encodeSetOracleAuthority({ newAuthority: wallet.publicKey });
+            const setAuthToUserKeys = buildAccountMetas(ACCOUNTS_SET_ORACLE_AUTHORITY, [
+              wallet.publicKey, slabPk,
+            ]);
+            instructions.push(buildIx({ programId, keys: setAuthToUserKeys, data: setAuthToUserData }));
+
+            // 2. PushOraclePrice (user is now authority)
             const now = Math.floor(Date.now() / 1000);
             const pushData = encodePushOraclePrice({
               priceE6: params.initialPriceE6.toString(),
@@ -270,23 +280,23 @@ export function useCreateMarket() {
             ]);
             instructions.push(buildIx({ programId, keys: pushKeys, data: pushData }));
 
-            // 2. SetOraclePriceCap — circuit breaker (10_000 = 1% max change per update)
+            // 3. SetOraclePriceCap — circuit breaker (10_000 = 1% max change per update)
             const priceCapData = encodeSetOraclePriceCap({ maxChangeE2bps: BigInt(10_000) });
             const priceCapKeys = buildAccountMetas(ACCOUNTS_SET_ORACLE_AUTHORITY, [
               wallet.publicKey, slabPk,
             ]);
             instructions.push(buildIx({ programId, keys: priceCapKeys, data: priceCapData }));
 
-            // 3. SetOracleAuthority AFTER price push — delegate to crank wallet
+            // 4. SetOracleAuthority → delegate to crank wallet
             const cfg = getConfig();
             const oracleAuthority = cfg.crankWallet
               ? new PublicKey(cfg.crankWallet)
               : wallet.publicKey;  // fallback to user if no crank configured
-            const setAuthData = encodeSetOracleAuthority({ newAuthority: oracleAuthority });
-            const setAuthKeys = buildAccountMetas(ACCOUNTS_SET_ORACLE_AUTHORITY, [
+            const setAuthToCrankData = encodeSetOracleAuthority({ newAuthority: oracleAuthority });
+            const setAuthToCrankKeys = buildAccountMetas(ACCOUNTS_SET_ORACLE_AUTHORITY, [
               wallet.publicKey, slabPk,
             ]);
-            instructions.push(buildIx({ programId, keys: setAuthKeys, data: setAuthData }));
+            instructions.push(buildIx({ programId, keys: setAuthToCrankKeys, data: setAuthToCrankData }));
           }
 
           // UpdateConfig — set funding rate parameters (MidTermDev Step 6)
