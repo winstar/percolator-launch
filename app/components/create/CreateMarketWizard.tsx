@@ -77,7 +77,27 @@ const QuickLaunchPanel: FC<{
   const { state, create, reset } = useCreateMarket();
   const [quickMint, setQuickMint] = useState("");
   const [quickSlabTier, setQuickSlabTier] = useState<SlabTierKey>("small");
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  // Overridable params — initialized from auto-config when it loads
+  const [tradingFeeBps, setTradingFeeBps] = useState<number | null>(null);
+  const [initialMarginBps, setInitialMarginBps] = useState<number | null>(null);
+  const [lpCollateral, setLpCollateral] = useState<string | null>(null);
+  const [insuranceAmount, setInsuranceAmount] = useState("500000");
   const quickLaunch = useQuickLaunch(quickMint.length >= 32 ? quickMint : null);
+
+  // Sync defaults from auto-config
+  useEffect(() => {
+    if (quickLaunch.config) {
+      if (tradingFeeBps === null) setTradingFeeBps(quickLaunch.config.tradingFeeBps);
+      if (initialMarginBps === null) setInitialMarginBps(quickLaunch.config.initialMarginBps);
+      if (lpCollateral === null) setLpCollateral(quickLaunch.config.lpCollateral);
+    }
+  }, [quickLaunch.config]);
+
+  const effectiveTradingFee = tradingFeeBps ?? quickLaunch.config?.tradingFeeBps ?? 30;
+  const effectiveMargin = initialMarginBps ?? quickLaunch.config?.initialMarginBps ?? 1000;
+  const effectiveLpCollateral = lpCollateral ?? quickLaunch.config?.lpCollateral ?? "1000000";
+  const effectiveMaxLeverage = Math.floor(10000 / effectiveMargin);
 
   const handleQuickCreate = () => {
     if (!quickLaunch.config || !quickLaunch.poolInfo || !publicKey) return;
@@ -97,12 +117,12 @@ const QuickLaunchPanel: FC<{
     const params: CreateMarketParams = {
       mint: new PublicKey(c.mint),
       initialPriceE6: BigInt(priceE6 > 0 ? priceE6 : 1_000_000),
-      lpCollateral: parseHumanAmount(c.lpCollateral, c.decimals),
-      insuranceAmount: parseHumanAmount("500000", c.decimals),
+      lpCollateral: parseHumanAmount(effectiveLpCollateral, c.decimals),
+      insuranceAmount: parseHumanAmount(insuranceAmount, c.decimals),
       oracleFeed,
       invert: false,
-      tradingFeeBps: 30,
-      initialMarginBps: 1000,
+      tradingFeeBps: effectiveTradingFee,
+      initialMarginBps: effectiveMargin,
       maxAccounts: tier.maxAccounts,
       slabDataSize: tier.dataSize,
     };
@@ -227,18 +247,77 @@ const QuickLaunchPanel: FC<{
             <div className="grid grid-cols-3 gap-2 text-center">
               <div>
                 <p className="text-[10px] text-[#52525b]">Fee</p>
-                <p className="text-xs font-medium text-[#e4e4e7]">30 bps</p>
+                <p className="text-xs font-medium text-[#e4e4e7]">{effectiveTradingFee} bps</p>
               </div>
               <div>
                 <p className="text-[10px] text-[#52525b]">Margin</p>
-                <p className="text-xs font-medium text-[#e4e4e7]">1000 bps</p>
+                <p className="text-xs font-medium text-[#e4e4e7]">{effectiveMargin} bps</p>
               </div>
               <div>
                 <p className="text-[10px] text-[#52525b]">Leverage</p>
-                <p className="text-xs font-medium text-[#e4e4e7]">10x</p>
+                <p className="text-xs font-medium text-[#e4e4e7]">{effectiveMaxLeverage}x</p>
               </div>
             </div>
           </div>
+
+          {/* Advanced Settings */}
+          <button
+            type="button"
+            onClick={() => setShowAdvanced(!showAdvanced)}
+            className="flex items-center gap-1.5 text-xs text-[#71717a] hover:text-[#a1a1aa] transition-colors"
+          >
+            <span className={`transition-transform ${showAdvanced ? "rotate-90" : ""}`}>▶</span>
+            Advanced Settings
+          </button>
+
+          {showAdvanced && (
+            <div className="space-y-3 rounded-lg border border-[#1e1e2e] bg-[#0a0a12] p-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[10px] font-medium text-[#71717a] mb-1">Trading Fee (bps)</label>
+                  <input
+                    type="number"
+                    value={effectiveTradingFee}
+                    onChange={(e) => setTradingFeeBps(Math.max(1, Math.min(1000, Number(e.target.value))))}
+                    className="w-full rounded-lg border border-[#1e1e2e] bg-[#12121a] px-3 py-1.5 text-sm text-[#e4e4e7] focus:border-blue-500 focus:outline-none"
+                  />
+                  <p className="mt-0.5 text-[9px] text-[#52525b]">{(effectiveTradingFee / 100).toFixed(2)}% per trade</p>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-medium text-[#71717a] mb-1">Initial Margin (bps)</label>
+                  <input
+                    type="number"
+                    value={effectiveMargin}
+                    onChange={(e) => setInitialMarginBps(Math.max(100, Math.min(10000, Number(e.target.value))))}
+                    className="w-full rounded-lg border border-[#1e1e2e] bg-[#12121a] px-3 py-1.5 text-sm text-[#e4e4e7] focus:border-blue-500 focus:outline-none"
+                  />
+                  <p className="mt-0.5 text-[9px] text-[#52525b]">Max {effectiveMaxLeverage}x leverage</p>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[10px] font-medium text-[#71717a] mb-1">LP Collateral</label>
+                  <input
+                    type="text"
+                    value={effectiveLpCollateral}
+                    onChange={(e) => setLpCollateral(e.target.value.replace(/[^0-9]/g, ""))}
+                    className="w-full rounded-lg border border-[#1e1e2e] bg-[#12121a] px-3 py-1.5 text-sm text-[#e4e4e7] focus:border-blue-500 focus:outline-none"
+                  />
+                  <p className="mt-0.5 text-[9px] text-[#52525b]">Base units deposited as LP</p>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-medium text-[#71717a] mb-1">Insurance Fund</label>
+                  <input
+                    type="text"
+                    value={insuranceAmount}
+                    onChange={(e) => setInsuranceAmount(e.target.value.replace(/[^0-9]/g, ""))}
+                    className="w-full rounded-lg border border-[#1e1e2e] bg-[#12121a] px-3 py-1.5 text-sm text-[#e4e4e7] focus:border-blue-500 focus:outline-none"
+                  />
+                  <p className="mt-0.5 text-[9px] text-[#52525b]">Base units for insurance</p>
+                </div>
+              </div>
+            </div>
+          )}
 
           {!quickLaunch.poolInfo && (
             <div className="rounded-lg bg-amber-900/20 p-3">
