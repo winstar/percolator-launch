@@ -16,6 +16,10 @@ interface PriceEntry {
   timestamp: number;
 }
 
+// DexScreener rate limit: cache responses for 10s to avoid hitting limits
+const dexScreenerCache = new Map<string, { data: DexScreenerResponse; fetchedAt: number }>();
+const DEX_SCREENER_CACHE_TTL_MS = 10_000;
+
 interface DexScreenerResponse {
   pairs?: Array<{ priceUsd?: string }>;
 }
@@ -30,11 +34,21 @@ export class OracleService {
   private readonly rateLimitMs = 5_000;
   private readonly maxHistory = 100;
 
-  /** Fetch price from DexScreener */
+  /** Fetch price from DexScreener (with rate-limit cache) */
   async fetchDexScreenerPrice(mint: string): Promise<bigint | null> {
     try {
+      // Check cache first
+      const cached = dexScreenerCache.get(mint);
+      if (cached && Date.now() - cached.fetchedAt < DEX_SCREENER_CACHE_TTL_MS) {
+        const pair = cached.data.pairs?.[0];
+        if (!pair?.priceUsd) return null;
+        return BigInt(Math.round(parseFloat(pair.priceUsd) * 1_000_000));
+      }
+
       const res = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${mint}`);
       const json = (await res.json()) as DexScreenerResponse;
+      dexScreenerCache.set(mint, { data: json, fetchedAt: Date.now() });
+
       const pair = json.pairs?.[0];
       if (!pair?.priceUsd) return null;
       return BigInt(Math.round(parseFloat(pair.priceUsd) * 1_000_000));

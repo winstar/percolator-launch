@@ -123,8 +123,15 @@ export function useCreateMarket() {
       if (startStep === 0) {
         slabKp = Keypair.generate();
         slabPk = slabKp.publicKey;
+        // Persist keypair for retry recovery
+        if (typeof sessionStorage !== "undefined") {
+          sessionStorage.setItem(
+            "percolator_slab_keypair",
+            JSON.stringify(Array.from(slabKp.secretKey)),
+          );
+        }
       } else {
-        // On retry, slab address must already be set
+        // On retry, try to recover slab keypair from sessionStorage
         if (!state.slabAddress) {
           setState((s) => ({
             ...s,
@@ -134,8 +141,20 @@ export function useCreateMarket() {
           return;
         }
         slabPk = new PublicKey(state.slabAddress);
-        // We can't recover the keypair for step 0 retry, but steps > 0 don't need it as a signer
-        slabKp = null as unknown as Keypair; // Not needed for steps > 0
+
+        // Try to recover keypair for step 0 retry
+        const stored = typeof sessionStorage !== "undefined"
+          ? sessionStorage.getItem("percolator_slab_keypair")
+          : null;
+        if (stored) {
+          try {
+            slabKp = Keypair.fromSecretKey(Uint8Array.from(JSON.parse(stored)));
+          } catch {
+            slabKp = null as unknown as Keypair;
+          }
+        } else {
+          slabKp = null as unknown as Keypair; // Not needed for steps > 0
+        }
       }
 
       const [vaultPda] = deriveVaultAuthority(programId, slabPk);
@@ -433,6 +452,11 @@ export function useCreateMarket() {
         } catch {
           // Non-fatal — market is on-chain even if DB write fails
           console.warn("Failed to register market in dashboard DB");
+        }
+
+        // Clean up stored keypair
+        if (typeof sessionStorage !== "undefined") {
+          sessionStorage.removeItem("percolator_slab_keypair");
         }
 
         // Done!
