@@ -16,8 +16,11 @@ proptest = "1.4"
 
 [features]
 default = []
-test = []  # Use MAX_ACCOUNTS=64 for tests
-fuzz = []  # Enable fuzzing tests
+test = []    # Use MAX_ACCOUNTS=64 (~0.17 SOL rent)
+small = []   # Use MAX_ACCOUNTS=256 (~0.68 SOL rent)
+medium = []  # Use MAX_ACCOUNTS=1024 (~2.7 SOL rent)
+# No feature = MAX_ACCOUNTS=4096 (~6.9 SOL rent)
+fuzz = []    # Enable fuzzing tests
 
 [profile.release]
 lto = "fat"

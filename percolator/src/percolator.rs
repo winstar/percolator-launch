@@ -31,10 +31,16 @@ extern crate kani;
 pub const MAX_ACCOUNTS: usize = 4; // Small for fast formal verification (1 bitmap word, 4 bits)
 
 #[cfg(all(feature = "test", not(kani)))]
-pub const MAX_ACCOUNTS: usize = 64; // Small for tests
+pub const MAX_ACCOUNTS: usize = 64; // Micro: ~0.17 SOL rent
 
-#[cfg(all(not(kani), not(feature = "test")))]
-pub const MAX_ACCOUNTS: usize = 4096; // Production
+#[cfg(all(feature = "small", not(feature = "test"), not(kani)))]
+pub const MAX_ACCOUNTS: usize = 256; // Small: ~0.68 SOL rent
+
+#[cfg(all(feature = "medium", not(feature = "test"), not(feature = "small"), not(kani)))]
+pub const MAX_ACCOUNTS: usize = 1024; // Medium: ~2.7 SOL rent
+
+#[cfg(all(not(kani), not(feature = "test"), not(feature = "small"), not(feature = "medium")))]
+pub const MAX_ACCOUNTS: usize = 4096; // Full: ~6.9 SOL rent
 
 // Derived constants - all use size_of, no hardcoded values
 pub const BITMAP_WORDS: usize = (MAX_ACCOUNTS + 63) / 64;

@@ -13,21 +13,21 @@ path = "src/percolator.rs"
 no-entrypoint = []
 test-sbf = []
 devnet = []
-test = ["percolator/test"]  # Use MAX_ACCOUNTS=64 for tests
+test = ["percolator/test"]      # MAX_ACCOUNTS=64 (~0.17 SOL)
+small = ["percolator/small"]    # MAX_ACCOUNTS=256 (~0.68 SOL)
+medium = ["percolator/medium"]  # MAX_ACCOUNTS=1024 (~2.7 SOL)
 cu-audit = []  # Enable compute unit checkpoints for CU auditing
 unsafe_close = []  # Skip all validation in CloseSlab instruction
 
 [dependencies]
 solana-program = "1.18"
 spl-token = { version = "4.0", features = ["no-entrypoint"] }
-thiserror = "1.0"
 bytemuck = { version = "1.14", features = ["derive", "min_const_generics"] }
-pyth-sdk-solana = "0.10"
-pinocchio = "0.6"
-arrayref = "0.3"
-num-derive = "0.4"
-num-traits = "0.2"
 percolator = { path = "../percolator" }
+# NOTE: pinocchio, pyth-sdk-solana, arrayref, num-derive, num-traits, thiserror
+# were removed — not used in source code, and their transitive deps (blake3,
+# wit-bindgen, constant_time_eq) use edition2024 manifests incompatible with
+# cargo-build-sbf's internal cargo 1.79.
 
 [dev-dependencies]
 bincode = "1"
