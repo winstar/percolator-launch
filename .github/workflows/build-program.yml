@@ -17,6 +17,7 @@ jobs:
     name: Build Program (${{ matrix.variant }})
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         include:
           - variant: small
@@ -27,10 +28,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Rust 1.75 (old enough to avoid edition2024 crate manifests)
+      - name: Install Rust 1.85
         uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: 1.75.0
+          toolchain: 1.85.0
 
       - name: Cache Rust
         uses: actions/cache@v4
@@ -39,30 +40,38 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             program/target
-          key: ${{ runner.os }}-cargo-${{ matrix.variant }}-${{ hashFiles('program/Cargo.lock') }}
+          key: ${{ runner.os }}-cargo-${{ matrix.variant }}-v2
 
       - name: Install Solana CLI v1.18.26
         run: |
           sh -c "$(curl -sSfL https://release.anza.xyz/v1.18.26/install)"
           echo "$HOME/.local/share/solana/install/active_release/bin" >> $GITHUB_PATH
 
-      - name: Generate compatible lockfile and vendor deps
+      - name: Generate lockfile compatible with cargo-build-sbf
         working-directory: program
         run: |
-          # Use Rust 1.75 to generate lockfile (avoids edition2024 crates)
+          # Step 1: Generate fresh lockfile with Rust 1.85 (can parse all modern manifests)
           rm -f Cargo.lock
           cargo generate-lockfile
-          echo "Lockfile version:"
+          
+          # Step 2: Downgrade crates that need rustc > 1.79 or use edition2024 manifests
+          # getrandom 0.3+ pulls in wasip2 -> wit-bindgen (edition2024)
+          cargo update getrandom@0.3.4 --precise 0.2.16 2>/dev/null || true
+          # indexmap 2.8+ needs rustc 1.82
+          cargo update indexmap@2.12.1 --precise 2.7.1 2>/dev/null || true
+          cargo update indexmap --precise 2.7.1 2>/dev/null || true
+          
+          # Step 3: Downgrade lockfile version from v4 to v3
+          sed -i 's/^version = 4$/version = 3/' Cargo.lock
+          
+          # Debug: show versions
+          echo "=== Lockfile version ==="
           head -3 Cargo.lock
-          # Vendor all deps with host cargo so cargo-build-sbf doesn't re-download
-          cargo vendor .vendor
-          mkdir -p .cargo
-          cat > .cargo/config.toml << 'EOF'
-          [source.crates-io]
-          replace-with = "vendored-sources"
-          [source.vendored-sources]
-          directory = ".vendor"
-          EOF
+          echo "=== Key deps ==="
+          grep -A1 'name = "getrandom"' Cargo.lock | grep version || true
+          grep -A1 'name = "indexmap"' Cargo.lock | grep version || true
+          grep -A1 'name = "wit-bindgen"' Cargo.lock | grep version || true
+          grep -A1 'name = "time-macros"' Cargo.lock | grep version || true
 
       - name: Build program
         working-directory: program
@@ -96,15 +105,6 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: 1.85.0
-
-      - name: Cache Rust
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            percolator/target
-          key: ${{ runner.os }}-cargo-test-${{ hashFiles('percolator/Cargo.lock') }}
 
       - name: Test risk engine (non-fuzz)
         working-directory: percolator
