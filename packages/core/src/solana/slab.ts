@@ -337,12 +337,40 @@ const ENGINE_NEXT_ACCOUNT_ID_OFF = 928; // u64
 const ENGINE_FREE_HEAD_OFF = 936;       // u16
 // _padding_accounts: [u8; 6] at 938-943 for next_free alignment
 // next_free: [u16; 4096] at 944-9135
-// 8 bytes padding for Account alignment (u128)
-const ENGINE_ACCOUNTS_OFF = 9136;       // accounts: [Account; 4096]
-
-const BITMAP_WORDS = 64;
-const MAX_ACCOUNTS = 4096;
+// Dynamic layout helpers — bitmap/accounts offsets depend on maxAccounts
+const DEFAULT_MAX_ACCOUNTS = 4096;
+const DEFAULT_BITMAP_WORDS = 64;  // ceil(4096/64)
 const ACCOUNT_SIZE = 240;  // Account._padding removed (was 248)
+
+// For backward compat, keep large default
+const ENGINE_ACCOUNTS_OFF = 9136;       // accounts offset for 4096 variant
+
+/**
+ * Compute bitmap words and accounts offset for a given maxAccounts.
+ * Layout: engine_fixed(408) + bitmap(words*8) + post_bitmap(24) + next_free(N*2) + padding + accounts(N*240)
+ */
+function slabLayout(maxAccounts: number) {
+  const bitmapWords = Math.ceil(maxAccounts / 64);
+  const bitmapBytes = bitmapWords * 8;
+  const postBitmap = 24; // last_crank_slot(8) + current_slot(8) + padding(8)
+  const nextFreeBytes = maxAccounts * 2;
+  // Align to 16 bytes for Account (u128 fields)
+  const preAccountsLen = 408 + bitmapBytes + postBitmap + nextFreeBytes;
+  const accountsOff = Math.ceil(preAccountsLen / 16) * 16;
+  return { bitmapWords, accountsOff, maxAccounts };
+}
+
+// Detect maxAccounts from slab data length
+function detectLayout(dataLen: number) {
+  // Try each known tier
+  for (const n of [64, 256, 1024, 4096]) {
+    const layout = slabLayout(n);
+    const expectedLen = ENGINE_OFF + layout.accountsOff + n * ACCOUNT_SIZE;
+    if (dataLen === expectedLen) return layout;
+  }
+  // Fallback: compute from params (will read maxAccounts from data)
+  return null;
+}
 
 // =============================================================================
 // RiskParams Layout (144 bytes, repr(C) with 8-byte alignment on SBF)
@@ -521,7 +549,9 @@ export function parseParams(data: Uint8Array): RiskParams {
  */
 export function parseEngine(data: Uint8Array): EngineState {
   const base = ENGINE_OFF;
-  if (data.length < base + ENGINE_ACCOUNTS_OFF) {
+  const layout = detectLayout(data.length);
+  const minLen = layout ? layout.accountsOff : ENGINE_ACCOUNTS_OFF;
+  if (data.length < base + minLen) {
     throw new Error("Slab data too short for RiskEngine");
   }
 
@@ -562,13 +592,15 @@ export function parseEngine(data: Uint8Array): EngineState {
  * Read bitmap to get list of used account indices.
  */
 export function parseUsedIndices(data: Uint8Array): number[] {
+  const layout = detectLayout(data.length);
+  const bitmapWords = layout ? layout.bitmapWords : DEFAULT_BITMAP_WORDS;
   const base = ENGINE_OFF + ENGINE_BITMAP_OFF;
-  if (data.length < base + BITMAP_WORDS * 8) {
+  if (data.length < base + bitmapWords * 8) {
     throw new Error("Slab data too short for bitmap");
   }
 
   const used: number[] = [];
-  for (let word = 0; word < BITMAP_WORDS; word++) {
+  for (let word = 0; word < bitmapWords; word++) {
     const bits = readU64LE(data, base + word * 8);
     if (bits === 0n) continue;
     for (let bit = 0; bit < 64; bit++) {
@@ -584,7 +616,9 @@ export function parseUsedIndices(data: Uint8Array): number[] {
  * Check if a specific account index is used.
  */
 export function isAccountUsed(data: Uint8Array, idx: number): boolean {
-  if (idx < 0 || idx >= MAX_ACCOUNTS) return false;
+  const layout = detectLayout(data.length);
+  const maxAcc = layout ? layout.maxAccounts : DEFAULT_MAX_ACCOUNTS;
+  if (idx < 0 || idx >= maxAcc) return false;
   const base = ENGINE_OFF + ENGINE_BITMAP_OFF;
   const word = Math.floor(idx / 64);
   const bit = idx % 64;
@@ -596,7 +630,9 @@ export function isAccountUsed(data: Uint8Array, idx: number): boolean {
  * Calculate the maximum valid account index for a given slab size.
  */
 export function maxAccountIndex(dataLen: number): number {
-  const accountsEnd = dataLen - ENGINE_OFF - ENGINE_ACCOUNTS_OFF;
+  const layout = detectLayout(dataLen);
+  const accOff = layout ? layout.accountsOff : ENGINE_ACCOUNTS_OFF;
+  const accountsEnd = dataLen - ENGINE_OFF - accOff;
   if (accountsEnd <= 0) return 0;
   return Math.floor(accountsEnd / ACCOUNT_SIZE);
 }
@@ -610,7 +646,9 @@ export function parseAccount(data: Uint8Array, idx: number): Account {
     throw new Error(`Account index out of range: ${idx} (max: ${maxIdx - 1})`);
   }
 
-  const base = ENGINE_OFF + ENGINE_ACCOUNTS_OFF + idx * ACCOUNT_SIZE;
+  const layout = detectLayout(data.length);
+  const accOff = layout ? layout.accountsOff : ENGINE_ACCOUNTS_OFF;
+  const base = ENGINE_OFF + accOff + idx * ACCOUNT_SIZE;
   if (data.length < base + ACCOUNT_SIZE) {
     throw new Error("Slab data too short for account");
   }
