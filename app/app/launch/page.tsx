@@ -486,7 +486,7 @@ export default function LaunchPage() {
 
       // Register market in Supabase
       try {
-        await fetch("/api/markets", {
+        const regRes = await fetch("/api/markets", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -504,7 +504,15 @@ export default function LaunchPage() {
             matcher_context: matcherCtxKp.publicKey.toBase58(),
           }),
         });
-      } catch { /* non-fatal — market is deployed on-chain regardless */ }
+        if (!regRes.ok) {
+          const regErr = await regRes.json().catch(() => ({}));
+          console.error("Market registration failed:", regRes.status, regErr);
+        } else {
+          console.log("Market registered in Supabase ✅");
+        }
+      } catch (regE) {
+        console.error("Market registration error:", regE);
+      }
 
       setStep(3);
     } catch (e) {

@@ -14,7 +14,7 @@ export async function sendTx({
   instruction,
   computeUnits = 200_000,
 }: SendTxParams): Promise<string> {
-  if (!wallet.publicKey || !wallet.sendTransaction) {
+  if (!wallet.publicKey || !wallet.signTransaction) {
     throw new Error("Wallet not connected");
   }
 
@@ -27,7 +27,13 @@ export async function sendTx({
   tx.recentBlockhash = blockhash;
   tx.feePayer = wallet.publicKey;
 
-  const signature = await wallet.sendTransaction(tx, connection);
+  // Use signTransaction + sendRawTransaction to bypass Phantom's RPC
+  // (Phantom's sendTransaction routes through its own endpoint which rate-limits)
+  const signed = await wallet.signTransaction(tx);
+  const signature = await connection.sendRawTransaction(signed.serialize(), {
+    skipPreflight: false,
+    preflightCommitment: "confirmed",
+  });
   await connection.confirmTransaction({ signature, blockhash, lastValidBlockHeight }, "confirmed");
   return signature;
 }
