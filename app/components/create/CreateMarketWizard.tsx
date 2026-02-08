@@ -545,7 +545,7 @@ export const CreateMarketWizard: FC = () => {
       maxAccounts: selectedTier.maxAccounts,
       slabDataSize: selectedTier.dataSize,
       symbol: symbol || "UNKNOWN",
-      name: name || "Unknown Token",
+      name: tokenMeta?.name || "Unknown Token",
       decimals: decimals,
     };
     create(params);

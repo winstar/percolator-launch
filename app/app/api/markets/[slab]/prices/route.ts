@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServiceClient } from "@/lib/supabase";
 
+export const dynamic = "force-dynamic";
+
 // GET /api/markets/[slab]/prices — oracle price history (for charts)
 export async function GET(
   req: NextRequest,
@@ -45,7 +47,8 @@ export async function POST(
   const body = await req.json();
   const supabase = getServiceClient();
 
-  const { error } = await supabase.from("oracle_prices").insert({
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error } = await (supabase.from("oracle_prices") as any).insert({
     slab_address: slab,
     price_e6: body.price_e6,
     timestamp: body.timestamp,

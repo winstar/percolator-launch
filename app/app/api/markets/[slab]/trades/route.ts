@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServiceClient } from "@/lib/supabase";
+export const dynamic = "force-dynamic";
 
 // GET /api/markets/[slab]/trades — recent trades for a market
 export async function GET(
@@ -38,7 +39,7 @@ export async function POST(
   const body = await req.json();
   const supabase = getServiceClient();
 
-  const { error } = await supabase.from("trades").insert({
+  const { error } = await (supabase.from("trades") as any).insert({
     slab_address: slab,
     ...body,
   });

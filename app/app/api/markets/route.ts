@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServiceClient } from "@/lib/supabase";
+export const dynamic = "force-dynamic";
 
 // GET /api/markets — list all active markets with stats
 export async function GET() {
@@ -44,8 +45,9 @@ export async function POST(req: NextRequest) {
   const supabase = getServiceClient();
 
   // Insert market
-  const { data: market, error: marketError } = await supabase
-    .from("markets")
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: market, error: marketError } = await (supabase
+    .from("markets") as any)
     .insert({
       slab_address,
       mint_address,
@@ -68,7 +70,7 @@ export async function POST(req: NextRequest) {
   }
 
   // Create initial stats row
-  await supabase.from("market_stats").insert({
+  await (supabase.from("market_stats") as any).insert({
     slab_address,
     last_price: initial_price_e6 ? initial_price_e6 / 1_000_000 : null,
   });

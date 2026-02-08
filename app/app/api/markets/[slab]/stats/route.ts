@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServiceClient } from "@/lib/supabase";
+export const dynamic = "force-dynamic";
 
 // POST /api/markets/[slab]/stats — update market stats (called by indexer/keeper)
 export async function POST(
@@ -17,8 +18,9 @@ export async function POST(
   const body = await req.json();
   const supabase = getServiceClient();
 
-  const { error } = await supabase
-    .from("market_stats")
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error } = await (supabase
+    .from("market_stats") as any)
     .upsert({
       slab_address: slab,
       ...body,

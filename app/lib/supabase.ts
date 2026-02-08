@@ -1,15 +1,42 @@
 import { createClient } from "@supabase/supabase-js";
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+// Lazy singletons — avoids build-time crashes when env vars aren't available during SSG
+let _anonClient: ReturnType<typeof createClient> | null = null;
+let _serviceClient: ReturnType<typeof createClient> | null = null;
 
-// Client-side (anon key, respects RLS)
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+export function getSupabase() {
+  if (!_anonClient) {
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    if (!url || !key) throw new Error("Supabase env vars not set");
+    _anonClient = createClient(url, key);
+  }
+  return _anonClient;
+}
+
+/** @deprecated Use getSupabase() instead */
+export const supabase = (() => {
+  // Only eagerly create on client side where env vars are always available
+  if (typeof window !== "undefined") {
+    return createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    );
+  }
+  // Server-side: return a dummy that will be replaced at runtime
+  // API routes should use getSupabase() or getServiceClient()
+  return null as unknown as ReturnType<typeof createClient>;
+})();
 
 // Server-side (service role, bypasses RLS)
 export function getServiceClient() {
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-  return createClient(supabaseUrl, serviceKey);
+  if (!_serviceClient) {
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!url || !serviceKey) throw new Error("Supabase env vars not set");
+    _serviceClient = createClient(url, serviceKey);
+  }
+  return _serviceClient;
 }
 
 export interface Market {

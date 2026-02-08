@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServiceClient } from "@/lib/supabase";
+export const dynamic = "force-dynamic";
 
 // GET /api/markets/[slab] — get single market with stats
 export async function GET(
