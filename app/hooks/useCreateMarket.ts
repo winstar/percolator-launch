@@ -261,15 +261,36 @@ export function useCreateMarket() {
             programId: matcherProgramId,
           });
 
-          // 2. Initialize matcher context (passthrough matcher — tag 1, stores LP PDA)
-          // Matcher init instruction: accounts = [lp_pda (read), ctx (write)]
+          // 2. Initialize matcher context with vAMM (Tag 2 = InitVamm, 66 bytes)
+          // Matcher accounts: [lp_pda (read), ctx (write)]
+          // vAMM params: mode(1) + tradingFeeBps(4) + baseSpreadBps(4) + maxTotalBps(4) +
+          //              impactKBps(4) + liquidityNotionalE6(16) + maxFillAbs(16) + maxInventoryAbs(16)
+          const vammData = new Uint8Array(66);
+          const vammDv = new DataView(vammData.buffer);
+          let off = 0;
+          vammData[off] = 2; off += 1;             // Tag 2 = InitVamm
+          vammData[off] = 0; off += 1;             // mode 0 = passive
+          vammDv.setUint32(off, 50, true); off += 4;   // tradingFeeBps = 50 (0.5%)
+          vammDv.setUint32(off, 50, true); off += 4;   // baseSpreadBps = 50 (0.5%)
+          vammDv.setUint32(off, 200, true); off += 4;  // maxTotalBps = 200 (2%)
+          vammDv.setUint32(off, 0, true); off += 4;    // impactKBps = 0
+          // liquidityNotionalE6 (u128) = 10M (10_000_000 * 1e6)
+          vammDv.setBigUint64(off, 10_000_000_000_000n, true); off += 8;
+          vammDv.setBigUint64(off, 0n, true); off += 8;
+          // maxFillAbs (u128) = 1M
+          vammDv.setBigUint64(off, 1_000_000_000_000n, true); off += 8;
+          vammDv.setBigUint64(off, 0n, true); off += 8;
+          // maxInventoryAbs (u128) = 0 (unlimited)
+          vammDv.setBigUint64(off, 0n, true); off += 8;
+          vammDv.setBigUint64(off, 0n, true); off += 8;
+
           const initMatcherIx = new TransactionInstruction({
             programId: matcherProgramId,
             keys: [
               { pubkey: lpPda, isSigner: false, isWritable: false },
               { pubkey: matcherCtxKp.publicKey, isSigner: false, isWritable: true },
             ],
-            data: Buffer.from([1]), // Tag 1 = Init (passthrough matcher)
+            data: Buffer.from(vammData),
           });
 
           // 3. Initialize LP in percolator with real matcher
