@@ -705,7 +705,7 @@ export default function LaunchPage() {
                 </span>
                 {s.sig && (
                   <a
-                    href={`https://explorer.solana.com/tx/${s.sig}`}
+                    href={`https://explorer.solana.com/tx/${s.sig}${typeof window !== "undefined" && localStorage.getItem("percolator_network") === "mainnet" ? "" : "?cluster=devnet"}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="font-mono text-xs text-slate-500 hover:text-emerald-400"
@@ -749,7 +749,7 @@ export default function LaunchPage() {
         <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/5 p-8 text-center">
           <div className="mb-4 text-5xl">🎉</div>
           <h3 className="mb-2 text-2xl font-bold text-white">Market Deployed!</h3>
-          <p className="mb-4 text-slate-400">Your perpetual futures market is live on Solana mainnet.</p>
+          <p className="mb-4 text-slate-400">Your perpetual futures market is live on Solana.</p>
           <div className="mb-6 rounded-xl bg-[#0a0b0f] p-4">
             <p className="text-xs text-slate-500">Market Address (Slab)</p>
             <p className="font-mono text-sm text-emerald-400">{slabAddress}</p>

@@ -1,6 +1,6 @@
 "use client";
 
-import { FC, useCallback, useState, useEffect } from "react";
+import { FC, useCallback, useState, useEffect, useMemo } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import {
   Connection,
@@ -36,7 +36,7 @@ const DevnetMintContent: FC = () => {
   const [airdropping, setAirdropping] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  const connection = new Connection(DEVNET_RPC, "confirmed");
+  const connection = useMemo(() => new Connection(DEVNET_RPC, "confirmed"), []);
 
   // Set recipient to connected wallet if available
   useEffect(() => {
@@ -157,6 +157,55 @@ const DevnetMintContent: FC = () => {
     }
   };
 
+  // Mint more of an existing token
+  const [existingMint, setExistingMint] = useState("");
+  const [mintMoreAmount, setMintMoreAmount] = useState("100000");
+  const [mintingMore, setMintingMore] = useState(false);
+
+  const handleMintMore = useCallback(async () => {
+    if (!publicKey || !signTransaction || !existingMint) return;
+    setMintingMore(true);
+    setStatus("Minting more tokens…");
+    try {
+      const mintPk = new PublicKey(existingMint);
+      const recipientPk = new PublicKey(recipient);
+      // Fetch mint info to get decimals
+      const mintInfo = await connection.getParsedAccountInfo(mintPk);
+      if (!mintInfo.value) throw new Error("Mint not found");
+      const parsedMint = (mintInfo.value.data as any)?.parsed;
+      if (!parsedMint || parsedMint.type !== "mint") throw new Error("Not a valid mint");
+      const dec = parsedMint.info.decimals;
+
+      const ata = await getAssociatedTokenAddress(mintPk, recipientPk);
+      const tx = new Transaction();
+
+      // Create ATA if it doesn't exist
+      const ataInfo = await connection.getAccountInfo(ata);
+      if (!ataInfo) {
+        tx.add(createAssociatedTokenAccountInstruction(publicKey, ata, recipientPk, mintPk));
+      }
+
+      const rawAmount = BigInt(mintMoreAmount) * BigInt(10 ** dec);
+      tx.add(createMintToInstruction(mintPk, ata, publicKey, rawAmount));
+
+      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash("confirmed");
+      tx.feePayer = publicKey;
+      tx.recentBlockhash = blockhash;
+      const signed = await signTransaction(tx);
+      const sig = await connection.sendRawTransaction(signed.serialize(), {
+        skipPreflight: false,
+        preflightCommitment: "confirmed",
+      });
+      await connection.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight }, "confirmed");
+      setStatus(`Minted ${Number(mintMoreAmount).toLocaleString()} more tokens! Tx: ${sig.slice(0, 12)}…`);
+      await refreshBalance();
+    } catch (e: unknown) {
+      setStatus(`Error: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setMintingMore(false);
+    }
+  }, [publicKey, signTransaction, existingMint, mintMoreAmount, recipient, refreshBalance]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const cardClass = "rounded-xl border border-[#1e2433] bg-[#12131a] p-6";
   const btnPrimary =
     "rounded-lg bg-emerald-500 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-emerald-600 disabled:opacity-40 disabled:cursor-not-allowed";
@@ -266,6 +315,44 @@ const DevnetMintContent: FC = () => {
             >
               {loading ? "Creating…" : `Create Mint + Mint ${Number(supply).toLocaleString()} Tokens`}
             </button>
+          </div>
+        )}
+
+        {/* Mint More - existing token */}
+        {connected && (
+          <div className={cardClass}>
+            <h2 className="mb-3 text-sm font-bold uppercase tracking-wider text-slate-400">
+              🔄 Mint More (Existing Token)
+            </h2>
+            <p className="mb-3 text-xs text-slate-500">Already deployed a market? Mint more of the same token to your wallet.</p>
+            <div className="space-y-3">
+              <div>
+                <label className="mb-1 block text-xs text-slate-400">Existing Mint Address</label>
+                <input
+                  type="text"
+                  value={existingMint}
+                  onChange={(e) => setExistingMint(e.target.value)}
+                  placeholder="Paste token mint address..."
+                  className={inputClass}
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs text-slate-400">Amount to Mint</label>
+                <input
+                  type="text"
+                  value={mintMoreAmount}
+                  onChange={(e) => setMintMoreAmount(e.target.value.replace(/[^0-9]/g, ""))}
+                  className={inputClass}
+                />
+              </div>
+              <button
+                className={`${btnPrimary} w-full`}
+                onClick={handleMintMore}
+                disabled={mintingMore || !existingMint || !mintMoreAmount}
+              >
+                {mintingMore ? "Minting…" : `Mint ${Number(mintMoreAmount).toLocaleString()} More Tokens`}
+              </button>
+            </div>
           </div>
         )}
 
