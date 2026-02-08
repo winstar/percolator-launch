@@ -47,7 +47,8 @@ export function useWithdraw(slabAddress: string) {
         const instructions = [];
 
         // Auto-crank: push fresh oracle price + crank before withdraw (admin oracle mode)
-        if (isHyperp) {
+        const userIsAuthority = mktConfig.oracleAuthority?.equals(wallet.publicKey);
+        if (isHyperp && userIsAuthority) {
           const now = Math.floor(Date.now() / 1000);
           const priceE6 = mktConfig.authorityPriceE6?.toString() ?? "1000000";
           instructions.push(buildIx({

@@ -253,8 +253,12 @@ export function useCreateMarket() {
           const instructions: TransactionInstruction[] = [];
 
           if (isAdminOracle) {
-            // SetOracleAuthority
-            const setAuthData = encodeSetOracleAuthority({ newAuthority: wallet.publicKey });
+            // SetOracleAuthority — delegate to crank wallet so background service can push prices
+            const cfg = getConfig();
+            const oracleAuthority = cfg.crankWallet
+              ? new PublicKey(cfg.crankWallet)
+              : wallet.publicKey;  // fallback to user if no crank configured
+            const setAuthData = encodeSetOracleAuthority({ newAuthority: oracleAuthority });
             const setAuthKeys = buildAccountMetas(ACCOUNTS_SET_ORACLE_AUTHORITY, [
               wallet.publicKey, slabPk,
             ]);

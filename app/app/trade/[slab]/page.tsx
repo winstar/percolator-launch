@@ -14,6 +14,7 @@ import { HealthBadge } from "@/components/market/HealthBadge";
 import { ShareButton } from "@/components/market/ShareCard";
 import { computeMarketHealth } from "@/lib/health";
 import { useLivePrice } from "@/hooks/useLivePrice";
+import { DelegateCrankButton } from "@/components/trade/DelegateCrankButton";
 
 function Collapsible({ title, defaultOpen = true, children }: { title: string; defaultOpen?: boolean; children: React.ReactNode }) {
   const [open, setOpen] = useState(defaultOpen);
@@ -75,6 +76,7 @@ function TradePageInner({ slab }: { slab: string }) {
         <div className="space-y-4 sm:space-y-6">
           <AccountsCard />
           <DepositWithdrawCard slabAddress={slab} />
+          <DelegateCrankButton slabAddress={slab} />
           <Collapsible title="Engine Health" defaultOpen={false}>
             <EngineHealthCard />
           </Collapsible>

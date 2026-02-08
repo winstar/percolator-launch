@@ -48,7 +48,9 @@ export function useTrade(slabAddress: string) {
         const instructions = [];
 
         // Auto-crank: push fresh oracle price + crank before trade (admin oracle mode)
-        if (isHyperp) {
+        // Only push price if user IS the oracle authority (otherwise crank service handles it)
+        const userIsAuthority = mktConfig.oracleAuthority?.equals(wallet.publicKey);
+        if (isHyperp && userIsAuthority) {
           const now = Math.floor(Date.now() / 1000);
           // Use last known price from slab state or default
           const priceE6 = mktConfig.authorityPriceE6?.toString() ?? "1000000";
