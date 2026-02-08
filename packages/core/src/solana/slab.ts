@@ -331,7 +331,7 @@ const ENGINE_LP_MAX_ABS_SWEEP_OFF = 392;// U128
 // Bitmap: 64 u64 words = 512 bytes
 const ENGINE_BITMAP_OFF = 408;
 // After bitmap (408 + 512 = 920):
-const ENGINE_NUM_USED_OFF = 920;        // u16
+const ENGINE_NUM_USED_OFF_LARGE = 920;  // u16 — for 4096-slot variant only
 // 6 bytes padding for u64 alignment
 const ENGINE_NEXT_ACCOUNT_ID_OFF = 928; // u64
 const ENGINE_FREE_HEAD_OFF = 936;       // u16
@@ -583,8 +583,16 @@ export function parseEngine(data: Uint8Array): EngineState {
     lpSumAbs: readU128LE(data, base + ENGINE_LP_SUM_ABS_OFF),
     lpMaxAbs: readU128LE(data, base + ENGINE_LP_MAX_ABS_OFF),
     lpMaxAbsSweep: readU128LE(data, base + ENGINE_LP_MAX_ABS_SWEEP_OFF),
-    numUsedAccounts: readU16LE(data, base + ENGINE_NUM_USED_OFF),
-    nextAccountId: readU64LE(data, base + ENGINE_NEXT_ACCOUNT_ID_OFF),
+    numUsedAccounts: (() => {
+      const bw = layout ? layout.bitmapWords : DEFAULT_BITMAP_WORDS;
+      return readU16LE(data, base + ENGINE_BITMAP_OFF + bw * 8);
+    })(),
+    nextAccountId: (() => {
+      const bw = layout ? layout.bitmapWords : DEFAULT_BITMAP_WORDS;
+      const numUsedOff = ENGINE_BITMAP_OFF + bw * 8;
+      // next_account_id is u64 (8-byte aligned) after num_used(u16)
+      return readU64LE(data, base + Math.ceil((numUsedOff + 2) / 8) * 8);
+    })(),
   };
 }
 
