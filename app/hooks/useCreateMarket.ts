@@ -20,6 +20,7 @@ import {
   encodeKeeperCrank,
   encodeSetOracleAuthority,
   encodePushOraclePrice,
+  encodeUpdateConfig,
   ACCOUNTS_INIT_MARKET,
   ACCOUNTS_INIT_LP,
   ACCOUNTS_DEPOSIT_COLLATERAL,
@@ -27,6 +28,7 @@ import {
   ACCOUNTS_KEEPER_CRANK,
   ACCOUNTS_SET_ORACLE_AUTHORITY,
   ACCOUNTS_PUSH_ORACLE_PRICE,
+  ACCOUNTS_UPDATE_CONFIG,
   buildAccountMetas,
   WELL_KNOWN,
   buildIx,
@@ -69,9 +71,9 @@ const STEP_LABELS = [
   "Creating slab account...",
   "Creating vault token account...",
   "Initializing market...",
+  "Oracle setup & pre-LP crank...",
   "Initializing LP...",
   "Depositing collateral & insurance...",
-  "Setting up oracle & cranking...",
 ];
 
 export function useCreateMarket() {
@@ -195,12 +197,12 @@ export function useCreateMarket() {
             admin: wallet.publicKey,
             collateralMint: params.mint,
             indexFeedId: params.oracleFeed,
-            maxStalenessSecs: "50",
+            maxStalenessSecs: "86400",           // 24h — generous for admin oracle mode
             confFilterBps: 0,
             invert: params.invert ? 1 : 0,
             unitScale: 0,
             initialMarkPriceE6: params.initialPriceE6.toString(),
-            warmupPeriodSlots: "0",
+            warmupPeriodSlots: "100",              // Match MidTermDev — warmup before trading
             maintenanceMarginBps: (initialMarginBps / 2n).toString(),
             initialMarginBps: initialMarginBps.toString(),
             tradingFeeBps: BigInt(params.tradingFeeBps).toString(),
@@ -208,11 +210,11 @@ export function useCreateMarket() {
             newAccountFee: "1000000",
             riskReductionThreshold: "0",
             maintenanceFeePerSlot: "0",
-            maxCrankStalenessSlots: "100",
+            maxCrankStalenessSlots: "400",         // Match MidTermDev — more forgiving
             liquidationFeeBps: "100",
-            liquidationFeeCap: "0",
+            liquidationFeeCap: "100000000000",     // Cap liquidation fees (was 0 = uncapped)
             liquidationBufferBps: "50",
-            minLiquidationAbs: "0",
+            minLiquidationAbs: "1000000",          // Prevent dust liquidations
           });
 
           const initMarketKeys = buildAccountMetas(ACCOUNTS_INIT_MARKET, [
@@ -223,7 +225,7 @@ export function useCreateMarket() {
             WELL_KNOWN.tokenProgram,
             WELL_KNOWN.clock,
             WELL_KNOWN.rent,
-            vaultAta,
+            vaultPda,              // dummyAta slot — MidTermDev passes vaultPda here
             WELL_KNOWN.systemProgram,
           ]);
 
@@ -237,22 +239,82 @@ export function useCreateMarket() {
           setState((s) => ({ ...s, txSigs: [...s.txSigs, sig] }));
         }
 
-        // Step 3: InitLP with matcher program (atomic: create ctx + init LP)
+        // Step 3: Oracle setup + UpdateConfig + pre-LP crank
+        // MidTermDev does this BEFORE InitLP — market must be cranked first
         if (startStep <= 3) {
           setState((s) => ({ ...s, step: 3, stepLabel: STEP_LABELS[3] }));
+
+          const instructions: TransactionInstruction[] = [];
+
+          if (isAdminOracle) {
+            // SetOracleAuthority
+            const setAuthData = encodeSetOracleAuthority({ newAuthority: wallet.publicKey });
+            const setAuthKeys = buildAccountMetas(ACCOUNTS_SET_ORACLE_AUTHORITY, [
+              wallet.publicKey, slabPk,
+            ]);
+            instructions.push(buildIx({ programId, keys: setAuthKeys, data: setAuthData }));
+
+            // PushOraclePrice
+            const now = Math.floor(Date.now() / 1000);
+            const pushData = encodePushOraclePrice({
+              priceE6: params.initialPriceE6.toString(),
+              timestamp: now.toString(),
+            });
+            const pushKeys = buildAccountMetas(ACCOUNTS_PUSH_ORACLE_PRICE, [
+              wallet.publicKey, slabPk,
+            ]);
+            instructions.push(buildIx({ programId, keys: pushKeys, data: pushData }));
+          }
+
+          // UpdateConfig — set funding rate parameters (MidTermDev Step 6)
+          const updateConfigData = encodeUpdateConfig({
+            fundingHorizonSlots: "3600",
+            fundingKBps: "100",
+            fundingInvScaleNotionalE6: "1000000000000",
+            fundingMaxPremiumBps: "1000",
+            fundingMaxBpsPerSlot: "10",
+            threshFloor: "0",
+            threshRiskBps: "500",
+            threshUpdateIntervalSlots: "100",
+            threshStepBps: "100",
+            threshAlphaBps: "5000",
+            threshMin: "0",
+            threshMax: "1000000000000000000",
+            threshMinStep: "0",
+          });
+          const updateConfigKeys = buildAccountMetas(ACCOUNTS_UPDATE_CONFIG, [
+            wallet.publicKey, slabPk,
+          ]);
+          instructions.push(buildIx({ programId, keys: updateConfigKeys, data: updateConfigData }));
+
+          // Pre-LP KeeperCrank
+          const crankData = encodeKeeperCrank({ callerIdx: 65535, allowPanic: false });
+          const oracleAccount = isAdminOracle ? slabPk : derivePythPushOraclePDA(params.oracleFeed)[0];
+          const crankKeys = buildAccountMetas(ACCOUNTS_KEEPER_CRANK, [
+            wallet.publicKey, slabPk, WELL_KNOWN.clock, oracleAccount,
+          ]);
+          instructions.push(buildIx({ programId, keys: crankKeys, data: crankData }));
+
+          const sig = await sendTx({
+            connection, wallet, instructions, computeUnits: 500_000,
+          });
+          setState((s) => ({ ...s, txSigs: [...s.txSigs, sig] }));
+        }
+
+        // Step 4: InitLP with matcher program (atomic: create ctx + init vAMM + init LP)
+        if (startStep <= 4) {
+          setState((s) => ({ ...s, step: 4, stepLabel: STEP_LABELS[4] }));
 
           const userAta = await getAssociatedTokenAddress(params.mint, wallet.publicKey);
           const matcherProgramId = new PublicKey(getConfig().matcherProgramId);
 
-          // Generate a new matcher context keypair
           const matcherCtxKp = Keypair.generate();
           const matcherCtxRent = await connection.getMinimumBalanceForRentExemption(MATCHER_CTX_SIZE);
 
-          // Derive LP PDA (index 0 = first LP)
           const lpIdx = 0;
           const [lpPda] = deriveLpPda(programId, slabPk, lpIdx);
 
-          // 1. Create matcher context account (owned by matcher program)
+          // 1. Create matcher context account
           const createCtxIx = SystemProgram.createAccount({
             fromPubkey: wallet.publicKey,
             newAccountPubkey: matcherCtxKp.publicKey,
@@ -261,26 +323,20 @@ export function useCreateMarket() {
             programId: matcherProgramId,
           });
 
-          // 2. Initialize matcher context with vAMM (Tag 2 = InitVamm, 66 bytes)
-          // Matcher accounts: [lp_pda (read), ctx (write)]
-          // vAMM params: mode(1) + tradingFeeBps(4) + baseSpreadBps(4) + maxTotalBps(4) +
-          //              impactKBps(4) + liquidityNotionalE6(16) + maxFillAbs(16) + maxInventoryAbs(16)
+          // 2. Initialize vAMM matcher (Tag 2, 66 bytes)
           const vammData = new Uint8Array(66);
           const vammDv = new DataView(vammData.buffer);
           let off = 0;
           vammData[off] = 2; off += 1;             // Tag 2 = InitVamm
           vammData[off] = 0; off += 1;             // mode 0 = passive
-          vammDv.setUint32(off, 50, true); off += 4;   // tradingFeeBps = 50 (0.5%)
-          vammDv.setUint32(off, 50, true); off += 4;   // baseSpreadBps = 50 (0.5%)
-          vammDv.setUint32(off, 200, true); off += 4;  // maxTotalBps = 200 (2%)
-          vammDv.setUint32(off, 0, true); off += 4;    // impactKBps = 0
-          // liquidityNotionalE6 (u128) = 10M (10_000_000 * 1e6)
+          vammDv.setUint32(off, 50, true); off += 4;   // tradingFeeBps
+          vammDv.setUint32(off, 50, true); off += 4;   // baseSpreadBps
+          vammDv.setUint32(off, 200, true); off += 4;  // maxTotalBps
+          vammDv.setUint32(off, 0, true); off += 4;    // impactKBps
           vammDv.setBigUint64(off, 10_000_000_000_000n, true); off += 8;
           vammDv.setBigUint64(off, 0n, true); off += 8;
-          // maxFillAbs (u128) = 1M
           vammDv.setBigUint64(off, 1_000_000_000_000n, true); off += 8;
           vammDv.setBigUint64(off, 0n, true); off += 8;
-          // maxInventoryAbs (u128) = 0 (unlimited)
           vammDv.setBigUint64(off, 0n, true); off += 8;
           vammDv.setBigUint64(off, 0n, true); off += 8;
 
@@ -293,38 +349,29 @@ export function useCreateMarket() {
             data: Buffer.from(vammData),
           });
 
-          // 3. Initialize LP in percolator with real matcher
+          // 3. Initialize LP
           const initLpData = encodeInitLP({
             matcherProgram: matcherProgramId,
             matcherContext: matcherCtxKp.publicKey,
-            feePayment: "1000000",  // Must match newAccountFee from InitMarket
+            feePayment: "1000000",
           });
-
           const initLpKeys = buildAccountMetas(ACCOUNTS_INIT_LP, [
-            wallet.publicKey,
-            slabPk,
-            userAta,
-            vaultAta,
-            WELL_KNOWN.tokenProgram,
+            wallet.publicKey, slabPk, userAta, vaultAta, WELL_KNOWN.tokenProgram,
           ]);
-
           const initLpIx = buildIx({ programId, keys: initLpKeys, data: initLpData });
 
-          // Send as compound transaction (all 3 must succeed atomically)
           const sig = await sendTx({
-            connection,
-            wallet,
+            connection, wallet,
             instructions: [createCtxIx, initMatcherIx, initLpIx],
             computeUnits: 300_000,
             signers: [matcherCtxKp],
           });
-
           setState((s) => ({ ...s, txSigs: [...s.txSigs, sig] }));
         }
 
-        // Step 4: DepositCollateral + TopUpInsurance (combined tx)
-        if (startStep <= 4) {
-          setState((s) => ({ ...s, step: 4, stepLabel: STEP_LABELS[4] }));
+        // Step 5: DepositCollateral + TopUpInsurance
+        if (startStep <= 5) {
+          setState((s) => ({ ...s, step: 5, stepLabel: STEP_LABELS[5] }));
 
           const userAta = await getAssociatedTokenAddress(params.mint, wallet.publicKey);
 
@@ -333,96 +380,23 @@ export function useCreateMarket() {
             amount: params.lpCollateral.toString(),
           });
           const depositKeys = buildAccountMetas(ACCOUNTS_DEPOSIT_COLLATERAL, [
-            wallet.publicKey,
-            slabPk,
-            userAta,
-            vaultAta,
-            WELL_KNOWN.tokenProgram,
-            WELL_KNOWN.clock,
+            wallet.publicKey, slabPk, userAta, vaultAta,
+            WELL_KNOWN.tokenProgram, WELL_KNOWN.clock,
           ]);
           const depositIx = buildIx({ programId, keys: depositKeys, data: depositData });
 
           const topupData = encodeTopUpInsurance({ amount: params.insuranceAmount.toString() });
           const topupKeys = buildAccountMetas(ACCOUNTS_TOPUP_INSURANCE, [
-            wallet.publicKey,
-            slabPk,
-            userAta,
-            vaultAta,
-            WELL_KNOWN.tokenProgram,
+            wallet.publicKey, slabPk, userAta, vaultAta, WELL_KNOWN.tokenProgram,
           ]);
           const topupIx = buildIx({ programId, keys: topupKeys, data: topupData });
 
           const sig = await sendTx({
-            connection,
-            wallet,
+            connection, wallet,
             instructions: [depositIx, topupIx],
             computeUnits: 200_000,
           });
-
           setState((s) => ({ ...s, txSigs: [...s.txSigs, sig] }));
-        }
-
-        // Step 5: Oracle setup + crank
-        if (startStep <= 5) {
-          setState((s) => ({ ...s, step: 5, stepLabel: STEP_LABELS[5] }));
-
-          if (isAdminOracle) {
-            const setAuthData = encodeSetOracleAuthority({ newAuthority: wallet.publicKey });
-            const setAuthKeys = buildAccountMetas(ACCOUNTS_SET_ORACLE_AUTHORITY, [
-              wallet.publicKey,
-              slabPk,
-            ]);
-            const setAuthIx = buildIx({ programId, keys: setAuthKeys, data: setAuthData });
-
-            const now = Math.floor(Date.now() / 1000);
-            const pushData = encodePushOraclePrice({
-              priceE6: params.initialPriceE6.toString(),
-              timestamp: now.toString(),
-            });
-            const pushKeys = buildAccountMetas(ACCOUNTS_PUSH_ORACLE_PRICE, [
-              wallet.publicKey,
-              slabPk,
-            ]);
-            const pushIx = buildIx({ programId, keys: pushKeys, data: pushData });
-
-            const crankData = encodeKeeperCrank({ callerIdx: 65535, allowPanic: false });
-            const crankKeys = buildAccountMetas(ACCOUNTS_KEEPER_CRANK, [
-              wallet.publicKey,
-              slabPk,
-              WELL_KNOWN.clock,
-              slabPk, // admin oracle: oracle = slab
-            ]);
-            const crankIx = buildIx({ programId, keys: crankKeys, data: crankData });
-
-            const sig = await sendTx({
-              connection,
-              wallet,
-              instructions: [setAuthIx, pushIx, crankIx],
-              computeUnits: 500_000,
-            });
-
-            setState((s) => ({ ...s, txSigs: [...s.txSigs, sig] }));
-          } else {
-            const [pythPDA] = derivePythPushOraclePDA(params.oracleFeed);
-
-            const crankData = encodeKeeperCrank({ callerIdx: 65535, allowPanic: false });
-            const crankKeys = buildAccountMetas(ACCOUNTS_KEEPER_CRANK, [
-              wallet.publicKey,
-              slabPk,
-              WELL_KNOWN.clock,
-              pythPDA,
-            ]);
-            const crankIx = buildIx({ programId, keys: crankKeys, data: crankData });
-
-            const sig = await sendTx({
-              connection,
-              wallet,
-              instructions: [crankIx],
-              computeUnits: 500_000,
-            });
-
-            setState((s) => ({ ...s, txSigs: [...s.txSigs, sig] }));
-          }
         }
 
         // Done!

@@ -158,7 +158,7 @@ const QuickLaunchPanel: FC<{
               if (state.step > i || state.step === 6) status = "done";
               else if (state.step === i && state.loading) status = "active";
               else if (state.step === i && state.error) status = "error";
-              const labels = ["Create slab account", "Create vault token account", "Initialize market", "Initialize LP", "Deposit collateral & insurance", "Oracle setup & crank"];
+              const labels = ["Create slab account", "Create vault token account", "Initialize market", "Oracle setup & crank", "Initialize LP", "Deposit collateral & insurance"];
               return (
                 <div key={i} className="flex items-center gap-3">
                   <div className="flex h-6 w-6 flex-shrink-0 items-center justify-center">
@@ -586,7 +586,7 @@ export const CreateMarketWizard: FC = () => {
               if (state.step > i || state.step === 6) status = "done";
               else if (state.step === i && state.loading) status = "active";
               else if (state.step === i && state.error) status = "error";
-              const labels = ["Create slab account", "Create vault token account", "Initialize market", "Initialize LP", "Deposit collateral & insurance", "Oracle setup & crank"];
+              const labels = ["Create slab account", "Create vault token account", "Initialize market", "Oracle setup & crank", "Initialize LP", "Deposit collateral & insurance"];
               return (
                 <div key={i} className="flex items-center gap-3">
                   <div className="flex h-6 w-6 flex-shrink-0 items-center justify-center">
