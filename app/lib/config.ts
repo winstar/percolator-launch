@@ -5,7 +5,7 @@ function getNetwork(): Network {
     const stored = localStorage.getItem("percolator_network");
     if (stored === "devnet" || stored === "mainnet") return stored;
   }
-  return (process.env.NEXT_PUBLIC_DEFAULT_NETWORK as Network) ?? "devnet";
+  return (process.env.NEXT_PUBLIC_DEFAULT_NETWORK as Network) ?? "devnet"; // default devnet until mainnet launch
 }
 
 const CONFIGS = {

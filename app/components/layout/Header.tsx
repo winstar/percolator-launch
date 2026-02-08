@@ -11,7 +11,7 @@ const WalletMultiButton = dynamic(
 );
 
 export const Header: FC = () => {
-  const [network, setNet] = useState<Network>("mainnet");
+  const [network, setNet] = useState<Network>("devnet");
   useEffect(() => { setNet(getConfig().network); }, []);
 
   return (
@@ -27,7 +27,7 @@ export const Header: FC = () => {
           </Link>
           <nav className="hidden items-center gap-1 md:flex">
             <Link
-              href="/launch"
+              href="/create"
               className="rounded-lg px-3 py-1.5 text-sm font-medium text-slate-400 transition-colors hover:bg-[#1e2433] hover:text-white"
             >
               Launch
