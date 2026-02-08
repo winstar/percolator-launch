@@ -83,6 +83,7 @@ const QuickLaunchPanel: FC<{
   const [initialMarginBps, setInitialMarginBps] = useState<number | null>(null);
   const [lpCollateral, setLpCollateral] = useState<string | null>(null);
   const [insuranceAmount, setInsuranceAmount] = useState("500000");
+  const [manualPrice, setManualPrice] = useState("1.000000");
   const quickLaunch = useQuickLaunch(quickMint.length >= 32 ? quickMint : null);
 
   // Sync defaults from auto-config
@@ -100,19 +101,27 @@ const QuickLaunchPanel: FC<{
   const effectiveMaxLeverage = Math.floor(10000 / effectiveMargin);
 
   const handleQuickCreate = () => {
-    if (!quickLaunch.config || !quickLaunch.poolInfo || !publicKey) return;
+    if (!quickLaunch.config || !publicKey) return;
 
     const c = quickLaunch.config;
     const pool = quickLaunch.poolInfo;
     const tier = SLAB_TIERS[quickSlabTier];
 
-    // Derive oracle feed from pool address
-    const poolPk = new PublicKey(pool.poolAddress);
-    const oracleFeed = Array.from(poolPk.toBytes())
-      .map((b) => b.toString(16).padStart(2, "0"))
-      .join("");
+    let oracleFeed: string;
+    let priceE6: number;
 
-    const priceE6 = Math.round(pool.priceUsd * 1_000_000);
+    if (pool) {
+      // DEX pool found — use pool address as oracle feed
+      const poolPk = new PublicKey(pool.poolAddress);
+      oracleFeed = Array.from(poolPk.toBytes())
+        .map((b) => b.toString(16).padStart(2, "0"))
+        .join("");
+      priceE6 = Math.round(pool.priceUsd * 1_000_000);
+    } else {
+      // No pool (devnet / new token) — admin oracle mode (all zeros)
+      oracleFeed = "0".repeat(64);
+      priceE6 = Math.round(parseFloat(manualPrice) * 1_000_000);
+    }
 
     const params: CreateMarketParams = {
       mint: new PublicKey(c.mint),
@@ -320,15 +329,26 @@ const QuickLaunchPanel: FC<{
           )}
 
           {!quickLaunch.poolInfo && (
-            <div className="rounded-lg bg-amber-900/20 p-3">
-              <p className="text-xs text-amber-400">No DEX pool found. You can still launch with manual oracle or <button type="button" onClick={() => onFallbackToManual(quickMint, null)} className="underline hover:text-amber-300">switch to manual mode</button>.</p>
+            <div className="space-y-3">
+              <div className="rounded-lg bg-amber-900/20 p-3">
+                <p className="text-xs text-amber-400">No DEX pool found — using admin oracle mode. Set an initial price below.</p>
+              </div>
+              <div>
+                <label className="block text-[10px] font-medium text-[#71717a] mb-1">Initial Price (USD)</label>
+                <input
+                  type="text"
+                  value={manualPrice}
+                  onChange={(e) => setManualPrice(e.target.value.replace(/[^0-9.]/g, ""))}
+                  placeholder="1.000000"
+                  className="w-full rounded-lg border border-[#1e1e2e] bg-[#12121a] px-3 py-1.5 text-sm text-[#e4e4e7] focus:border-blue-500 focus:outline-none"
+                />
+              </div>
             </div>
           )}
 
           {publicKey ? (
             <button
               onClick={handleQuickCreate}
-              disabled={!quickLaunch.poolInfo}
               className="w-full rounded-lg bg-blue-600 py-3 text-sm font-semibold text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-[#1e1e2e] disabled:text-[#52525b]"
             >
               🚀 Launch Market
