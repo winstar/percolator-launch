@@ -54,9 +54,11 @@ jobs:
         run: |
           sh -c "$(curl -sSfL https://release.anza.xyz/v2.3.13/install)"
           echo "$HOME/.local/share/solana/install/active_release/bin" >> $GITHUB_PATH
-          # Show bundled toolchain version
-          cargo-build-sbf --version || true
+
+      - name: Verify Solana install
+        run: |
           solana --version
+          cargo-build-sbf --version || true
 
       - name: Generate lockfile
         working-directory: program
