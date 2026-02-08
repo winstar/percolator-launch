@@ -50,46 +50,23 @@ jobs:
             program/target
           key: ${{ runner.os }}-cargo-${{ matrix.variant }}-v2
 
-      - name: Install Solana CLI v1.18.26
+      - name: Install Solana CLI v2.3.13
         run: |
-          sh -c "$(curl -sSfL https://release.anza.xyz/v1.18.26/install)"
+          sh -c "$(curl -sSfL https://release.anza.xyz/v2.3.13/install)"
           echo "$HOME/.local/share/solana/install/active_release/bin" >> $GITHUB_PATH
+          # Show bundled toolchain version
+          cargo-build-sbf --version || true
+          solana --version
 
-      - name: Generate lockfile compatible with cargo-build-sbf
+      - name: Generate lockfile
         working-directory: program
         run: |
-          # Generate fresh lockfile with Rust 1.85 (can parse all modern manifests)
           rm -f Cargo.lock
           cargo generate-lockfile
-          
-          # Pin crates incompatible with cargo-build-sbf's rustc 1.75.0-dev
-          # Show errors instead of suppressing them
-          set +e
-          cargo update borsh-derive@1.6.0 --precise 1.5.3
-          cargo update borsh@1.6.0 --precise 1.5.3
-          cargo update toml_datetime@0.7.5 --precise 0.6.8
-          cargo update toml_edit@0.23.10 --precise 0.22.22
-          cargo update toml_parser@1.0.6 --precise 0.5.0 || cargo update toml_parser --precise 0.5.0 || true
-          cargo update indexmap@2.13.0 --precise 2.7.1
-          cargo update time-macros@0.2.27 --precise 0.2.18
-          cargo update constant_time_eq@0.4.2 --precise 0.3.1
-          cargo update blake3 --precise 1.5.5
-          cargo update hashbrown --precise 0.15.2
-          cargo update getrandom --precise 0.2.16
-          set -e
-          
-          # Downgrade lockfile version from v4 to v3 LAST (after all cargo update commands)
-          sed -i 's/^version = 4$/version = 3/' Cargo.lock
-          
-          # Debug: show what we resolved
           echo "=== Lockfile version ==="
           head -3 Cargo.lock
           echo "=== Dep count ==="
           grep -c '^\[\[package\]\]' Cargo.lock
-          echo "=== Check for edition2024 problem crates ==="
-          for crate in wit-bindgen pinocchio blake3 constant_time_eq time-macros; do
-            grep -q "name = \"$crate\"" Cargo.lock && echo "WARNING: $crate present!" || echo "OK: $crate not present"
-          done
 
       - name: Build program
         working-directory: program
