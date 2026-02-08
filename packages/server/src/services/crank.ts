@@ -34,7 +34,9 @@ export class CrankService {
   async discover(): Promise<DiscoveredMarket[]> {
     const connection = getConnection();
     const programId = new PublicKey(config.programId);
+    console.log(`[CrankService] Discovering markets for program ${config.programId}...`);
     const discovered = await discoverMarkets(connection, programId);
+    console.log(`[CrankService] Found ${discovered.length} markets`);
 
     for (const market of discovered) {
       const key = market.slabAddress.toBase58();
@@ -132,10 +134,22 @@ export class CrankService {
     if (this.timer) return;
     console.log(`[CrankService] Starting with interval ${this.intervalMs}ms`);
 
+    // Initial discover
+    this.discover().then(markets => {
+      console.log(`[CrankService] Initial discover: ${markets.length} markets found`);
+    }).catch(err => {
+      console.error("[CrankService] Initial discover failed:", err);
+    });
+
     this.timer = setInterval(async () => {
       try {
-        await this.discover();
-        await this.crankAll();
+        const markets = await this.discover();
+        if (markets.length > 0) {
+          const result = await this.crankAll();
+          if (result.failed > 0) {
+            console.warn(`[CrankService] Crank cycle: ${result.success} ok, ${result.failed} failed`);
+          }
+        }
       } catch (err) {
         console.error("[CrankService] Cycle error:", err);
       }
