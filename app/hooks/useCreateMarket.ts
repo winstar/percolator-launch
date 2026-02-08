@@ -297,7 +297,7 @@ export function useCreateMarket() {
           const initLpData = encodeInitLP({
             matcherProgram: matcherProgramId,
             matcherContext: matcherCtxKp.publicKey,
-            feePayment: "0",
+            feePayment: "1000000",  // Must match newAccountFee from InitMarket
           });
 
           const initLpKeys = buildAccountMetas(ACCOUNTS_INIT_LP, [
