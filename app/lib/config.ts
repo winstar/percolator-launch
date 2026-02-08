@@ -17,8 +17,8 @@ const CONFIGS = {
   },
   devnet: {
     rpcUrl: "https://devnet.helius-rpc.com/?api-key=e568033d-06d6-49d1-ba90-b3564c91851b",
-    programId: "2SSnp35m7FQ7cRLNKGdW5UzjYFF6RBUNq7d3m5mqNByp",
-    matcherProgramId: "4HcGCsyjAqnFua5ccuXyt8KRRQzKFbGTJkVChpS7Yfzy",
+    programId: "EXsr2Tfz8ntWYP3vgCStdknFBoafvJQugJKAh4nFdo8f",
+    matcherProgramId: "8VvDz1y1AFmzLhBZN5vRCSbBhVx3qiN6vqxCmk3arune",
     explorerUrl: "https://explorer.solana.com",
   },
 } as const;
