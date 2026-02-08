@@ -64,12 +64,9 @@ jobs:
           blake3 = { git = "https://github.com/BLAKE3-team/BLAKE3", tag = "1.5.5" }
           EOF
 
-      - name: Regenerate lockfile for cargo-build-sbf compatibility
+      - name: Remove lockfile v4 (cargo-build-sbf ships cargo 1.79, can't read v4)
         working-directory: program
-        run: |
-          # cargo-build-sbf ships cargo 1.79 which can't read lockfile v4
-          # Regenerate with current cargo to get v3 format
-          cargo generate-lockfile
+        run: rm -f Cargo.lock
 
       - name: Build program (MAX_ACCOUNTS=${{ matrix.max_accounts }})
         working-directory: program
