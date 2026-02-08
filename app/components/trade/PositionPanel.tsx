@@ -1,4 +1,5 @@
 "use client";
+import { explorerTxUrl } from "@/lib/config";
 
 import { FC, useMemo, useState } from "react";
 import { useUserAccount } from "@/hooks/useUserAccount";
@@ -246,7 +247,7 @@ export const PositionPanel: FC<{ slabAddress: string }> = ({ slabAddress }) => {
             <p className="text-xs text-[#71717a]">
               Closed:{" "}
               <a
-                href={`https://explorer.solana.com/tx/${closeSig}`}
+                href={`${explorerTxUrl(closeSig)}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-blue-400 hover:underline"

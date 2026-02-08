@@ -3,6 +3,7 @@
 import { FC, useState, useMemo, useCallback, useEffect } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { useTrade } from "@/hooks/useTrade";
+import { explorerTxUrl } from "@/lib/config";
 import { useUserAccount } from "@/hooks/useUserAccount";
 import { useEngineState } from "@/hooks/useEngineState";
 import { useSlabState } from "@/components/providers/SlabProvider";
@@ -353,7 +354,7 @@ export const TradeForm: FC<{ slabAddress: string }> = ({ slabAddress }) => {
         <p className="mt-2 text-xs text-[#71717a]">
           Tx:{" "}
           <a
-            href={`https://explorer.solana.com/tx/${lastSig}`}
+            href={`${explorerTxUrl(lastSig)}`}
             target="_blank"
             rel="noopener noreferrer"
             className="text-blue-400 hover:underline"

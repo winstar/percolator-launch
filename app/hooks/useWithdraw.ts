@@ -11,9 +11,10 @@ import {
   buildIx,
   getAta,
   deriveVaultAuthority,
+  derivePythPushOraclePDA,
 } from "@percolator/core";
 import { sendTx } from "@/lib/tx";
-import { config } from "@/lib/config";
+import { getConfig } from "@/lib/config";
 import { useSlabState } from "@/components/providers/SlabProvider";
 
 export function useWithdraw(slabAddress: string) {
@@ -29,15 +30,20 @@ export function useWithdraw(slabAddress: string) {
       setError(null);
       try {
         if (!wallet.publicKey || !mktConfig) throw new Error("Wallet not connected or market not loaded");
-        const programId = new PublicKey(config.programId);
+        const programId = new PublicKey(getConfig().programId);
         const slabPk = new PublicKey(slabAddress);
         const userAta = await getAta(wallet.publicKey, mktConfig.collateralMint);
         const [vaultPda] = deriveVaultAuthority(programId, slabPk);
 
+        // Determine oracle account based on market config
+        const feedHex = Array.from(mktConfig.indexFeedId.toBytes()).map(b => b.toString(16).padStart(2, "0")).join("");
+        const isHyperp = feedHex === "0".repeat(64);
+        const oracleAccount = isHyperp ? slabPk : derivePythPushOraclePDA(feedHex)[0];
+
         const ix = buildIx({
           programId,
           keys: buildAccountMetas(ACCOUNTS_WITHDRAW_COLLATERAL, [
-            wallet.publicKey, slabPk, mktConfig.vaultPubkey, userAta, vaultPda, WELL_KNOWN.tokenProgram, WELL_KNOWN.clock, slabPk,
+            wallet.publicKey, slabPk, mktConfig.vaultPubkey, userAta, vaultPda, WELL_KNOWN.tokenProgram, WELL_KNOWN.clock, oracleAccount,
           ]),
           data: encodeWithdrawCollateral({ userIdx: params.userIdx, amount: params.amount.toString() }),
         });

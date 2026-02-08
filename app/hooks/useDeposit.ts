@@ -12,7 +12,7 @@ import {
   getAta,
 } from "@percolator/core";
 import { sendTx } from "@/lib/tx";
-import { config } from "@/lib/config";
+import { getConfig } from "@/lib/config";
 import { useSlabState } from "@/components/providers/SlabProvider";
 
 export function useDeposit(slabAddress: string) {
@@ -28,7 +28,7 @@ export function useDeposit(slabAddress: string) {
       setError(null);
       try {
         if (!wallet.publicKey || !mktConfig) throw new Error("Wallet not connected or market not loaded");
-        const programId = new PublicKey(config.programId);
+        const programId = new PublicKey(getConfig().programId);
         const slabPk = new PublicKey(slabAddress);
         const userAta = await getAta(wallet.publicKey, mktConfig.collateralMint);
 

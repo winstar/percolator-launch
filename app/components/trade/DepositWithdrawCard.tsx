@@ -1,4 +1,5 @@
 "use client";
+import { explorerTxUrl } from "@/lib/config";
 
 import { FC, useState } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
@@ -102,7 +103,7 @@ export const DepositWithdrawCard: FC<{ slabAddress: string }> = ({ slabAddress }
       </button>
 
       {error && <p className="mt-2 text-xs text-red-400">{error}</p>}
-      {lastSig && <p className="mt-2 text-xs text-[#52525b]">Tx: <a href={`https://explorer.solana.com/tx/${lastSig}`} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline">{lastSig.slice(0, 12)}...</a></p>}
+      {lastSig && <p className="mt-2 text-xs text-[#52525b]">Tx: <a href={`${explorerTxUrl(lastSig)}`} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline">{lastSig.slice(0, 12)}...</a></p>}
     </div>
   );
 };

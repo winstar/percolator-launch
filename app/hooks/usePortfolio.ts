@@ -12,7 +12,7 @@ import {
   type DiscoveredMarket,
   type Account,
 } from "@percolator/core";
-import { config } from "@/lib/config";
+import { getConfig } from "@/lib/config";
 
 export interface PortfolioPosition {
   slabAddress: string;
@@ -41,7 +41,7 @@ export function usePortfolio(): PortfolioData {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!publicKey || !config.programId) {
+    if (!publicKey || !getConfig().programId) {
       setPositions([]);
       setTotalPnl(0n);
       setTotalDeposited(0n);
@@ -50,7 +50,7 @@ export function usePortfolio(): PortfolioData {
     }
 
     let cancelled = false;
-    const programId = new PublicKey(config.programId);
+    const programId = new PublicKey(getConfig().programId);
     const pkStr = publicKey.toBase58();
 
     async function load() {

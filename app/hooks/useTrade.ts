@@ -9,10 +9,11 @@ import {
   buildAccountMetas,
   buildIx,
   deriveLpPda,
+  derivePythPushOraclePDA,
   WELL_KNOWN,
 } from "@percolator/core";
 import { sendTx } from "@/lib/tx";
-import { config } from "@/lib/config";
+import { getConfig } from "@/lib/config";
 import { useSlabState } from "@/components/providers/SlabProvider";
 
 export function useTrade(slabAddress: string) {
@@ -31,9 +32,14 @@ export function useTrade(slabAddress: string) {
         const lpAccount = accounts.find((a) => a.idx === params.lpIdx);
         if (!lpAccount) throw new Error(`LP at index ${params.lpIdx} not found`);
 
-        const programId = new PublicKey(config.programId);
+        const programId = new PublicKey(getConfig().programId);
         const slabPk = new PublicKey(slabAddress);
         const [lpPda] = deriveLpPda(programId, slabPk, params.lpIdx);
+
+        // Determine oracle account based on market config
+        const feedHex = Array.from(mktConfig.indexFeedId.toBytes()).map(b => b.toString(16).padStart(2, "0")).join("");
+        const isHyperp = feedHex === "0".repeat(64);
+        const oracleAccount = isHyperp ? slabPk : derivePythPushOraclePDA(feedHex)[0];
 
         const ix = buildIx({
           programId,
@@ -42,7 +48,7 @@ export function useTrade(slabAddress: string) {
             lpAccount.account.owner,
             slabPk,
             WELL_KNOWN.clock,
-            slabPk,
+            oracleAccount,
             lpAccount.account.matcherProgram,
             lpAccount.account.matcherContext,
             lpPda,

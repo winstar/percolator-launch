@@ -44,3 +44,17 @@ export function setNetwork(network: Network) {
 
 // For backward compat
 export const config = getConfig();
+
+/** Build an explorer URL for a transaction */
+export function explorerTxUrl(sig: string): string {
+  const c = getConfig();
+  const cluster = c.network === "devnet" ? "?cluster=devnet" : "";
+  return `${c.explorerUrl}/tx/${sig}${cluster}`;
+}
+
+/** Build an explorer URL for an account */
+export function explorerAccountUrl(address: string): string {
+  const c = getConfig();
+  const cluster = c.network === "devnet" ? "?cluster=devnet" : "";
+  return `${c.explorerUrl}/account/${address}${cluster}`;
+}
