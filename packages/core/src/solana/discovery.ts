@@ -20,8 +20,8 @@ export interface DiscoveredMarket {
   params: RiskParams;
 }
 
-/** PERCOLAT magic bytes */
-const MAGIC_BYTES = new Uint8Array([0x50, 0x45, 0x52, 0x43, 0x4f, 0x4c, 0x41, 0x54]);
+/** PERCOLAT magic bytes — stored little-endian on-chain as TALOCREP */
+const MAGIC_BYTES = new Uint8Array([0x54, 0x41, 0x4c, 0x4f, 0x43, 0x52, 0x45, 0x50]);
 
 /** 
  * Slab tier definitions — variable slab sizes for different market needs.
