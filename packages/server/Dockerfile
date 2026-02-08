@@ -17,9 +17,10 @@ COPY packages/server/package.json packages/server/
 COPY packages/server/tsconfig.json packages/server/
 COPY packages/server/src/ packages/server/src/
 
-# Install deps (only for core + server, skip native modules except rollup)
-RUN pnpm install --filter @percolator/core --filter @percolator/server --ignore-scripts --no-optional && \
-    pnpm add -D @rollup/rollup-linux-x64-gnu --filter @percolator/core --ignore-scripts
+# Install deps - let scripts run (for rollup native) but tolerate usb failure
+RUN pnpm install --filter @percolator/core --filter @percolator/server || true
+# Ensure core deps are complete
+RUN cd packages/core && pnpm install || true
 
 # Build core first (server depends on it)
 RUN cd packages/core && npx tsup
@@ -32,15 +33,13 @@ FROM node:22-slim
 
 WORKDIR /app
 
-RUN npm install -g pnpm@10
-
-COPY --from=builder /app/package.json /app/pnpm-workspace.yaml /app/pnpm-lock.yaml ./
+COPY --from=builder /app/package.json /app/pnpm-workspace.yaml ./
 COPY --from=builder /app/packages/core/package.json packages/core/
 COPY --from=builder /app/packages/core/dist/ packages/core/dist/
 COPY --from=builder /app/packages/server/package.json packages/server/
 COPY --from=builder /app/packages/server/dist/ packages/server/dist/
 COPY --from=builder /app/node_modules/ node_modules/
-COPY --from=builder /app/packages/core/node_modules/ packages/core/node_modules/
+COPY --from=builder /app/packages/core/node_modules/ packages/core/node_modules/ 
 COPY --from=builder /app/packages/server/node_modules/ packages/server/node_modules/
 
 EXPOSE 3001
