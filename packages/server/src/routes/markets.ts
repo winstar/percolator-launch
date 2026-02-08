@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { PublicKey } from "@solana/web3.js";
 import { fetchSlab, parseHeader, parseConfig, parseEngine, SLAB_TIERS, type SlabTierKey } from "@percolator/core";
 import { getConnection } from "../utils/solana.js";
+import { config } from "../config.js";
 import type { CrankService } from "../services/crank.js";
 import type { MarketLifecycleManager, LaunchOptions } from "../services/lifecycle.js";
 
@@ -64,9 +65,26 @@ export function marketRoutes(deps: MarketDeps): Hono {
     }
   });
 
-  // POST /markets — register an existing market
+  // POST /markets — register an existing market (verified on-chain)
   app.post("/markets", async (c) => {
     const body = await c.req.json<{ slabAddress: string; metadata?: Record<string, unknown> }>();
+
+    // Verify slab exists on-chain and is owned by our program
+    try {
+      const connection = getConnection();
+      const slabPubkey = new PublicKey(body.slabAddress);
+      const accountInfo = await connection.getAccountInfo(slabPubkey);
+      if (!accountInfo) {
+        return c.json({ error: "Slab account does not exist on-chain" }, 400);
+      }
+      const programId = new PublicKey(config.programId);
+      if (!accountInfo.owner.equals(programId)) {
+        return c.json({ error: "Slab account not owned by percolator program" }, 400);
+      }
+    } catch {
+      return c.json({ error: "Failed to verify slab on-chain" }, 400);
+    }
+
     const ok = await deps.lifecycleManager.registerMarket(body.slabAddress, body.metadata ?? {});
     return c.json({ registered: ok });
   });

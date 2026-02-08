@@ -75,7 +75,7 @@ export class CrankService {
       const keypair = loadKeypair(config.crankKeypair);
       const programId = new PublicKey(config.programId);
 
-      const data = encodeKeeperCrank({ callerIdx: 0, allowPanic: false });
+      const data = encodeKeeperCrank({ callerIdx: 65535, allowPanic: false });
 
       // ACCOUNTS_KEEPER_CRANK: [caller, slab, clock, oracle]
       // For admin oracle: oracle = slab (unused but required)

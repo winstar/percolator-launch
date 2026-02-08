@@ -97,6 +97,9 @@ export class OracleService {
     const lastPush = this.lastPushTime.get(slabAddress) ?? 0;
     if (now - lastPush < this.rateLimitMs) return false;
 
+    // For coin-margined markets (collateral IS the index token), use collateralMint
+    // For USDC-margined markets, we'd need a separate indexMint field
+    // Currently all percolator markets are coin-margined, so collateralMint is correct
     const mint = marketConfig.collateralMint.toBase58();
     const priceEntry = await this.fetchPrice(mint, slabAddress);
     if (!priceEntry) return false;

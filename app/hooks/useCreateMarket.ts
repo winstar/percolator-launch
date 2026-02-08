@@ -20,6 +20,7 @@ import {
   encodeKeeperCrank,
   encodeSetOracleAuthority,
   encodePushOraclePrice,
+  encodeSetOraclePriceCap,
   encodeUpdateConfig,
   ACCOUNTS_INIT_MARKET,
   ACCOUNTS_INIT_LP,
@@ -80,6 +81,7 @@ const STEP_LABELS = [
   "Oracle setup & pre-LP crank...",
   "Initializing LP...",
   "Depositing collateral & insurance...",
+  "Final crank...",
 ];
 
 export function useCreateMarket() {
@@ -253,18 +255,7 @@ export function useCreateMarket() {
           const instructions: TransactionInstruction[] = [];
 
           if (isAdminOracle) {
-            // SetOracleAuthority — delegate to crank wallet so background service can push prices
-            const cfg = getConfig();
-            const oracleAuthority = cfg.crankWallet
-              ? new PublicKey(cfg.crankWallet)
-              : wallet.publicKey;  // fallback to user if no crank configured
-            const setAuthData = encodeSetOracleAuthority({ newAuthority: oracleAuthority });
-            const setAuthKeys = buildAccountMetas(ACCOUNTS_SET_ORACLE_AUTHORITY, [
-              wallet.publicKey, slabPk,
-            ]);
-            instructions.push(buildIx({ programId, keys: setAuthKeys, data: setAuthData }));
-
-            // PushOraclePrice
+            // 1. PushOraclePrice FIRST (while user is still authority)
             const now = Math.floor(Date.now() / 1000);
             const pushData = encodePushOraclePrice({
               priceE6: params.initialPriceE6.toString(),
@@ -274,6 +265,24 @@ export function useCreateMarket() {
               wallet.publicKey, slabPk,
             ]);
             instructions.push(buildIx({ programId, keys: pushKeys, data: pushData }));
+
+            // 2. SetOraclePriceCap — circuit breaker (10_000 = 1% max change per update)
+            const priceCapData = encodeSetOraclePriceCap({ maxChangeE2bps: BigInt(10_000) });
+            const priceCapKeys = buildAccountMetas(ACCOUNTS_SET_ORACLE_AUTHORITY, [
+              wallet.publicKey, slabPk,
+            ]);
+            instructions.push(buildIx({ programId, keys: priceCapKeys, data: priceCapData }));
+
+            // 3. SetOracleAuthority AFTER price push — delegate to crank wallet
+            const cfg = getConfig();
+            const oracleAuthority = cfg.crankWallet
+              ? new PublicKey(cfg.crankWallet)
+              : wallet.publicKey;  // fallback to user if no crank configured
+            const setAuthData = encodeSetOracleAuthority({ newAuthority: oracleAuthority });
+            const setAuthKeys = buildAccountMetas(ACCOUNTS_SET_ORACLE_AUTHORITY, [
+              wallet.publicKey, slabPk,
+            ]);
+            instructions.push(buildIx({ programId, keys: setAuthKeys, data: setAuthData }));
           }
 
           // UpdateConfig — set funding rate parameters (MidTermDev Step 6)
@@ -409,6 +418,32 @@ export function useCreateMarket() {
           setState((s) => ({ ...s, txSigs: [...s.txSigs, sig] }));
         }
 
+        // Step 6: Post-LP crank — engine needs to recognize LP capital
+        {
+          setState((s) => ({ ...s, step: 6, stepLabel: "Final crank..." }));
+
+          const instructions: TransactionInstruction[] = [];
+          const isAdminOracleMarket = params.oracleFeed === ALL_ZEROS_FEED;
+
+          if (isAdminOracleMarket) {
+            // Push fresh price from crank wallet perspective — but we're still the admin at this point
+            // The crank wallet is now the oracle authority, so we prepend a crank + oracle push
+            // Actually, the user can still crank (callerIdx=65535 = permissionless)
+          }
+
+          const oracleAccount = isAdminOracleMarket ? slabPk : derivePythPushOraclePDA(params.oracleFeed)[0];
+          const crankData = encodeKeeperCrank({ callerIdx: 65535, allowPanic: false });
+          const crankKeys = buildAccountMetas(ACCOUNTS_KEEPER_CRANK, [
+            wallet.publicKey, slabPk, WELL_KNOWN.clock, oracleAccount,
+          ]);
+          instructions.push(buildIx({ programId, keys: crankKeys, data: crankData }));
+
+          const sig = await sendTx({
+            connection, wallet, instructions, computeUnits: 200_000,
+          });
+          setState((s) => ({ ...s, txSigs: [...s.txSigs, sig] }));
+        }
+
         // Register market in Supabase so dashboard can see it
         try {
           await fetch("/api/markets", {
@@ -437,7 +472,7 @@ export function useCreateMarket() {
         setState((s) => ({
           ...s,
           loading: false,
-          step: 6,
+          step: 7,
           stepLabel: "Market created!",
         }));
       } catch (e) {

@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
+import { Connection, PublicKey } from "@solana/web3.js";
 import { getServiceClient } from "@/lib/supabase";
+import { getConfig } from "@/lib/config";
 export const dynamic = "force-dynamic";
 
 // GET /api/markets — list all active markets with stats
@@ -40,6 +42,22 @@ export async function POST(req: NextRequest) {
       { error: "Missing required fields: slab_address, mint_address, deployer" },
       { status: 400 }
     );
+  }
+
+  // Verify slab account exists on-chain and is owned by our program
+  try {
+    const cfg = getConfig();
+    const connection = new Connection(cfg.rpcUrl, "confirmed");
+    const slabPubkey = new PublicKey(slab_address);
+    const accountInfo = await connection.getAccountInfo(slabPubkey);
+    if (!accountInfo) {
+      return NextResponse.json({ error: "Slab account does not exist on-chain" }, { status: 400 });
+    }
+    if (accountInfo.owner.toBase58() !== cfg.programId) {
+      return NextResponse.json({ error: "Slab account not owned by percolator program" }, { status: 400 });
+    }
+  } catch (err) {
+    return NextResponse.json({ error: "Failed to verify slab on-chain" }, { status: 400 });
   }
 
   const supabase = getServiceClient();
