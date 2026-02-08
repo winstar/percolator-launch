@@ -1,28 +1,58 @@
 "use client";
 
-import { FC, useEffect, useState, useMemo, useRef } from "react";
+import { FC, useEffect, useState, useMemo, useRef, useCallback } from "react";
+import { useSlabState } from "@/components/providers/SlabProvider";
 
 interface PricePoint {
   price_e6: number;
   timestamp: number;
-  created_at: string;
 }
 
 export const PriceChart: FC<{ slabAddress: string }> = ({ slabAddress }) => {
+  const { config, engine } = useSlabState();
   const [prices, setPrices] = useState<PricePoint[]>([]);
-  const [loading, setLoading] = useState(true);
   const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
   const svgRef = useRef<SVGSVGElement>(null);
 
+  // Accumulate prices from on-chain slab state (polled every 3s by SlabProvider)
+  const lastPriceRef = useRef<number>(0);
+  useEffect(() => {
+    if (!config) return;
+    const priceE6 = Number(config.authorityPriceE6 ?? config.lastEffectivePriceE6 ?? 0);
+    if (priceE6 === 0 || priceE6 === lastPriceRef.current) return;
+    lastPriceRef.current = priceE6;
+    const now = Math.floor(Date.now() / 1000);
+    setPrices(prev => {
+      const next = [...prev, { price_e6: priceE6, timestamp: now }];
+      // Keep last 500 points
+      return next.slice(-500);
+    });
+  }, [config]);
+
+  // Also try to load from API (if any history exists)
   useEffect(() => {
     const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     fetch(`/api/markets/${slabAddress}/prices?since=${since}&limit=500`)
       .then((r) => r.json())
       .then((d) => {
-        setPrices((d.prices ?? []).reverse()); // ascending order
+        const apiPrices = (d.prices ?? []).reverse().map((p: { price_e6: number; timestamp: number }) => ({
+          price_e6: p.price_e6,
+          timestamp: p.timestamp,
+        }));
+        if (apiPrices.length > 0) {
+          setPrices(prev => {
+            // Merge API + live, deduplicate by timestamp
+            const merged = [...apiPrices, ...prev];
+            const seen = new Set<number>();
+            return merged.filter(p => {
+              if (seen.has(p.timestamp)) return false;
+              seen.add(p.timestamp);
+              return true;
+            }).sort((a, b) => a.timestamp - b.timestamp).slice(-500);
+          });
+        }
       })
-      .catch(() => {})
-      .finally(() => setLoading(false));
+      .catch(() => {});
   }, [slabAddress]);
 
   const { points, minP, maxP, curPrice, high, low, isUp, minT, maxT } = useMemo(() => {
@@ -35,7 +65,7 @@ export const PriceChart: FC<{ slabAddress: string }> = ({ slabAddress }) => {
     const mx = Math.max(...vals);
     const tMin = Math.min(...times);
     const tMax = Math.max(...times);
-    const range = mx - mn || 1;
+    const range = mx - mn || 0.001;  // Small range for flat prices
     const tRange = tMax - tMin || 1;
 
     const W = 600;
@@ -65,26 +95,30 @@ export const PriceChart: FC<{ slabAddress: string }> = ({ slabAddress }) => {
     };
   }, [prices]);
 
-  const handleMouseMove = (e: React.MouseEvent<SVGSVGElement>) => {
+  const handleMouseMove = useCallback((e: React.MouseEvent<SVGSVGElement>) => {
     if (!svgRef.current || prices.length === 0) return;
     const rect = svgRef.current.getBoundingClientRect();
     const x = (e.clientX - rect.left) / rect.width;
     const idx = Math.min(Math.max(Math.round(x * (prices.length - 1)), 0), prices.length - 1);
     setHoveredIdx(idx);
-  };
+  }, [prices.length]);
 
-  if (loading) {
-    return (
-      <div className="flex h-[200px] items-center justify-center rounded-lg border border-zinc-800 bg-[#0d1117]">
-        <div className="text-sm text-slate-500">Loading chart…</div>
-      </div>
-    );
-  }
+  // Show current price even with just 1 data point
+  const currentPrice = config
+    ? Number(config.authorityPriceE6 ?? config.lastEffectivePriceE6 ?? 0) / 1e6
+    : 0;
 
-  if (prices.length === 0) {
+  if (prices.length < 2) {
     return (
-      <div className="flex h-[200px] items-center justify-center rounded-lg border border-zinc-800 bg-[#0d1117]">
-        <div className="text-sm text-slate-500">No price history yet</div>
+      <div className="flex h-[200px] flex-col items-center justify-center rounded-lg border border-zinc-800 bg-[#0d1117]">
+        {currentPrice > 0 ? (
+          <>
+            <div className="text-2xl font-bold text-white">${currentPrice < 0.01 ? currentPrice.toFixed(6) : currentPrice.toFixed(2)}</div>
+            <div className="mt-1 text-xs text-slate-500">Price chart building... (updates with each trade)</div>
+          </>
+        ) : (
+          <div className="text-sm text-slate-500">No price data yet</div>
+        )}
       </div>
     );
   }
@@ -95,7 +129,6 @@ export const PriceChart: FC<{ slabAddress: string }> = ({ slabAddress }) => {
 
   const fmtPrice = (p: number) => (p < 0.01 ? p.toFixed(6) : p < 1 ? p.toFixed(4) : p.toFixed(2));
 
-  // Time axis labels
   const timeLabels = useMemo(() => {
     if (minT === maxT) return [];
     const labels: { x: number; label: string }[] = [];
@@ -114,7 +147,7 @@ export const PriceChart: FC<{ slabAddress: string }> = ({ slabAddress }) => {
   return (
     <div className="rounded-lg border border-zinc-800 bg-[#0d1117] p-3">
       <div className="mb-2 flex items-center justify-between text-xs">
-        <span className="text-slate-400">24h Price</span>
+        <span className="text-slate-400">Price</span>
         <div className="flex gap-3">
           <span className="text-slate-500">
             H: <span className="text-white">${fmtPrice(high)}</span>
@@ -146,14 +179,11 @@ export const PriceChart: FC<{ slabAddress: string }> = ({ slabAddress }) => {
             <stop offset="100%" stopColor={color} stopOpacity="0" />
           </linearGradient>
         </defs>
-        {/* Area fill */}
         <polygon
           points={`${points} 600,130 0,130`}
           fill="url(#chartGrad)"
         />
-        {/* Line */}
         <polyline points={points} fill="none" stroke={color} strokeWidth="2" />
-        {/* Current price dot */}
         {prices.length > 0 && (() => {
           const lastPts = points.split(" ");
           const last = lastPts[lastPts.length - 1];
@@ -161,7 +191,6 @@ export const PriceChart: FC<{ slabAddress: string }> = ({ slabAddress }) => {
           return <circle cx={cx} cy={cy} r="3" fill={color} />;
         })()}
       </svg>
-      {/* Time axis */}
       <div className="relative mt-1 flex justify-between text-[10px] text-slate-600">
         {timeLabels.map((tl, i) => (
           <span key={i}>{tl.label}</span>
