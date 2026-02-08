@@ -73,6 +73,9 @@ jobs:
           cargo update indexmap@2.13.0 --precise 2.7.1
           cargo update time-macros@0.2.27 --precise 0.2.18
           cargo update constant_time_eq@0.4.2 --precise 0.3.1
+          cargo update blake3 --precise 1.5.5
+          cargo update hashbrown --precise 0.15.2
+          cargo update getrandom --precise 0.2.16
           set -e
           
           # Downgrade lockfile version from v4 to v3 LAST (after all cargo update commands)
