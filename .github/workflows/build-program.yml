@@ -64,9 +64,12 @@ jobs:
           blake3 = { git = "https://github.com/BLAKE3-team/BLAKE3", tag = "1.5.5" }
           EOF
 
-      - name: Remove lockfile v4 (cargo-build-sbf ships cargo 1.79, can't read v4)
+      - name: Force lockfile v3 (cargo-build-sbf ships cargo 1.79, can't read v4)
         working-directory: program
-        run: rm -f Cargo.lock
+        run: |
+          rm -f Cargo.lock
+          mkdir -p .cargo
+          echo -e '[lockfile]\nversion = 3' >> .cargo/config.toml
 
       - name: Build program (MAX_ACCOUNTS=${{ matrix.max_accounts }})
         working-directory: program
