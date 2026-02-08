@@ -48,19 +48,33 @@ jobs:
             program/target
           key: ${{ runner.os }}-cargo-${{ matrix.variant }}-${{ hashFiles('program/Cargo.lock') }}
 
-      - name: Install Solana CLI (v2.1.5 — ships newer platform tools)
+      - name: Install Solana CLI v2.1.5
         run: |
           sh -c "$(curl -sSfL https://release.anza.xyz/v2.1.5/install)"
           echo "$HOME/.local/share/solana/install/active_release/bin" >> $GITHUB_PATH
 
-      - name: Pin deps compatible with cargo-build-sbf rustc 1.79
+      - name: Upgrade platform-tools to v2 (rustc 1.82+)
+        run: |
+          # Default platform-tools ships rustc 1.79 which is too old for modern deps
+          # Force platform-tools v2 which ships rustc 1.82+
+          cargo-build-sbf --tools-version v2 2>/dev/null || true
+          # If --tools-version doesn't work, manually install
+          TOOLS_DIR="$HOME/.cache/solana/v2.1.5/platform-tools-v2"
+          if [ ! -d "$TOOLS_DIR" ]; then
+            TOOLS_DIR2="$HOME/.cache/solana/v2.1/platform-tools-v2"
+            if [ ! -d "$TOOLS_DIR2" ]; then
+              echo "Trying to download platform-tools v2..."
+              # List available platform tools
+              ls -la $HOME/.cache/solana/ 2>/dev/null || true
+              find $HOME/.cache/solana -name "platform-tools*" -type d 2>/dev/null || true
+            fi
+          fi
+
+      - name: Fix lockfile for platform-tools compatibility
         working-directory: program
         run: |
-          # cargo-build-sbf ships rustc 1.79 — pin deps that need newer versions
-          # First downgrade lockfile from v4 to v3 if needed
-          sed -i 's/^version = 4$/version = 3/' Cargo.lock || true
-          # Pin indexmap to version compatible with rustc 1.79
-          cargo update indexmap@2.12.1 --precise 2.7.1 2>/dev/null || true
+          # Downgrade lockfile v4 → v3 for older cargo compat
+          sed -i 's/^version = 4$/version = 3/' Cargo.lock
 
       - name: Build program (MAX_ACCOUNTS=${{ matrix.max_accounts }})
         working-directory: program
