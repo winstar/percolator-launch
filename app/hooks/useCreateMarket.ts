@@ -5,6 +5,7 @@ import {
   Keypair,
   PublicKey,
   SystemProgram,
+  TransactionInstruction,
 } from "@solana/web3.js";
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 import {
@@ -33,11 +34,12 @@ import {
   derivePythPushOraclePDA,
 } from "@percolator/core";
 import { sendTx } from "@/lib/tx";
-import { config } from "@/lib/config";
+import { config, getConfig } from "@/lib/config";
 
-import { SLAB_TIERS, slabDataSize } from "@percolator/core";
+import { SLAB_TIERS, slabDataSize, deriveLpPda } from "@percolator/core";
 const DEFAULT_SLAB_SIZE = SLAB_TIERS.large.dataSize;
 const ALL_ZEROS_FEED = "0".repeat(64);
+const MATCHER_CTX_SIZE = 320; // Minimum context size for percolator matcher
 
 export interface CreateMarketParams {
   mint: PublicKey;
@@ -235,15 +237,45 @@ export function useCreateMarket() {
           setState((s) => ({ ...s, txSigs: [...s.txSigs, sig] }));
         }
 
-        // Step 3: InitLP (passive, matcher=SystemProgram)
+        // Step 3: InitLP with matcher program (atomic: create ctx + init LP)
         if (startStep <= 3) {
           setState((s) => ({ ...s, step: 3, stepLabel: STEP_LABELS[3] }));
 
           const userAta = await getAssociatedTokenAddress(params.mint, wallet.publicKey);
+          const matcherProgramId = new PublicKey(getConfig().matcherProgramId);
 
+          // Generate a new matcher context keypair
+          const matcherCtxKp = Keypair.generate();
+          const matcherCtxRent = await connection.getMinimumBalanceForRentExemption(MATCHER_CTX_SIZE);
+
+          // Derive LP PDA (index 0 = first LP)
+          const lpIdx = 0;
+          const [lpPda] = deriveLpPda(programId, slabPk, lpIdx);
+
+          // 1. Create matcher context account (owned by matcher program)
+          const createCtxIx = SystemProgram.createAccount({
+            fromPubkey: wallet.publicKey,
+            newAccountPubkey: matcherCtxKp.publicKey,
+            lamports: matcherCtxRent,
+            space: MATCHER_CTX_SIZE,
+            programId: matcherProgramId,
+          });
+
+          // 2. Initialize matcher context (passthrough matcher — tag 1, stores LP PDA)
+          // Matcher init instruction: accounts = [lp_pda (read), ctx (write)]
+          const initMatcherIx = new TransactionInstruction({
+            programId: matcherProgramId,
+            keys: [
+              { pubkey: lpPda, isSigner: false, isWritable: false },
+              { pubkey: matcherCtxKp.publicKey, isSigner: false, isWritable: true },
+            ],
+            data: Buffer.from([1]), // Tag 1 = Init (passthrough matcher)
+          });
+
+          // 3. Initialize LP in percolator with real matcher
           const initLpData = encodeInitLP({
-            matcherProgram: SystemProgram.programId,
-            matcherContext: SystemProgram.programId,
+            matcherProgram: matcherProgramId,
+            matcherContext: matcherCtxKp.publicKey,
             feePayment: "0",
           });
 
@@ -255,12 +287,15 @@ export function useCreateMarket() {
             WELL_KNOWN.tokenProgram,
           ]);
 
-          const ix = buildIx({ programId, keys: initLpKeys, data: initLpData });
+          const initLpIx = buildIx({ programId, keys: initLpKeys, data: initLpData });
+
+          // Send as compound transaction (all 3 must succeed atomically)
           const sig = await sendTx({
             connection,
             wallet,
-            instructions: [ix],
-            computeUnits: 100_000,
+            instructions: [createCtxIx, initMatcherIx, initLpIx],
+            computeUnits: 300_000,
+            signers: [matcherCtxKp],
           });
 
           setState((s) => ({ ...s, txSigs: [...s.txSigs, sig] }));

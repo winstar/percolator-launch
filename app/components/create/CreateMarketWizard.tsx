@@ -178,7 +178,7 @@ const QuickLaunchPanel: FC<{
               <p className="text-sm font-medium text-green-300">Market created successfully!</p>
               <p className="mt-1 font-mono text-xs text-green-400">Slab: {state.slabAddress}</p>
               <div className="mt-3 flex gap-2">
-                <Link href={`/trade?market=${state.slabAddress}`} className="rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700">Trade this market</Link>
+                <Link href={`/trade/${state.slabAddress}`} className="rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700">Trade this market</Link>
                 <button onClick={reset} className="rounded-lg bg-[#1a1a2e] px-4 py-2 text-sm font-medium text-[#e4e4e7] hover:bg-[#1e1e2e]">Create another</button>
               </div>
             </div>
@@ -548,7 +548,7 @@ export const CreateMarketWizard: FC = () => {
               <p className="text-sm font-medium text-green-300">Market created successfully!</p>
               <p className="mt-1 font-mono text-xs text-green-400">Slab: {state.slabAddress}</p>
               <div className="mt-3 flex gap-2">
-                <Link href={`/trade?market=${state.slabAddress}`} className="rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700">Trade this market</Link>
+                <Link href={`/trade/${state.slabAddress}`} className="rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700">Trade this market</Link>
                 <button onClick={reset} className="rounded-lg bg-[#1a1a2e] px-4 py-2 text-sm font-medium text-[#e4e4e7] hover:bg-[#1e1e2e]">Create another</button>
               </div>
             </div>
