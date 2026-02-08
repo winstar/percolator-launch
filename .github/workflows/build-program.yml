@@ -34,10 +34,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Rust (1.82 - generates lockfile v3 compatible with cargo-build-sbf)
+      - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: 1.82.0
+          toolchain: 1.85.0
 
       - name: Cache Rust
         uses: actions/cache@v4
@@ -48,25 +48,10 @@ jobs:
             program/target
           key: ${{ runner.os }}-cargo-${{ matrix.variant }}-${{ hashFiles('program/Cargo.lock') }}
 
-      - name: Install Solana CLI
+      - name: Install Solana CLI (v2.1.5 — ships newer platform tools)
         run: |
-          sh -c "$(curl -sSfL https://release.anza.xyz/v1.18.26/install)"
+          sh -c "$(curl -sSfL https://release.anza.xyz/v2.1.5/install)"
           echo "$HOME/.local/share/solana/install/active_release/bin" >> $GITHUB_PATH
-
-      - name: Pin blake3 to avoid edition2024
-        working-directory: program
-        run: |
-          # blake3 >= 1.6.0 uses edition2024 which needs cargo 1.85+
-          # cargo-build-sbf uses its own cargo (1.79) so we pin blake3
-          cat >> Cargo.toml <<'EOF'
-
-          [patch.crates-io]
-          blake3 = { git = "https://github.com/BLAKE3-team/BLAKE3", tag = "1.5.5" }
-          EOF
-
-      - name: Remove lockfile (let cargo-build-sbf regenerate)
-        working-directory: program
-        run: rm -f Cargo.lock
 
       - name: Build program (MAX_ACCOUNTS=${{ matrix.max_accounts }})
         working-directory: program
