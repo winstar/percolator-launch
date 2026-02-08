@@ -11,11 +11,6 @@ on:
       - 'program/**'
       - 'percolator/**'
   workflow_dispatch:
-    inputs:
-      max_accounts:
-        description: 'MAX_ACCOUNTS size (64, 256, 1024, 4096)'
-        required: false
-        default: '64'
 
 jobs:
   build:
@@ -26,18 +21,16 @@ jobs:
         include:
           - variant: small
             features: "test"
-            max_accounts: 64
           - variant: full
             features: ""
-            max_accounts: 4096
     
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Rust
+      - name: Install Rust 1.78 (matches cargo-build-sbf internal rustc 1.79)
         uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: 1.85.0
+          toolchain: 1.78.0
 
       - name: Cache Rust
         uses: actions/cache@v4
@@ -48,49 +41,29 @@ jobs:
             program/target
           key: ${{ runner.os }}-cargo-${{ matrix.variant }}-${{ hashFiles('program/Cargo.lock') }}
 
-      - name: Install Solana CLI v2.1.5
+      - name: Install Solana CLI v1.18.26
         run: |
-          sh -c "$(curl -sSfL https://release.anza.xyz/v2.1.5/install)"
+          sh -c "$(curl -sSfL https://release.anza.xyz/v1.18.26/install)"
           echo "$HOME/.local/share/solana/install/active_release/bin" >> $GITHUB_PATH
 
-      - name: Upgrade platform-tools to v2 (rustc 1.82+)
-        run: |
-          # Default platform-tools ships rustc 1.79 which is too old for modern deps
-          # Force platform-tools v2 which ships rustc 1.82+
-          cargo-build-sbf --tools-version v2 2>/dev/null || true
-          # If --tools-version doesn't work, manually install
-          TOOLS_DIR="$HOME/.cache/solana/v2.1.5/platform-tools-v2"
-          if [ ! -d "$TOOLS_DIR" ]; then
-            TOOLS_DIR2="$HOME/.cache/solana/v2.1/platform-tools-v2"
-            if [ ! -d "$TOOLS_DIR2" ]; then
-              echo "Trying to download platform-tools v2..."
-              # List available platform tools
-              ls -la $HOME/.cache/solana/ 2>/dev/null || true
-              find $HOME/.cache/solana -name "platform-tools*" -type d 2>/dev/null || true
-            fi
-          fi
-
-      - name: Fix lockfile for platform-tools compatibility
+      - name: Generate compatible lockfile
         working-directory: program
         run: |
-          # Downgrade lockfile v4 → v3 for older cargo compat
-          sed -i 's/^version = 4$/version = 3/' Cargo.lock
+          # Use Rust 1.78 to generate lockfile — resolves deps compatible with rustc 1.78/1.79
+          # This avoids indexmap 2.12+, time-macros 0.2.27+, etc that need newer Rust
+          rm -f Cargo.lock
+          cargo generate-lockfile
+          echo "Lockfile version:"
+          head -3 Cargo.lock
+          echo "indexmap version:"
+          grep -A1 'name = "indexmap"' Cargo.lock | grep version || echo "not found"
 
-      - name: Build program (MAX_ACCOUNTS=${{ matrix.max_accounts }})
+      - name: Build program
         working-directory: program
         run: |
           if [ -n "${{ matrix.features }}" ]; then
             cargo-build-sbf --features "${{ matrix.features }}"
           else
-            cargo-build-sbf
-          fi
-
-      - name: Build matcher
-        working-directory: program
-        run: |
-          # If matcher exists as separate crate, build it too
-          if [ -d "../matcher" ]; then
-            cd ../matcher
             cargo-build-sbf
           fi
 
