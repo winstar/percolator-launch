@@ -63,6 +63,8 @@ export class PriceEngine {
 
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
       this.pendingSubscriptions.push(slabAddress);
+      // Trigger connection if not already connecting
+      if (!this.ws) this.connect();
       return;
     }
 
@@ -141,6 +143,11 @@ export class PriceEngine {
 
   private connect(): void {
     if (!this.started) return;
+
+    // Don't connect if nothing to subscribe to — avoids idle connection flapping
+    if (this.slabToSubId.size === 0 && this.pendingSubscriptions.length === 0) {
+      return;
+    }
 
     try {
       this.ws = new WebSocket(this.wsUrl);
