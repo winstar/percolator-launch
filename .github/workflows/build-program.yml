@@ -46,17 +46,23 @@ jobs:
           sh -c "$(curl -sSfL https://release.anza.xyz/v1.18.26/install)"
           echo "$HOME/.local/share/solana/install/active_release/bin" >> $GITHUB_PATH
 
-      - name: Generate compatible lockfile
+      - name: Generate compatible lockfile and vendor deps
         working-directory: program
         run: |
-          # Use Rust 1.78 to generate lockfile
+          # Use Rust 1.75 to generate lockfile (avoids edition2024 crates)
           rm -f Cargo.lock
           cargo generate-lockfile
           echo "Lockfile version:"
           head -3 Cargo.lock
-          echo "Key dep versions:"
-          grep -A1 'name = "indexmap"' Cargo.lock | grep version || true
-          grep -A1 'name = "time-macros"' Cargo.lock | grep version || true
+          # Vendor all deps with host cargo so cargo-build-sbf doesn't re-download
+          cargo vendor .vendor
+          mkdir -p .cargo
+          cat > .cargo/config.toml << 'EOF'
+          [source.crates-io]
+          replace-with = "vendored-sources"
+          [source.vendored-sources]
+          directory = ".vendor"
+          EOF
 
       - name: Build program
         working-directory: program
