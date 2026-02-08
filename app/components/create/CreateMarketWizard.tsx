@@ -82,7 +82,7 @@ const QuickLaunchPanel: FC<{
   const [tradingFeeBps, setTradingFeeBps] = useState<number | null>(null);
   const [initialMarginBps, setInitialMarginBps] = useState<number | null>(null);
   const [lpCollateral, setLpCollateral] = useState<string | null>(null);
-  const [insuranceAmount, setInsuranceAmount] = useState("500000");
+  const [insuranceAmount, setInsuranceAmount] = useState("100");
   const [manualPrice, setManualPrice] = useState("1.000000");
   const quickLaunch = useQuickLaunch(quickMint.length >= 32 ? quickMint : null);
 
@@ -120,7 +120,8 @@ const QuickLaunchPanel: FC<{
     } else {
       // No pool (devnet / new token) — admin oracle mode (all zeros)
       oracleFeed = "0".repeat(64);
-      priceE6 = Math.round(parseFloat(manualPrice) * 1_000_000);
+      const parsed = parseFloat(manualPrice);
+      priceE6 = isNaN(parsed) ? 1_000_000 : Math.round(parsed * 1_000_000);
     }
 
     const params: CreateMarketParams = {

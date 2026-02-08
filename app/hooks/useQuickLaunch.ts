@@ -127,7 +127,7 @@ export function useQuickLaunch(mint: string | null): QuickLaunchResult {
       initialMarginBps,
       maintenanceMarginBps,
       tradingFeeBps,
-      lpCollateral: "1000000",
+      lpCollateral: "1000",
       liquidityTier: tier,
     });
   }, [tokenMeta, pools, mint]);
