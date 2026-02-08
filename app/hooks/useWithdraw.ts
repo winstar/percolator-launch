@@ -5,7 +5,11 @@ import { PublicKey } from "@solana/web3.js";
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 import {
   encodeWithdrawCollateral,
+  encodePushOraclePrice,
+  encodeKeeperCrank,
   ACCOUNTS_WITHDRAW_COLLATERAL,
+  ACCOUNTS_PUSH_ORACLE_PRICE,
+  ACCOUNTS_KEEPER_CRANK,
   buildAccountMetas,
   WELL_KNOWN,
   buildIx,
@@ -40,14 +44,33 @@ export function useWithdraw(slabAddress: string) {
         const isHyperp = feedHex === "0".repeat(64);
         const oracleAccount = isHyperp ? slabPk : derivePythPushOraclePDA(feedHex)[0];
 
-        const ix = buildIx({
+        const instructions = [];
+
+        // Auto-crank: push fresh oracle price + crank before withdraw (admin oracle mode)
+        if (isHyperp) {
+          const now = Math.floor(Date.now() / 1000);
+          const priceE6 = mktConfig.authorityPriceE6?.toString() ?? "1000000";
+          instructions.push(buildIx({
+            programId,
+            keys: buildAccountMetas(ACCOUNTS_PUSH_ORACLE_PRICE, [wallet.publicKey, slabPk]),
+            data: encodePushOraclePrice({ priceE6, timestamp: now.toString() }),
+          }));
+          instructions.push(buildIx({
+            programId,
+            keys: buildAccountMetas(ACCOUNTS_KEEPER_CRANK, [wallet.publicKey, slabPk, WELL_KNOWN.clock, slabPk]),
+            data: encodeKeeperCrank({ callerIdx: 65535, allowPanic: false }),
+          }));
+        }
+
+        instructions.push(buildIx({
           programId,
           keys: buildAccountMetas(ACCOUNTS_WITHDRAW_COLLATERAL, [
             wallet.publicKey, slabPk, mktConfig.vaultPubkey, userAta, vaultPda, WELL_KNOWN.tokenProgram, WELL_KNOWN.clock, oracleAccount,
           ]),
           data: encodeWithdrawCollateral({ userIdx: params.userIdx, amount: params.amount.toString() }),
-        });
-        return await sendTx({ connection, wallet, instructions: [ix] });
+        }));
+
+        return await sendTx({ connection, wallet, instructions, computeUnits: 300_000 });
       } catch (e) {
         setError(e instanceof Error ? e.message : String(e));
         throw e;

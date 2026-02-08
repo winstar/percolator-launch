@@ -5,7 +5,11 @@ import { PublicKey } from "@solana/web3.js";
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 import {
   encodeTradeCpi,
+  encodePushOraclePrice,
+  encodeKeeperCrank,
   ACCOUNTS_TRADE_CPI,
+  ACCOUNTS_PUSH_ORACLE_PRICE,
+  ACCOUNTS_KEEPER_CRANK,
   buildAccountMetas,
   buildIx,
   deriveLpPda,
@@ -41,7 +45,29 @@ export function useTrade(slabAddress: string) {
         const isHyperp = feedHex === "0".repeat(64);
         const oracleAccount = isHyperp ? slabPk : derivePythPushOraclePDA(feedHex)[0];
 
-        const ix = buildIx({
+        const instructions = [];
+
+        // Auto-crank: push fresh oracle price + crank before trade (admin oracle mode)
+        if (isHyperp) {
+          const now = Math.floor(Date.now() / 1000);
+          // Use last known price from slab state or default
+          const priceE6 = mktConfig.authorityPriceE6?.toString() ?? "1000000";
+          const pushIx = buildIx({
+            programId,
+            keys: buildAccountMetas(ACCOUNTS_PUSH_ORACLE_PRICE, [wallet.publicKey, slabPk]),
+            data: encodePushOraclePrice({ priceE6, timestamp: now.toString() }),
+          });
+          instructions.push(pushIx);
+
+          const crankIx = buildIx({
+            programId,
+            keys: buildAccountMetas(ACCOUNTS_KEEPER_CRANK, [wallet.publicKey, slabPk, WELL_KNOWN.clock, slabPk]),
+            data: encodeKeeperCrank({ callerIdx: 65535, allowPanic: false }),
+          });
+          instructions.push(crankIx);
+        }
+
+        const tradeIx = buildIx({
           programId,
           keys: buildAccountMetas(ACCOUNTS_TRADE_CPI, [
             wallet.publicKey,
@@ -55,7 +81,9 @@ export function useTrade(slabAddress: string) {
           ]),
           data: encodeTradeCpi({ lpIdx: params.lpIdx, userIdx: params.userIdx, size: params.size.toString() }),
         });
-        return await sendTx({ connection, wallet, instructions: [ix], computeUnits: 400_000 });
+        instructions.push(tradeIx);
+
+        return await sendTx({ connection, wallet, instructions, computeUnits: 600_000 });
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
         setError(msg);
