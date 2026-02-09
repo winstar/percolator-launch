@@ -24,7 +24,7 @@ export const Footer: FC = () => {
 
           {/* Center links */}
           <div className="flex items-center gap-4 text-[11px]">
-            <Link href="/launch" className="text-[#4a5068] transition-colors hover:text-white">Launch</Link>
+            <Link href="/create" className="text-[#4a5068] transition-colors hover:text-white">Launch</Link>
             <Link href="/markets" className="text-[#4a5068] transition-colors hover:text-white">Markets</Link>
             <a href="https://x.com/i/communities/1980346190404415886" target="_blank" rel="noopener noreferrer" className="text-[#4a5068] transition-colors hover:text-white">X Community</a>
             <a href="https://github.com/dcccrypto/percolator-launch" target="_blank" rel="noopener noreferrer" className="text-[#4a5068] transition-colors hover:text-white">GitHub</a>

@@ -11,6 +11,12 @@ export default function Home() {
   const [copied, setCopied] = useState(false);
   const [stats, setStats] = useState({ markets: 0, volume: 0, insurance: 0 });
   const [featured, setFeatured] = useState<{ slab_address: string; symbol: string | null; volume_total: number }[]>([]);
+  const [cfg, setCfg] = useState<{ programId: string; network: string }>({ programId: "", network: "devnet" });
+
+  useEffect(() => {
+    const c = getConfig();
+    setCfg({ programId: c.programId ?? "", network: c.network ?? "devnet" });
+  }, []);
 
   const copyCA = () => {
     navigator.clipboard.writeText(CA);
@@ -20,15 +26,15 @@ export default function Home() {
 
   useEffect(() => {
     async function loadStats() {
-      const { data } = await getSupabase().from("markets_with_stats").select("slab_address, symbol, volume_total, insurance_fund") as { data: { slab_address: string; symbol: string | null; volume_total: number | null; insurance_fund: number | null }[] | null };
+      const { data } = await getSupabase().from("markets_with_stats").select("slab_address, symbol, volume_24h, insurance_balance") as { data: { slab_address: string; symbol: string | null; volume_24h: number | null; insurance_balance: number | null }[] | null };
       if (data) {
         setStats({
           markets: data.length,
-          volume: data.reduce((s, m) => s + (m.volume_total || 0), 0),
-          insurance: data.reduce((s, m) => s + (m.insurance_fund || 0), 0),
+          volume: data.reduce((s, m) => s + (m.volume_24h || 0), 0),
+          insurance: data.reduce((s, m) => s + (m.insurance_balance || 0), 0),
         });
-        const sorted = [...data].sort((a, b) => (b.volume_total || 0) - (a.volume_total || 0)).slice(0, 4);
-        setFeatured(sorted.map((m) => ({ slab_address: m.slab_address, symbol: m.symbol, volume_total: m.volume_total || 0 })));
+        const sorted = [...data].sort((a, b) => (b.volume_24h || 0) - (a.volume_24h || 0)).slice(0, 4);
+        setFeatured(sorted.map((m) => ({ slab_address: m.slab_address, symbol: m.symbol, volume_total: m.volume_24h || 0 })));
       }
     }
     loadStats();
@@ -71,7 +77,7 @@ export default function Home() {
           {/* CTAs */}
           <div className="mb-10 flex flex-col items-center justify-center gap-3 sm:flex-row">
             <Link
-              href="/launch"
+              href="/create"
               className="group rounded-xl bg-[#00d4aa] px-8 py-3.5 text-sm font-bold text-[#080a0f] transition-all hover:bg-[#00e8bb] hover:shadow-[0_0_30px_rgba(0,212,170,0.2)]"
             >
               Launch a Market →
@@ -187,7 +193,7 @@ export default function Home() {
           <h2 className="mb-3 text-3xl font-extrabold text-white">Ready to launch?</h2>
           <p className="mb-6 text-sm text-[#4a5068]">Deploy your own perpetual futures market in under 60 seconds.</p>
           <Link
-            href="/launch"
+            href="/create"
             className="inline-block rounded-xl bg-[#00d4aa] px-10 py-3.5 text-sm font-bold text-[#080a0f] transition-all hover:bg-[#00e8bb] hover:shadow-[0_0_30px_rgba(0,212,170,0.2)]"
           >
             Launch a Market →
@@ -200,8 +206,8 @@ export default function Home() {
         <div className="flex flex-wrap items-center justify-center gap-4 text-[11px] text-[#2a2f40]">
           <span>
             Program:{" "}
-            <a href={`https://explorer.solana.com/address/${getConfig().programId ?? ""}?cluster=${getConfig().network ?? "devnet"}`} target="_blank" rel="noopener noreferrer" className="data-cell text-[#4a5068] hover:text-[#00d4aa]">
-              {(getConfig().programId ?? "").slice(0, 6)}…{(getConfig().programId ?? "").slice(-6)}
+            <a href={`https://explorer.solana.com/address/${cfg.programId}?cluster=${cfg.network}`} target="_blank" rel="noopener noreferrer" className="data-cell text-[#4a5068] hover:text-[#00d4aa]">
+              {cfg.programId ? `${cfg.programId.slice(0, 6)}…${cfg.programId.slice(-6)}` : "Loading..."}
             </a>
           </span>
           <span className="text-[#1a1d2a]">|</span>

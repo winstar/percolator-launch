@@ -94,7 +94,7 @@ export default function MarketsPage() {
             <p className="mt-0.5 text-sm text-[#4a5068]">Perpetual futures for any Solana token</p>
           </div>
           <Link
-            href="/launch"
+            href="/create"
             className="rounded-lg bg-[#00d4aa] px-5 py-2 text-center text-sm font-bold text-[#080a0f] transition-all hover:bg-[#00e8bb] hover:shadow-[0_0_20px_rgba(0,212,170,0.15)]"
           >
             + Launch Market
@@ -157,7 +157,7 @@ export default function MarketsPage() {
                 <div className="mb-3 text-3xl text-[#1a1d2a]">🚀</div>
                 <h3 className="mb-1 text-lg font-semibold text-white">No markets yet</h3>
                 <p className="mb-4 text-sm text-[#4a5068]">Be the first.</p>
-                <Link href="/launch" className="inline-block rounded-lg bg-[#00d4aa] px-6 py-2.5 text-sm font-bold text-[#080a0f]">
+                <Link href="/create" className="inline-block rounded-lg bg-[#00d4aa] px-6 py-2.5 text-sm font-bold text-[#080a0f]">
                   Launch First Market
                 </Link>
               </>
