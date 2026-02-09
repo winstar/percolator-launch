@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { supabase } from "@/lib/supabase";
-import { config } from "@/lib/config";
+import { getSupabase } from "@/lib/supabase";
+import { getConfig } from "@/lib/config";
 
 const CA = "8PzFWyLpCVEmbZmVJcaRTU5r69XKJx1rd7YGpWvnpump";
 
@@ -20,7 +20,7 @@ export default function Home() {
 
   useEffect(() => {
     async function loadStats() {
-      const { data } = await supabase.from("markets_with_stats").select("slab_address, symbol, volume_total, insurance_fund");
+      const { data } = await getSupabase().from("markets_with_stats").select("slab_address, symbol, volume_total, insurance_fund") as { data: { slab_address: string; symbol: string | null; volume_total: number | null; insurance_fund: number | null }[] | null };
       if (data) {
         setStats({
           markets: data.length,
@@ -200,8 +200,8 @@ export default function Home() {
         <div className="flex flex-wrap items-center justify-center gap-4 text-[11px] text-[#2a2f40]">
           <span>
             Program:{" "}
-            <a href={`https://explorer.solana.com/address/${config.programId}?cluster=${config.network}`} target="_blank" rel="noopener noreferrer" className="data-cell text-[#4a5068] hover:text-[#00d4aa]">
-              {config.programId.slice(0, 6)}…{config.programId.slice(-6)}
+            <a href={`https://explorer.solana.com/address/${getConfig().programId}?cluster=${getConfig().network}`} target="_blank" rel="noopener noreferrer" className="data-cell text-[#4a5068] hover:text-[#00d4aa]">
+              {getConfig().programId.slice(0, 6)}…{getConfig().programId.slice(-6)}
             </a>
           </span>
           <span className="text-[#1a1d2a]">|</span>
