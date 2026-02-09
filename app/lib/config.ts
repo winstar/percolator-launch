@@ -1,8 +1,10 @@
 export type Network = "mainnet" | "devnet";
 
 function getNetwork(): Network {
-  // Network is controlled by env var only — no localStorage override
-  // This prevents users from manually switching to mainnet on a devnet deployment
+  if (typeof window !== "undefined") {
+    const override = localStorage.getItem("percolator-network") as Network | null;
+    if (override === "mainnet" || override === "devnet") return override;
+  }
   return (process.env.NEXT_PUBLIC_DEFAULT_NETWORK as Network) ?? "devnet";
 }
 
@@ -41,10 +43,11 @@ export function getConfig() {
   };
 }
 
-export function setNetwork(_network: Network) {
-  // Network switching disabled — controlled by NEXT_PUBLIC_DEFAULT_NETWORK env var
-  // To switch networks, redeploy with the correct env var
-  console.warn("Network switching is disabled. Set NEXT_PUBLIC_DEFAULT_NETWORK env var instead.");
+export function setNetwork(network: Network) {
+  if (typeof window !== "undefined") {
+    localStorage.setItem("percolator-network", network);
+    window.location.reload();
+  }
 }
 
 // For backward compat
