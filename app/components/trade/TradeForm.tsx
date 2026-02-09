@@ -10,6 +10,7 @@ import { useSlabState } from "@/components/providers/SlabProvider";
 import { useTokenMeta } from "@/hooks/useTokenMeta";
 import { useLivePrice } from "@/hooks/useLivePrice";
 import { AccountKind } from "@percolator/core";
+import { PreTradeSummary } from "@/components/trade/PreTradeSummary";
 
 const LEVERAGE_PRESETS = [1, 2, 3, 5, 10];
 const MARGIN_PRESETS = [25, 50, 75, 100];
@@ -73,27 +74,6 @@ export const TradeForm: FC<{ slabAddress: string }> = ({ slabAddress }) => {
   const marginNative = marginInput ? parsePercToNative(marginInput) : 0n;
   const positionSize = marginNative * BigInt(leverage);
   const exceedsMargin = marginNative > 0n && marginNative > capital;
-
-  // Estimated fee
-  const estFee = positionSize > 0n ? (positionSize * tradingFeeBps) / 10000n : 0n;
-
-  // Estimated liquidation price
-  const estLiqPrice = useMemo(() => {
-    if (!priceUsd || leverage <= 0) return null;
-    const entry = priceUsd;
-    const mmBps = Number(maintenanceMarginBps);
-    if (direction === "long") {
-      return entry * (1 - 1 / leverage + mmBps / 10000 / leverage);
-    } else {
-      return entry * (1 + 1 / leverage - mmBps / 10000 / leverage);
-    }
-  }, [priceUsd, leverage, maintenanceMarginBps, direction]);
-
-  // Notional USD value
-  const notionalUsd = useMemo(() => {
-    if (!priceUsd || positionSize <= 0n) return null;
-    return (Number(positionSize) / 1e6) * priceUsd;
-  }, [priceUsd, positionSize]);
 
   const setMarginPercent = useCallback(
     (pct: number) => {
@@ -284,48 +264,18 @@ export const TradeForm: FC<{ slabAddress: string }> = ({ slabAddress }) => {
         </div>
       </div>
 
-      {/* Position summary */}
+      {/* Pre-trade summary */}
       {marginInput && marginNative > 0n && !exceedsMargin && (
-        <div className="mb-4 space-y-1.5 rounded-lg bg-[#1a1a28] p-3 text-xs text-[#71717a]">
-          <div className="flex justify-between">
-            <span>Position Size</span>
-            <span className="font-medium text-[#e4e4e7]">
-              {formatPerc(positionSize)} {symbol}
-            </span>
-          </div>
-          {notionalUsd !== null && (
-            <div className="flex justify-between">
-              <span>Notional Value</span>
-              <span className="font-medium text-[#e4e4e7]">
-                ${notionalUsd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </span>
-            </div>
-          )}
-          <div className="flex justify-between">
-            <span>Direction</span>
-            <span
-              className={`font-medium ${
-                direction === "long" ? "text-emerald-400" : "text-red-400"
-              }`}
-            >
-              {direction === "long" ? "Long" : "Short"} {leverage}x
-            </span>
-          </div>
-          <div className="flex justify-between">
-            <span>Est. Fee</span>
-            <span className="font-medium text-[#a1a1aa]">
-              {formatPerc(estFee)} {symbol}
-            </span>
-          </div>
-          {estLiqPrice !== null && (
-            <div className="flex justify-between">
-              <span>Est. Liq. Price</span>
-              <span className="font-medium text-amber-400">
-                ${estLiqPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 6 })}
-              </span>
-            </div>
-          )}
-        </div>
+        <PreTradeSummary
+          oracleE6={priceUsd ? BigInt(Math.round(priceUsd * 1e6)) : 0n}
+          margin={marginNative}
+          positionSize={positionSize}
+          direction={direction}
+          leverage={leverage}
+          tradingFeeBps={tradingFeeBps}
+          maintenanceMarginBps={maintenanceMarginBps}
+          symbol={symbol}
+        />
       )}
 
       {/* Submit */}

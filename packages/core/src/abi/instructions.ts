@@ -36,6 +36,9 @@ export const IX_TAG = {
   SetOraclePriceCap: 18,
   ResolveMarket: 19,
   WithdrawInsurance: 20,
+  AdminForceClose: 21,
+  UpdateRiskParams: 22,
+  RenounceAdmin: 23,
 } as const;
 
 /**
@@ -418,6 +421,46 @@ export function encodeResolveMarket(): Uint8Array {
  */
 export function encodeWithdrawInsurance(): Uint8Array {
   return encU8(IX_TAG.WithdrawInsurance);
+}
+
+/**
+ * AdminForceClose instruction data (3 bytes)
+ * Force-close any position at oracle price (admin only, skips margin checks).
+ */
+export interface AdminForceCloseArgs {
+  targetIdx: number;
+}
+
+export function encodeAdminForceClose(args: AdminForceCloseArgs): Uint8Array {
+  return concatBytes(
+    encU8(IX_TAG.AdminForceClose),
+    encU16(args.targetIdx),
+  );
+}
+
+/**
+ * UpdateRiskParams instruction data (17 bytes)
+ * Update initial and maintenance margin BPS (admin only).
+ */
+export interface UpdateRiskParamsArgs {
+  initialMarginBps: bigint | string;
+  maintenanceMarginBps: bigint | string;
+}
+
+export function encodeUpdateRiskParams(args: UpdateRiskParamsArgs): Uint8Array {
+  return concatBytes(
+    encU8(IX_TAG.UpdateRiskParams),
+    encU64(args.initialMarginBps),
+    encU64(args.maintenanceMarginBps),
+  );
+}
+
+/**
+ * RenounceAdmin instruction data (1 byte)
+ * Irreversibly set admin to all zeros. After this, all admin-only instructions fail.
+ */
+export function encodeRenounceAdmin(): Uint8Array {
+  return encU8(IX_TAG.RenounceAdmin);
 }
 
 // ============================================================================
