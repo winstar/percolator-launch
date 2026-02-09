@@ -10,24 +10,21 @@ import { useTokenMeta } from "@/hooks/useTokenMeta";
 import { AccountKind } from "@percolator/core";
 import { formatTokenAmount, formatUsd } from "@/lib/format";
 import { useLivePrice } from "@/hooks/useLivePrice";
+import {
+  computeMarkPnl,
+  computeLiqPrice,
+  computePnlPercent,
+} from "@/lib/trading";
 
 function abs(n: bigint): bigint {
   return n < 0n ? -n : n;
-}
-
-function relativeTime(slotDiff: bigint): string {
-  const seconds = Number(slotDiff) / 2.5;
-  if (seconds < 60) return `${Math.round(seconds)}s ago`;
-  if (seconds < 3600) return `${Math.round(seconds / 60)}m ago`;
-  if (seconds < 86400) return `${(seconds / 3600).toFixed(1)}h ago`;
-  return `${(seconds / 86400).toFixed(1)}d ago`;
 }
 
 export const PositionPanel: FC<{ slabAddress: string }> = ({ slabAddress }) => {
   const userAccount = useUserAccount();
   const config = useMarketConfig();
   const { trade, loading: closeLoading, error: closeError } = useTrade(slabAddress);
-  const { accounts, config: mktConfig } = useSlabState();
+  const { accounts, config: mktConfig, params } = useSlabState();
   const { priceE6: livePriceE6, priceUsd } = useLivePrice();
   const tokenMeta = useTokenMeta(mktConfig?.collateralMint ?? null);
   const symbol = tokenMeta?.symbol ?? "Token";
@@ -41,7 +38,7 @@ export const PositionPanel: FC<{ slabAddress: string }> = ({ slabAddress }) => {
 
   if (!userAccount) {
     return (
-      <div className="rounded-xl border border-[#1e1e2e] bg-[#12121a] p-6 shadow-sm">
+      <div className="rounded-xl border border-[#1e1e2e] bg-[#0a0b0f] p-6 shadow-sm">
         <h3 className="mb-4 text-sm font-medium uppercase tracking-wider text-[#71717a]">
           Position
         </h3>
@@ -61,39 +58,43 @@ export const PositionPanel: FC<{ slabAddress: string }> = ({ slabAddress }) => {
   const onChainPriceE6 = config?.lastEffectivePriceE6 ?? 0n;
   const currentPriceE6 = livePriceE6 ?? onChainPriceE6;
 
-  const entryPriceE6 = account.reservedPnl > 0n
-    ? account.reservedPnl
-    : account.entryPrice;
+  const entryPriceE6 =
+    account.reservedPnl > 0n ? account.reservedPnl : account.entryPrice;
 
-  let pnlPerc = 0n;
-  if (hasPosition && currentPriceE6 > 0n && entryPriceE6 > 0n) {
-    const priceDelta = currentPriceE6 - entryPriceE6;
-    pnlPerc = (account.positionSize * priceDelta) / currentPriceE6;
-  }
+  // --- PnL via trading.ts utilities ---
+  const pnlTokens = computeMarkPnl(
+    account.positionSize,
+    entryPriceE6,
+    currentPriceE6,
+  );
+  const pnlUsd =
+    priceUsd !== null ? (Number(pnlTokens) / 1e6) * priceUsd : null;
+  const roe = computePnlPercent(pnlTokens, account.capital);
 
-  // PnL in USD
-  const pnlUsd = priceUsd !== null ? (Number(pnlPerc) / 1e6) * priceUsd : null;
+  // --- Liquidation price ---
+  const maintenanceBps = params?.maintenanceMarginBps ?? 100n;
+  const liqPriceE6 = computeLiqPrice(
+    entryPriceE6,
+    account.capital,
+    account.positionSize,
+    maintenanceBps,
+  );
 
-  // ROE: PnL / capital * 100
-  const roe = account.capital > 0n && hasPosition
-    ? Number(pnlPerc * 10000n / account.capital) / 100
-    : 0;
-
+  // --- Colours ---
   const pnlColor =
-    pnlPerc === 0n
+    pnlTokens === 0n
       ? "text-[#71717a]"
-      : pnlPerc > 0n
-        ? "text-emerald-400"
+      : pnlTokens > 0n
+        ? "text-[#00d4aa]"
         : "text-red-400";
 
   const pnlBgColor =
-    pnlPerc === 0n
+    pnlTokens === 0n
       ? "bg-[#1a1a2e]"
-      : pnlPerc > 0n
-        ? "bg-emerald-500/10"
+      : pnlTokens > 0n
+        ? "bg-[#00d4aa]/10"
         : "bg-red-500/10";
 
-  // PnL bar width (clamped to 0-100%)
   const pnlBarWidth = Math.min(100, Math.max(0, Math.abs(roe)));
 
   let marginHealthStr = "N/A";
@@ -101,9 +102,6 @@ export const PositionPanel: FC<{ slabAddress: string }> = ({ slabAddress }) => {
     const healthPct = Number((account.capital * 100n) / absPosition);
     marginHealthStr = `${healthPct.toFixed(1)}%`;
   }
-
-  // Time since opened — use lastUpdateSlot if available
-  const timeOpen: string | null = null;
 
   async function handleClose() {
     if (!userAccount || !hasPosition) return;
@@ -122,7 +120,7 @@ export const PositionPanel: FC<{ slabAddress: string }> = ({ slabAddress }) => {
   }
 
   return (
-    <div className="rounded-xl border border-[#1e1e2e] bg-[#12121a] p-6 shadow-sm">
+    <div className="rounded-xl border border-[#1e1e2e] bg-[#0a0b0f] p-6 shadow-sm">
       <h3 className="mb-4 text-sm font-medium uppercase tracking-wider text-[#71717a]">
         Position
       </h3>
@@ -136,13 +134,18 @@ export const PositionPanel: FC<{ slabAddress: string }> = ({ slabAddress }) => {
             <div className="flex items-center justify-between">
               <span className="text-xs text-[#71717a]">Unrealized PnL</span>
               <div className="text-right">
-                <span className={`text-sm font-bold ${pnlColor}`}>
-                  {pnlPerc > 0n ? "+" : pnlPerc < 0n ? "-" : ""}
-                  {formatTokenAmount(abs(pnlPerc))} {symbol}
+                <span className={`font-mono text-sm font-bold ${pnlColor}`}>
+                  {pnlTokens > 0n ? "+" : pnlTokens < 0n ? "-" : ""}
+                  {formatTokenAmount(abs(pnlTokens))} {symbol}
                 </span>
                 {pnlUsd !== null && (
-                  <span className={`ml-1.5 text-xs ${pnlColor}`}>
-                    ({pnlUsd >= 0 ? "+" : ""}${Math.abs(pnlUsd).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })})
+                  <span className={`ml-1.5 font-mono text-xs ${pnlColor}`}>
+                    ({pnlUsd >= 0 ? "+" : ""}$
+                    {Math.abs(pnlUsd).toLocaleString(undefined, {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })}
+                    )
                   </span>
                 )}
               </div>
@@ -151,22 +154,28 @@ export const PositionPanel: FC<{ slabAddress: string }> = ({ slabAddress }) => {
             <div className="mt-2 h-1 w-full overflow-hidden rounded-full bg-[#1e1e2e]">
               <div
                 className={`h-full rounded-full transition-all duration-500 ${
-                  pnlPerc >= 0n ? "bg-emerald-500" : "bg-red-500"
+                  pnlTokens >= 0n ? "bg-[#00d4aa]" : "bg-red-500"
                 }`}
                 style={{ width: `${pnlBarWidth}%` }}
               />
             </div>
             <div className="mt-1 flex justify-between text-[10px] text-[#52525b]">
-              <span>ROE: <span className={pnlColor}>{roe >= 0 ? "+" : ""}{roe.toFixed(2)}%</span></span>
-              {timeOpen && <span>Opened {timeOpen}</span>}
+              <span>
+                PnL%:{" "}
+                <span className={`font-mono ${pnlColor}`}>
+                  {roe >= 0 ? "+" : ""}
+                  {roe.toFixed(2)}%
+                </span>
+              </span>
             </div>
           </div>
 
+          {/* Position details */}
           <div className="flex items-center justify-between">
             <span className="text-xs text-[#71717a]">Direction</span>
             <span
               className={`text-sm font-medium ${
-                isLong ? "text-emerald-400" : "text-red-400"
+                isLong ? "text-[#00d4aa]" : "text-red-400"
               }`}
             >
               {isLong ? "LONG" : "SHORT"}
@@ -174,25 +183,33 @@ export const PositionPanel: FC<{ slabAddress: string }> = ({ slabAddress }) => {
           </div>
           <div className="flex items-center justify-between">
             <span className="text-xs text-[#71717a]">Size</span>
-            <span className="text-sm text-[#e4e4e7]">
+            <span className="font-mono text-sm text-[#e4e4e7]">
               {formatTokenAmount(absPosition)} {symbol}
             </span>
           </div>
           <div className="flex items-center justify-between">
             <span className="text-xs text-[#71717a]">Entry Price</span>
-            <span className="text-sm text-[#e4e4e7]">
+            <span className="font-mono text-sm text-[#e4e4e7]">
               {formatUsd(entryPriceE6)}
             </span>
           </div>
           <div className="flex items-center justify-between">
-            <span className="text-xs text-[#71717a]">Current Price</span>
-            <span className="text-sm text-[#e4e4e7]">
+            <span className="text-xs text-[#71717a]">Oracle Price</span>
+            <span className="font-mono text-sm text-[#e4e4e7]">
               {formatUsd(currentPriceE6)}
             </span>
           </div>
           <div className="flex items-center justify-between">
+            <span className="text-xs text-[#71717a]">Liq. Price</span>
+            <span className="font-mono text-sm text-amber-400">
+              {liqPriceE6 > 0n ? formatUsd(liqPriceE6) : "—"}
+            </span>
+          </div>
+          <div className="flex items-center justify-between">
             <span className="text-xs text-[#71717a]">Margin Health</span>
-            <span className="text-sm text-[#a1a1aa]">{marginHealthStr}</span>
+            <span className="font-mono text-sm text-[#a1a1aa]">
+              {marginHealthStr}
+            </span>
           </div>
 
           {/* Close button with confirmation */}
@@ -200,25 +217,37 @@ export const PositionPanel: FC<{ slabAddress: string }> = ({ slabAddress }) => {
             <button
               onClick={() => setShowConfirm(true)}
               disabled={closeLoading}
-              className="mt-2 w-full rounded-lg border border-[#1e1e2e] bg-[#1a1a2e] py-2.5 text-sm font-medium text-[#e4e4e7] transition-all duration-150 hover:bg-red-600/20 hover:border-red-600/30 hover:text-red-300 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-red-500/30"
+              className="mt-2 w-full rounded-lg border border-red-600/30 bg-red-600/10 py-2.5 text-sm font-medium text-red-400 transition-all duration-150 hover:bg-red-600/20 hover:text-red-300 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-red-500/30"
             >
               Close Position
             </button>
           ) : (
             <div className="mt-2 space-y-2 rounded-lg border border-red-600/30 bg-red-900/10 p-3">
               <p className="text-xs text-[#a1a1aa]">
-                Close {isLong ? "LONG" : "SHORT"} {formatTokenAmount(absPosition)} {symbol}?
+                Close {isLong ? "LONG" : "SHORT"}{" "}
+                {formatTokenAmount(absPosition)} {symbol}?
               </p>
               <div className="flex items-center justify-between text-xs">
                 <span className="text-[#71717a]">Est. PnL</span>
-                <span className={`font-medium ${pnlColor}`}>
-                  {pnlPerc > 0n ? "+" : pnlPerc < 0n ? "-" : ""}{formatTokenAmount(abs(pnlPerc))} {symbol}
+                <span className={`font-mono font-medium ${pnlColor}`}>
+                  {pnlTokens > 0n ? "+" : pnlTokens < 0n ? "-" : ""}
+                  {formatTokenAmount(abs(pnlTokens))} {symbol}
                 </span>
               </div>
               <div className="flex items-center justify-between text-xs">
                 <span className="text-[#71717a]">You&apos;ll receive</span>
-                <span className="font-medium text-[#e4e4e7]">
-                  ~{formatTokenAmount(pnlPerc > 0n ? account.capital + pnlPerc : pnlPerc < 0n ? (account.capital > abs(pnlPerc) ? account.capital - abs(pnlPerc) : 0n) : account.capital)} {symbol}
+                <span className="font-mono font-medium text-[#e4e4e7]">
+                  ~
+                  {formatTokenAmount(
+                    pnlTokens > 0n
+                      ? account.capital + pnlTokens
+                      : pnlTokens < 0n
+                        ? account.capital > abs(pnlTokens)
+                          ? account.capital - abs(pnlTokens)
+                          : 0n
+                        : account.capital,
+                  )}{" "}
+                  {symbol}
                 </span>
               </div>
               <div className="flex gap-2">
@@ -239,9 +268,7 @@ export const PositionPanel: FC<{ slabAddress: string }> = ({ slabAddress }) => {
             </div>
           )}
 
-          {closeError && (
-            <p className="text-xs text-red-400">{closeError}</p>
-          )}
+          {closeError && <p className="text-xs text-red-400">{closeError}</p>}
 
           {closeSig && (
             <p className="text-xs text-[#71717a]">
