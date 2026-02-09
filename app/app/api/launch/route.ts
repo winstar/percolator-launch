@@ -70,7 +70,7 @@ export async function POST(req: NextRequest) {
     try {
       // Get decimals from RPC
       const rpcUrl = process.env.NEXT_PUBLIC_HELIUS_RPC_URL
-        ?? "https://devnet.helius-rpc.com/?api-key=e568033d-06d6-49d1-ba90-b3564c91851b";
+        ?? `https://devnet.helius-rpc.com/?api-key=${process.env.HELIUS_API_KEY ?? process.env.NEXT_PUBLIC_HELIUS_API_KEY ?? ""}`;
       const rpcResp = await fetch(rpcUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },

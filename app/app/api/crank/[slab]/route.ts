@@ -68,7 +68,7 @@ function getKeypair(): Keypair | null {
 function getConnection(): Connection {
   const url =
     process.env.SOLANA_RPC_URL ||
-    "https://devnet.helius-rpc.com/?api-key=e568033d-06d6-49d1-ba90-b3564c91851b";
+    `https://devnet.helius-rpc.com/?api-key=${process.env.HELIUS_API_KEY ?? process.env.NEXT_PUBLIC_HELIUS_API_KEY ?? ""}`;
   return new Connection(url, "confirmed");
 }
 
