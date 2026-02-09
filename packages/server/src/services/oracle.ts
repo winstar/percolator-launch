@@ -143,7 +143,9 @@ export class OracleService {
       ]);
 
       const ix = buildIx({ programId, keys, data });
-      await sendWithRetry(connection, ix, [keypair]);
+      console.log(`[OracleService] Pushing price ${priceEntry.priceE6} to ${slabAddress} via program ${programId.toBase58()}`);
+      const sig = await sendWithRetry(connection, ix, [keypair]);
+      console.log(`[OracleService] Price pushed OK: ${sig}`);
 
       this.lastPushTime.set(slabAddress, now);
       eventBus.publish("price.updated", slabAddress, {
