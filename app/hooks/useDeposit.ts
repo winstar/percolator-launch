@@ -12,13 +12,12 @@ import {
   getAta,
 } from "@percolator/core";
 import { sendTx } from "@/lib/tx";
-import { getConfig } from "@/lib/config";
 import { useSlabState } from "@/components/providers/SlabProvider";
 
 export function useDeposit(slabAddress: string) {
   const { connection } = useConnection();
   const wallet = useWallet();
-  const { config: mktConfig } = useSlabState();
+  const { config: mktConfig, programId: slabProgramId } = useSlabState();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -27,8 +26,8 @@ export function useDeposit(slabAddress: string) {
       setLoading(true);
       setError(null);
       try {
-        if (!wallet.publicKey || !mktConfig) throw new Error("Wallet not connected or market not loaded");
-        const programId = new PublicKey(getConfig().programId);
+        if (!wallet.publicKey || !mktConfig || !slabProgramId) throw new Error("Wallet not connected or market not loaded");
+        const programId = slabProgramId;
         const slabPk = new PublicKey(slabAddress);
         const userAta = await getAta(wallet.publicKey, mktConfig.collateralMint);
 
@@ -47,7 +46,7 @@ export function useDeposit(slabAddress: string) {
         setLoading(false);
       }
     },
-    [connection, wallet, mktConfig, slabAddress]
+    [connection, wallet, mktConfig, slabAddress, slabProgramId]
   );
 
   return { deposit, loading, error };

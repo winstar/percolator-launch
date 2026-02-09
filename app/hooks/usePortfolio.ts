@@ -41,7 +41,7 @@ export function usePortfolio(): PortfolioData {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!publicKey || !getConfig().programId) {
+    if (!publicKey) {
       setPositions([]);
       setTotalPnl(0n);
       setTotalDeposited(0n);
@@ -50,13 +50,19 @@ export function usePortfolio(): PortfolioData {
     }
 
     let cancelled = false;
-    const programId = new PublicKey(getConfig().programId);
+    const cfg = getConfig();
+    const programIds = new Set<string>([cfg.programId]);
+    const byTier = (cfg as any).programsBySlabTier as Record<string, string> | undefined;
+    if (byTier) Object.values(byTier).forEach((id) => programIds.add(id));
     const pkStr = publicKey.toBase58();
 
     async function load() {
       try {
         setLoading(true);
-        const markets = await discoverMarkets(connection, programId);
+        const marketArrays = await Promise.all(
+          [...programIds].map((id) => discoverMarkets(connection, new PublicKey(id)).catch(() => []))
+        );
+        const markets = marketArrays.flat();
         const allPositions: PortfolioPosition[] = [];
         let pnlSum = 0n;
         let depositSum = 0n;

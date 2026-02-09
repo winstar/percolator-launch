@@ -6,8 +6,19 @@ import { useConnection } from "@solana/wallet-adapter-react";
 import { discoverMarkets, type DiscoveredMarket } from "@percolator/core";
 import { getConfig } from "@/lib/config";
 
+/** Get all unique program IDs to scan (default + all slab tier programs) */
+function getAllProgramIds(): PublicKey[] {
+  const cfg = getConfig();
+  const ids = new Set<string>([cfg.programId]);
+  const byTier = (cfg as any).programsBySlabTier as Record<string, string> | undefined;
+  if (byTier) {
+    Object.values(byTier).forEach((id) => ids.add(id));
+  }
+  return [...ids].map((id) => new PublicKey(id));
+}
+
 /**
- * Discovers all Percolator markets on-chain.
+ * Discovers all Percolator markets across all known program deployments.
  */
 export function useMarketDiscovery() {
   const { connection } = useConnection();
@@ -16,20 +27,22 @@ export function useMarketDiscovery() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!getConfig().programId) {
+    const programIds = getAllProgramIds();
+    if (programIds.length === 0) {
       setLoading(false);
       setError("PROGRAM_ID not configured");
       return;
     }
 
     let cancelled = false;
-    const programId = new PublicKey(getConfig().programId);
 
     async function load() {
       try {
-        const result = await discoverMarkets(connection, programId);
+        const results = await Promise.all(
+          programIds.map((pid) => discoverMarkets(connection, pid).catch(() => [] as DiscoveredMarket[]))
+        );
         if (!cancelled) {
-          setMarkets(result);
+          setMarkets(results.flat());
           setError(null);
         }
       } catch (err) {

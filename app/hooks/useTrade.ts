@@ -15,13 +15,12 @@ import {
   WELL_KNOWN,
 } from "@percolator/core";
 import { sendTx } from "@/lib/tx";
-import { getConfig } from "@/lib/config";
 import { useSlabState } from "@/components/providers/SlabProvider";
 
 export function useTrade(slabAddress: string) {
   const { connection } = useConnection();
   const wallet = useWallet();
-  const { config: mktConfig, accounts } = useSlabState();
+  const { config: mktConfig, accounts, programId: slabProgramId } = useSlabState();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -30,11 +29,11 @@ export function useTrade(slabAddress: string) {
       setLoading(true);
       setError(null);
       try {
-        if (!wallet.publicKey || !mktConfig) throw new Error("Wallet not connected or market not loaded");
+        if (!wallet.publicKey || !mktConfig || !slabProgramId) throw new Error("Wallet not connected or market not loaded");
         const lpAccount = accounts.find((a) => a.idx === params.lpIdx);
         if (!lpAccount) throw new Error(`LP at index ${params.lpIdx} not found`);
 
-        const programId = new PublicKey(getConfig().programId);
+        const programId = slabProgramId;
         const slabPk = new PublicKey(slabAddress);
         const [lpPda] = deriveLpPda(programId, slabPk, params.lpIdx);
 
@@ -80,7 +79,7 @@ export function useTrade(slabAddress: string) {
         setLoading(false);
       }
     },
-    [connection, wallet, mktConfig, accounts, slabAddress]
+    [connection, wallet, mktConfig, accounts, slabAddress, slabProgramId]
   );
 
   return { trade, loading, error };

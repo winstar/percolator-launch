@@ -33,6 +33,8 @@ export interface SlabState {
   accounts: { idx: number; account: Account }[];
   loading: boolean;
   error: string | null;
+  /** The on-chain program that owns this slab account */
+  programId: PublicKey | null;
 }
 
 const defaultState: SlabState = {
@@ -44,6 +46,7 @@ const defaultState: SlabState = {
   accounts: [],
   loading: true,
   error: null,
+  programId: null,
 };
 
 const SlabContext = createContext<SlabState>(defaultState);
@@ -65,14 +68,14 @@ export const SlabProvider: FC<{ children: ReactNode; slabAddress: string }> = ({
 
     const slabPk = new PublicKey(slabAddress);
 
-    function parseSlab(data: Uint8Array) {
+    function parseSlab(data: Uint8Array, owner?: PublicKey) {
       try {
         const header = parseHeader(data);
         const config = parseConfig(data);
         const engine = parseEngine(data);
         const params = parseParams(data);
         const accounts = parseAllAccounts(data);
-        setState({ raw: data, header, config, engine, params, accounts, loading: false, error: null });
+        setState((s) => ({ raw: data, header, config, engine, params, accounts, loading: false, error: null, programId: owner ?? s.programId }));
       } catch (e) {
         setState((s) => ({ ...s, loading: false, error: e instanceof Error ? e.message : String(e) }));
       }
@@ -82,7 +85,7 @@ export const SlabProvider: FC<{ children: ReactNode; slabAddress: string }> = ({
     try {
       subId = connection.onAccountChange(slabPk, (info) => {
         wsActive.current = true;
-        parseSlab(new Uint8Array(info.data));
+        parseSlab(new Uint8Array(info.data), info.owner);
       });
     } catch { /* ws not available */ }
 
@@ -91,7 +94,7 @@ export const SlabProvider: FC<{ children: ReactNode; slabAddress: string }> = ({
       if (wsActive.current) return;
       try {
         const info = await connection.getAccountInfo(slabPk);
-        if (info) parseSlab(new Uint8Array(info.data));
+        if (info) parseSlab(new Uint8Array(info.data), info.owner);
       } catch { /* ignore */ }
     }
 
