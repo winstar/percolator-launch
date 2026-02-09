@@ -10,7 +10,7 @@ const CA = "8PzFWyLpCVEmbZmVJcaRTU5r69XKJx1rd7YGpWvnpump";
 export default function Home() {
   const [copied, setCopied] = useState(false);
   const [stats, setStats] = useState({ markets: 0, volume: 0, insurance: 0 });
-  const [featured, setFeatured] = useState<{ slab_address: string; symbol: string | null; volume_total: number }[]>([]);
+  const [featured, setFeatured] = useState<{ slab_address: string; symbol: string | null; volume_24h: number }[]>([]);
   const [cfg, setCfg] = useState<{ programId: string; network: string }>({ programId: "", network: "devnet" });
 
   useEffect(() => {
@@ -34,7 +34,7 @@ export default function Home() {
           insurance: data.reduce((s, m) => s + (m.insurance_balance || 0), 0),
         });
         const sorted = [...data].sort((a, b) => (b.volume_24h || 0) - (a.volume_24h || 0)).slice(0, 4);
-        setFeatured(sorted.map((m) => ({ slab_address: m.slab_address, symbol: m.symbol, volume_total: m.volume_24h || 0 })));
+        setFeatured(sorted.map((m) => ({ slab_address: m.slab_address, symbol: m.symbol, volume_24h: m.volume_24h || 0 })));
       }
     }
     loadStats();
@@ -158,7 +158,7 @@ export default function Home() {
                   {m.symbol ? `${m.symbol}/USD` : `${m.slab_address.slice(0, 6)}…`}
                 </div>
                 <div className="data-cell text-xs text-[#4a5068]">
-                  Vol: <span className="text-[#7a8194]">{m.volume_total >= 1000 ? `$${(m.volume_total / 1000).toFixed(1)}K` : `$${m.volume_total.toLocaleString()}`}</span>
+                  Vol: <span className="text-[#7a8194]">{m.volume_24h >= 1000 ? `$${(m.volume_24h / 1000).toFixed(1)}K` : `$${m.volume_24h.toLocaleString()}`}</span>
                 </div>
                 <div className="mt-2 text-[11px] font-medium text-[#00d4aa] opacity-0 transition-opacity group-hover:opacity-100">
                   Trade →

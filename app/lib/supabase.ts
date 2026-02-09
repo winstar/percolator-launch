@@ -59,16 +59,13 @@ export interface Market {
 
 export interface MarketWithStats extends Market {
   last_price: number | null;
-  mark_price: number | null;
-  index_price: number | null;
+  price_change_24h: number | null;
   volume_24h: number | null;
-  volume_total: number | null;
-  open_interest_long: number | null;
-  open_interest_short: number | null;
-  insurance_fund: number | null;
-  total_accounts: number | null;
-  funding_rate: number | null;
-  stats_updated_at: string | null;
+  open_interest: number | null;
+  num_traders: number | null;
+  vault_balance: number | null;
+  insurance_balance: number | null;
+  last_crank_slot: number | null;
 }
 
 export interface Trade {

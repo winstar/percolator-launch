@@ -68,7 +68,7 @@ export default function MarketsPage() {
     }
     list = [...list].sort((a, b) => {
       switch (sortBy) {
-        case "volume": return (b.supabase?.volume_total ?? 0) - (a.supabase?.volume_total ?? 0);
+        case "volume": return (b.supabase?.volume_24h ?? 0) - (a.supabase?.volume_24h ?? 0);
         case "oi": return Number(b.onChain.engine.totalOpenInterest - a.onChain.engine.totalOpenInterest);
         case "health": {
           const ha = computeMarketHealth(a.onChain.engine);
