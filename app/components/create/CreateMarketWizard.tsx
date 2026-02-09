@@ -249,6 +249,10 @@ const QuickLaunchPanel: FC<{
         <p className="text-xs text-red-400">{quickLaunch.error}</p>
       )}
 
+      {!quickLaunch.config && !quickLaunch.loading && !quickLaunch.error && quickMint.length >= 32 && (
+        <p className="text-xs text-amber-400">Could not load token info. Check the mint address and try again.</p>
+      )}
+
       {quickLaunch.config && !quickLaunch.loading && (
         <>
           {/* Detected info */}
@@ -416,16 +420,13 @@ const QuickLaunchPanel: FC<{
             </div>
           )}
 
-          {publicKey ? (
-            <button
-              onClick={handleQuickCreate}
-              className="w-full rounded-lg bg-blue-600 py-3 text-sm font-semibold text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-[#1e1e2e] disabled:text-[#52525b]"
-            >
-              🚀 Launch Market
-            </button>
-          ) : (
-            <p className="text-sm text-amber-400 text-center">Connect your wallet to launch</p>
-          )}
+          <button
+            onClick={handleQuickCreate}
+            disabled={!publicKey || !quickLaunch.config}
+            className="w-full rounded-lg bg-blue-600 py-3 text-sm font-semibold text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-[#1e1e2e] disabled:text-[#52525b]"
+          >
+            {!publicKey ? "Connect wallet to launch" : "🚀 Launch Market"}
+          </button>
         </>
       )}
     </div>
