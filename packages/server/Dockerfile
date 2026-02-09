@@ -10,8 +10,8 @@ COPY . .
 # Install deps
 RUN pnpm install --no-frozen-lockfile
 
-# Build core then server
-RUN cd packages/core && npx tsc --build
+# Build core (uses tsup) then server (uses tsc)
+RUN cd packages/core && npx tsup
 RUN cd packages/server && npx tsc
 
 FROM node:22-slim
