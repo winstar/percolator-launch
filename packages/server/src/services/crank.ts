@@ -142,6 +142,7 @@ export class CrankService {
       // Only crank markets where we are the oracle authority
       const oracleAuth = state.market.config.oracleAuthority;
       if (!oracleAuth.equals(crankPubkey)) {
+        console.log(`[CrankService] Skipping ${slabAddress} — oracle auth ${oracleAuth.toBase58()} != crank ${crankPubkey.toBase58()}`);
         continue; // Not our market — skip
       }
 
