@@ -51,8 +51,8 @@ export function slabDataSize(maxAccounts: number): number {
   return FIXED_OVERHEAD + bitmapBytes + maxAccounts * ACCOUNT_SIZE;
 }
 
-/** All known slab data sizes for discovery (includes micro for backward compat) */
-const ALL_SLAB_SIZES = [16_320, ...Object.values(SLAB_TIERS).map(t => t.dataSize)];
+/** All known slab data sizes for discovery */
+const ALL_SLAB_SIZES = Object.values(SLAB_TIERS).map(t => t.dataSize);
 
 /** Legacy constant for backward compat */
 const SLAB_DATA_SIZE = SLAB_TIERS.large.dataSize;
