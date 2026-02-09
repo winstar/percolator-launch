@@ -200,8 +200,8 @@ export default function Home() {
         <div className="flex flex-wrap items-center justify-center gap-4 text-[11px] text-[#2a2f40]">
           <span>
             Program:{" "}
-            <a href={`https://explorer.solana.com/address/${getConfig().programId}?cluster=${getConfig().network}`} target="_blank" rel="noopener noreferrer" className="data-cell text-[#4a5068] hover:text-[#00d4aa]">
-              {getConfig().programId.slice(0, 6)}…{getConfig().programId.slice(-6)}
+            <a href={`https://explorer.solana.com/address/${getConfig().programId ?? ""}?cluster=${getConfig().network ?? "devnet"}`} target="_blank" rel="noopener noreferrer" className="data-cell text-[#4a5068] hover:text-[#00d4aa]">
+              {(getConfig().programId ?? "").slice(0, 6)}…{(getConfig().programId ?? "").slice(-6)}
             </a>
           </span>
           <span className="text-[#1a1d2a]">|</span>
