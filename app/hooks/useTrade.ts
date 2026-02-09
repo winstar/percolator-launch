@@ -39,16 +39,20 @@ export function useTrade(slabAddress: string) {
         const slabPk = new PublicKey(slabAddress);
         const [lpPda] = deriveLpPda(programId, slabPk, params.lpIdx);
 
-        // Determine oracle account based on market config
+        // Determine if this is an admin-oracle market:
+        // oracleAuthority != default means an admin has been set (regardless of feedId)
+        const hasAdminOracle = !mktConfig.oracleAuthority.equals(PublicKey.default);
         const feedHex = Array.from(mktConfig.indexFeedId.toBytes()).map(b => b.toString(16).padStart(2, "0")).join("");
-        const isHyperp = feedHex === "0".repeat(64);
-        const oracleAccount = isHyperp ? slabPk : derivePythPushOraclePDA(feedHex)[0];
+        const isZeroFeed = feedHex === "0".repeat(64);
+        // Use slab as oracle account when admin oracle is set OR feed is all zeros
+        const useAdminOracle = hasAdminOracle || isZeroFeed;
+        const oracleAccount = useAdminOracle ? slabPk : derivePythPushOraclePDA(feedHex)[0];
 
         const instructions = [];
 
         // For admin oracle markets where user IS the oracle authority,
         // push a fresh price before cranking (crank needs fresh oracle data)
-        const userIsOracleAuth = isHyperp && mktConfig.oracleAuthority.equals(wallet.publicKey);
+        const userIsOracleAuth = useAdminOracle && mktConfig.oracleAuthority.equals(wallet.publicKey);
         if (userIsOracleAuth) {
           // Fetch current price from backend or use last known
           let priceE6 = mktConfig.authorityPriceE6 ?? 1_000_000n;

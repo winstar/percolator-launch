@@ -38,15 +38,17 @@ export function useWithdraw(slabAddress: string) {
         const userAta = await getAta(wallet.publicKey, mktConfig.collateralMint);
         const [vaultPda] = deriveVaultAuthority(programId, slabPk);
 
-        // Determine oracle account based on market config
+        // Determine if admin oracle mode
+        const hasAdminOracle = !mktConfig.oracleAuthority.equals(PublicKey.default);
         const feedHex = Array.from(mktConfig.indexFeedId.toBytes()).map(b => b.toString(16).padStart(2, "0")).join("");
-        const isHyperp = feedHex === "0".repeat(64);
-        const oracleAccount = isHyperp ? slabPk : derivePythPushOraclePDA(feedHex)[0];
+        const isZeroFeed = feedHex === "0".repeat(64);
+        const useAdminOracle = hasAdminOracle || isZeroFeed;
+        const oracleAccount = useAdminOracle ? slabPk : derivePythPushOraclePDA(feedHex)[0];
 
         const instructions = [];
 
         // If user is oracle authority, push price first
-        const userIsOracleAuth = isHyperp && mktConfig.oracleAuthority.equals(wallet.publicKey);
+        const userIsOracleAuth = useAdminOracle && mktConfig.oracleAuthority.equals(wallet.publicKey);
         if (userIsOracleAuth) {
           let priceE6 = mktConfig.authorityPriceE6 ?? 1_000_000n;
           try {
