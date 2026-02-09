@@ -2,6 +2,8 @@
 import { explorerTxUrl } from "@/lib/config";
 
 import { FC, useMemo, useState } from "react";
+import { PublicKey } from "@solana/web3.js";
+import { useConnection } from "@solana/wallet-adapter-react";
 import { useUserAccount } from "@/hooks/useUserAccount";
 import { useMarketConfig } from "@/hooks/useMarketConfig";
 import { useTrade } from "@/hooks/useTrade";
@@ -22,6 +24,7 @@ function abs(n: bigint): bigint {
 }
 
 export const PositionPanel: FC<{ slabAddress: string }> = ({ slabAddress }) => {
+  const { connection } = useConnection();
   const userAccount = useUserAccount();
   const config = useMarketConfig();
   const { trade, loading: closeLoading, error: closeError } = useTrade(slabAddress);
@@ -107,7 +110,30 @@ export const PositionPanel: FC<{ slabAddress: string }> = ({ slabAddress }) => {
   async function handleClose() {
     if (!userAccount || !hasPosition) return;
     try {
-      const closeSize = isLong ? -absPosition : absPosition;
+      // IMPORTANT: Fetch fresh slab data to get the CURRENT on-chain position
+      // The prepended crank in useTrade can change position size (funding/settlement)
+      // Using stale UI data can cause the close to overshoot and flip the position
+      let freshPositionSize = account.positionSize;
+      try {
+        const { fetchSlab, parseAccount } = await import("@percolator/core");
+        const freshData = await fetchSlab(connection, new PublicKey(slabAddress));
+        const freshAccount = parseAccount(freshData, userAccount.idx);
+        freshPositionSize = freshAccount.positionSize;
+      } catch {
+        // Fall back to UI state if fresh fetch fails
+        console.warn("Could not fetch fresh position — using cached state");
+      }
+
+      if (freshPositionSize === 0n) {
+        // Position already closed (e.g., liquidated)
+        setShowConfirm(false);
+        return;
+      }
+
+      const freshAbs = freshPositionSize < 0n ? -freshPositionSize : freshPositionSize;
+      const freshIsLong = freshPositionSize > 0n;
+      const closeSize = freshIsLong ? -freshAbs : freshAbs;
+
       const sig = await trade({
         lpIdx,
         userIdx: userAccount.idx,
