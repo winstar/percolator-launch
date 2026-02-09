@@ -6,8 +6,10 @@ import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 import {
   encodeWithdrawCollateral,
   encodeKeeperCrank,
+  encodePushOraclePrice,
   ACCOUNTS_WITHDRAW_COLLATERAL,
   ACCOUNTS_KEEPER_CRANK,
+  ACCOUNTS_PUSH_ORACLE_PRICE,
   buildAccountMetas,
   WELL_KNOWN,
   buildIx,
@@ -42,6 +44,26 @@ export function useWithdraw(slabAddress: string) {
         const oracleAccount = isHyperp ? slabPk : derivePythPushOraclePDA(feedHex)[0];
 
         const instructions = [];
+
+        // If user is oracle authority, push price first
+        const userIsOracleAuth = isHyperp && mktConfig.oracleAuthority.equals(wallet.publicKey);
+        if (userIsOracleAuth) {
+          let priceE6 = mktConfig.authorityPriceE6 ?? 1_000_000n;
+          try {
+            const resp = await fetch(`https://percolator-api-production.up.railway.app/prices/markets`);
+            if (resp.ok) {
+              const prices = await resp.json();
+              const entry = prices[slabAddress];
+              if (entry?.priceE6) priceE6 = BigInt(entry.priceE6);
+            }
+          } catch { /* use existing */ }
+          if (priceE6 <= 0n) priceE6 = 1_000_000n;
+          instructions.push(buildIx({
+            programId,
+            keys: buildAccountMetas(ACCOUNTS_PUSH_ORACLE_PRICE, [wallet.publicKey, slabPk]),
+            data: encodePushOraclePrice({ priceE6, timestamp: BigInt(Math.floor(Date.now() / 1000)) }),
+          }));
+        }
 
         // Always prepend permissionless crank before withdraw
         // Market goes stale after 400 slots (~3 min)
