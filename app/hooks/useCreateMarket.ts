@@ -101,7 +101,13 @@ export function useCreateMarket() {
         return;
       }
 
-      const programId = new PublicKey(config.programId);
+      // Select program based on slab tier — each MAX_ACCOUNTS variant is a separate deployment
+      const cfg = getConfig();
+      const tierMap: Record<number, string> = { 256: "small", 1024: "medium" };
+      const tierKey = tierMap[params.maxAccounts ?? 256] ?? "small";
+      const programsByTier = (cfg as Record<string, unknown>).programsBySlabTier as Record<string, string> | undefined;
+      const selectedProgramId = programsByTier?.[tierKey] ?? cfg.programId;
+      const programId = new PublicKey(selectedProgramId);
       const isAdminOracle = params.oracleFeed === ALL_ZEROS_FEED;
       const startStep = retryFromStep ?? 0;
 
