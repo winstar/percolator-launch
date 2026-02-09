@@ -96,7 +96,7 @@ async function fetchDexScreenerPrice(mint: string): Promise<number> {
 }
 
 export async function POST(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ slab: string }> },
 ) {
   if (!requireAuth(req)) return UNAUTHORIZED;
