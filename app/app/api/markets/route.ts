@@ -53,8 +53,11 @@ export async function POST(req: NextRequest) {
     if (!accountInfo) {
       return NextResponse.json({ error: "Slab account does not exist on-chain" }, { status: 400 });
     }
-    if (accountInfo.owner.toBase58() !== cfg.programId) {
-      return NextResponse.json({ error: "Slab account not owned by percolator program" }, { status: 400 });
+    const validPrograms = new Set<string>([cfg.programId]);
+    const tiers = (cfg as Record<string, unknown>).programsBySlabTier as Record<string, string> | undefined;
+    if (tiers) Object.values(tiers).forEach((id) => validPrograms.add(id));
+    if (!validPrograms.has(accountInfo.owner.toBase58())) {
+      return NextResponse.json({ error: "Slab account not owned by a known percolator program" }, { status: 400 });
     }
   } catch (err) {
     return NextResponse.json({ error: "Failed to verify slab on-chain" }, { status: 400 });
