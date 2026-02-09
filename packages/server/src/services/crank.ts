@@ -141,7 +141,6 @@ export class CrankService {
     for (const [slabAddress, state] of this.markets) {
       // Only crank markets where we are the oracle authority
       const oracleAuth = state.market.config.oracleAuthority;
-      console.log(`[CrankService] Market ${slabAddress}: collateralMint=${state.market.config.collateralMint.toBase58()}, oracleAuth=${oracleAuth.toBase58()}, feedId=${Buffer.from(state.market.config.indexFeedId.toBytes()).toString('hex').slice(0,16)}...`);
       if (!oracleAuth.equals(crankPubkey)) {
         continue; // Not our market — skip
       }
