@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { validateSlab } from "../middleware/validateSlab.js";
 import type { OracleService } from "../services/oracle.js";
 import type { PriceEngine } from "../services/PriceEngine.js";
+import { validateSlab } from "../middleware/validateSlab.js";
 
 export function priceRoutes(deps: {
   oracleService: OracleService;

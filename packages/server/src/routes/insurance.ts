@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { validateSlab } from "../middleware/validateSlab.js";
 import type { InsuranceLPService } from "../services/InsuranceLPService.js";
+import { validateSlab } from "../middleware/validateSlab.js";
 
 interface InsuranceDeps {
   insuranceService: InsuranceLPService;
