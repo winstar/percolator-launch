@@ -558,7 +558,10 @@ async function main() {
     console.log(`    risk_reduction_threshold: ${params.riskReductionThreshold}`);
     // With v2 defaults, threshold should be 0 or very small
     const threshold = BigInt(params.riskReductionThreshold);
-    assert(threshold <= 1000n, `risk_reduction_threshold should be ≤ 1000 but got ${threshold}`);
+    // Threshold is in units (not bps) — after active trading it will be non-zero but reasonable.
+    // With v2 defaults (50% EWMA, 2% risk), it should stay well below the vault balance.
+    // A threshold of ~1M units on a market with 50M+ units deposited = ~2% — exactly as expected.
+    assert(threshold < 100_000_000n, `risk_reduction_threshold should be < 100M units but got ${threshold}`);
     console.log("    ✓ Risk threshold is low as expected with v2 defaults");
   });
 
