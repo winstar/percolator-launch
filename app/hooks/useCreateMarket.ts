@@ -142,15 +142,8 @@ export function useCreateMarket() {
       if (startStep === 0) {
         slabKp = Keypair.generate();
         slabPk = slabKp.publicKey;
-        // Persist keypair for retry recovery
-        if (typeof sessionStorage !== "undefined") {
-          sessionStorage.setItem(
-            "percolator_slab_keypair",
-            JSON.stringify(Array.from(slabKp.secretKey)),
-          );
-        }
       } else {
-        // On retry, try to recover slab keypair from sessionStorage
+        // On retry, recover slab public key only (secret key not persisted for security)
         if (!state.slabAddress) {
           setState((s) => ({
             ...s,
@@ -160,52 +153,51 @@ export function useCreateMarket() {
           return;
         }
         slabPk = new PublicKey(state.slabAddress);
-
-        // Try to recover keypair for step 0 retry
-        const stored = typeof sessionStorage !== "undefined"
-          ? sessionStorage.getItem("percolator_slab_keypair")
-          : null;
-        if (stored) {
-          try {
-            slabKp = Keypair.fromSecretKey(Uint8Array.from(JSON.parse(stored)));
-          } catch {
-            slabKp = null as unknown as Keypair;
-          }
-        } else {
-          slabKp = null as unknown as Keypair; // Not needed for steps > 0
-        }
+        slabKp = null as unknown as Keypair; // Not needed for steps > 0
       }
 
       const [vaultPda] = deriveVaultAuthority(programId, slabPk);
 
       try {
-        // Step 0: Create slab account
+        // Step 0: Create slab account (idempotent — skips if account already exists)
         if (startStep <= 0) {
           setState((s) => ({ ...s, step: 0, stepLabel: STEP_LABELS[0] }));
 
-          const effectiveSlabSize = params.slabDataSize ?? DEFAULT_SLAB_SIZE;
-          const slabRent = await connection.getMinimumBalanceForRentExemption(effectiveSlabSize);
-          const createAccountIx = SystemProgram.createAccount({
-            fromPubkey: wallet.publicKey,
-            newAccountPubkey: slabKp.publicKey,
-            lamports: slabRent,
-            space: effectiveSlabSize,
-            programId,
-          });
+          // Check if slab account already exists (previous attempt may have landed)
+          const existingAccount = await connection.getAccountInfo(slabKp.publicKey);
+          if (existingAccount) {
+            // Account already created — skip to next step
+            setState((s) => ({
+              ...s,
+              txSigs: [...s.txSigs, "skipped-already-exists"],
+              slabAddress: slabKp.publicKey.toBase58(),
+            }));
+          } else {
+            const effectiveSlabSize = params.slabDataSize ?? DEFAULT_SLAB_SIZE;
+            const slabRent = await connection.getMinimumBalanceForRentExemption(effectiveSlabSize);
+            const createAccountIx = SystemProgram.createAccount({
+              fromPubkey: wallet.publicKey,
+              newAccountPubkey: slabKp.publicKey,
+              lamports: slabRent,
+              space: effectiveSlabSize,
+              programId,
+            });
 
-          const sig = await sendTx({
-            connection,
-            wallet,
-            instructions: [createAccountIx],
-            computeUnits: 50_000,
-            signers: [slabKp],
-          });
+            const sig = await sendTx({
+              connection,
+              wallet,
+              instructions: [createAccountIx],
+              computeUnits: 50_000,
+              signers: [slabKp],
+              maxRetries: 0, // Don't retry createAccount — idempotency check handles it
+            });
 
-          setState((s) => ({
-            ...s,
-            txSigs: [...s.txSigs, sig],
-            slabAddress: slabKp.publicKey.toBase58(),
-          }));
+            setState((s) => ({
+              ...s,
+              txSigs: [...s.txSigs, sig],
+              slabAddress: slabKp.publicKey.toBase58(),
+            }));
+          }
         }
 
         // Step 1: Create vault ATA + InitMarket (merged — 1 tx instead of 2)
@@ -360,14 +352,17 @@ export function useCreateMarket() {
           const lpIdx = 0;
           const [lpPda] = deriveLpPda(programId, slabPk, lpIdx);
 
-          // 1. Create matcher context account
-          const createCtxIx = SystemProgram.createAccount({
-            fromPubkey: wallet.publicKey,
-            newAccountPubkey: matcherCtxKp.publicKey,
-            lamports: matcherCtxRent,
-            space: MATCHER_CTX_SIZE,
-            programId: matcherProgramId,
-          });
+          // 1. Create matcher context account (skip if already exists)
+          const existingCtx = await connection.getAccountInfo(matcherCtxKp.publicKey);
+          const createCtxIx = existingCtx
+            ? null
+            : SystemProgram.createAccount({
+                fromPubkey: wallet.publicKey,
+                newAccountPubkey: matcherCtxKp.publicKey,
+                lamports: matcherCtxRent,
+                space: MATCHER_CTX_SIZE,
+                programId: matcherProgramId,
+              });
 
           // 2. Initialize vAMM matcher (Tag 2, 66 bytes)
           // Use custom vAMM params if provided, otherwise defaults
@@ -408,11 +403,16 @@ export function useCreateMarket() {
           ]);
           const initLpIx = buildIx({ programId, keys: initLpKeys, data: initLpData });
 
+          const lpInstructions = createCtxIx
+            ? [createCtxIx, initMatcherIx, initLpIx]
+            : [initMatcherIx, initLpIx];
+          const lpSigners = createCtxIx ? [matcherCtxKp] : [];
+
           const sig = await sendTx({
             connection, wallet,
-            instructions: [createCtxIx, initMatcherIx, initLpIx],
+            instructions: lpInstructions,
             computeUnits: 300_000,
-            signers: [matcherCtxKp],
+            signers: lpSigners,
           });
           setState((s) => ({ ...s, txSigs: [...s.txSigs, sig] }));
         }
@@ -535,11 +535,6 @@ export function useCreateMarket() {
         } catch {
           // Non-fatal — market is on-chain even if DB write fails
           console.warn("Failed to register market in dashboard DB");
-        }
-
-        // Clean up stored keypair
-        if (typeof sessionStorage !== "undefined") {
-          sessionStorage.removeItem("percolator_slab_keypair");
         }
 
         // Done!

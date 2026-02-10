@@ -114,7 +114,7 @@ export const AccountsCard: FC = () => {
     return sorted;
   }, [tab, openPositions, idleAccounts, leaderboard, sortKey, sortDir]);
 
-  if (loading) return <div className="p-4"><p className="text-sm text-[var(--text-secondary)]">Loading…</p></div>;
+  if (loading) return <div className="p-4"><p className="text-sm text-[#8B95B0]">Loading…</p></div>;
 
   const tabs: { key: Tab; label: string; count: number }[] = [
     { key: "open", label: "Open", count: openPositions.length },
@@ -125,17 +125,17 @@ export const AccountsCard: FC = () => {
   const isOpenLike = tab === "open" || tab === "leaderboard";
 
   const SortHeader: FC<{ label: string; sKey: SortKey; align?: "left" | "right" }> = ({ label, sKey, align = "right" }) => (
-    <th onClick={() => toggleSort(sKey)} className={`cursor-pointer select-none pb-2 font-medium transition-colors duration-150 ${align === "left" ? "text-left" : "text-right"} hover:text-[var(--text-secondary)]`}>
+    <th onClick={() => toggleSort(sKey)} className={`cursor-pointer select-none pb-2 font-medium ${align === "left" ? "text-left" : "text-right"} hover:text-[#8B95B0]`}>
       {label}
-      {sortKey === sKey ? <span className="ml-0.5 text-[var(--accent)] inline-block transition-transform duration-200 scale-110">{sortDir === "asc" ? "↑" : "↓"}</span> : <span className="ml-0.5 text-[var(--border)] inline-block transition-transform duration-200 scale-100">↕</span>}
+      {sortKey === sKey ? <span className="ml-0.5 text-[#00FFB2]">{sortDir === "asc" ? "↑" : "↓"}</span> : <span className="ml-0.5 text-[#1a1d2a]">↕</span>}
     </th>
   );
 
   function liqBarColor(pct: number): string {
-    if (pct >= 70) return "bg-[var(--long)]";
-    if (pct >= 40) return "bg-[var(--warning)]";
-    if (pct >= 20) return "bg-[var(--warning)]";
-    return "bg-[var(--short)]";
+    if (pct >= 70) return "bg-[#00e68a]";
+    if (pct >= 40) return "bg-[#ffaa00]";
+    if (pct >= 20) return "bg-[#ff8800]";
+    return "bg-[#ff4d6a]";
   }
 
   return (
@@ -143,24 +143,24 @@ export const AccountsCard: FC = () => {
       <div className="mb-3 flex items-center gap-2">
         {tabs.map((t) => (
           <button key={t.key} onClick={() => setTab(t.key)}
-            className={`rounded-sm px-2.5 py-1 text-[11px] font-medium transition-all ${
-              tab === t.key ? "bg-[var(--accent)]/10 text-[var(--accent)]" : "text-[var(--text-secondary)] hover:text-[var(--text-secondary)]"
+            className={`rounded-md px-2.5 py-1 text-[11px] font-medium transition-all ${
+              tab === t.key ? "bg-white/[0.06] text-white" : "text-[#8B95B0] hover:text-[#8B95B0]"
             }`}>
-            {t.label} <span className="text-[var(--text-muted)]">({t.count})</span>
+            {t.label} <span className="text-[#3D4563]">({t.count})</span>
           </button>
         ))}
-        <span className="ml-auto data-cell text-[10px] text-[var(--text-muted)]">{accounts.length} total</span>
+        <span className="ml-auto data-cell text-[10px] text-[#3D4563]">{accounts.length} total</span>
       </div>
 
       {sortedRows.length === 0 ? (
-        <p className="py-4 text-center text-sm text-[var(--text-secondary)]">
+        <p className="py-4 text-center text-sm text-[#8B95B0]">
           {tab === "open" ? "No open positions" : tab === "idle" ? "No idle accounts" : "No data"}
         </p>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-[11px]">
             <thead>
-              <tr className="text-[10px] uppercase tracking-wider text-[var(--text-muted)]">
+              <tr className="text-[9px] uppercase tracking-wider text-[#3D4563]">
                 <SortHeader label="#" sKey="idx" align="left" />
                 <SortHeader label="Owner" sKey="owner" align="left" />
                 {isOpenLike && <SortHeader label="Side" sKey="direction" align="left" />}
@@ -172,46 +172,46 @@ export const AccountsCard: FC = () => {
                 {isOpenLike && <SortHeader label="Margin" sKey="margin" />}
               </tr>
             </thead>
-            <tbody className="divide-y divide-[var(--border)]">
+            <tbody className="divide-y divide-white/[0.04]">
               {sortedRows.map((row, i) => {
                 const absPos = row.positionSize < 0n ? -row.positionSize : row.positionSize;
                 return (
-                  <tr key={row.idx} className="hover:bg-[var(--accent)]/[0.06] transition-colors duration-150">
-                    <td className="py-1.5 text-[var(--text-muted)]">{i + 1}</td>
-                    <td className="data-cell py-1.5 text-[var(--text-secondary)]">{shortenAddress(row.owner)}</td>
+                  <tr key={row.idx} className="hover:bg-white/[0.04]">
+                    <td className="py-1.5 text-[#3D4563]">{i + 1}</td>
+                    <td className="data-cell py-1.5 text-[#8B95B0]">{shortenAddress(row.owner)}</td>
                     {isOpenLike && (
                       <td className="py-1.5">
-                        {row.direction === "IDLE" ? <span className="text-[var(--text-muted)]">—</span> : (
+                        {row.direction === "IDLE" ? <span className="text-[#3D4563]">—</span> : (
                           <span className={`rounded px-1.5 py-0.5 text-[9px] font-bold ${
-                            row.direction === "LONG" ? "bg-[var(--long)]/10 text-[var(--long)]" : "bg-[var(--short)]/10 text-[var(--short)]"
+                            row.direction === "LONG" ? "bg-[#00e68a]/10 text-[#00e68a]" : "bg-[#ff4d6a]/10 text-[#ff4d6a]"
                           }`}>{row.direction}</span>
                         )}
                       </td>
                     )}
                     {isOpenLike && (
-                      <td className={`data-cell py-1.5 text-right ${row.positionSize > 0n ? "text-[var(--long)]" : row.positionSize < 0n ? "text-[var(--short)]" : "text-[var(--text-muted)]"}`}>
+                      <td className={`data-cell py-1.5 text-right ${row.positionSize > 0n ? "text-[#00e68a]" : row.positionSize < 0n ? "text-[#ff4d6a]" : "text-[#3D4563]"}`}>
                         {row.positionSize !== 0n ? formatTokenAmount(absPos) : "—"}
                       </td>
                     )}
-                    {isOpenLike && <td className="data-cell py-1.5 text-right text-[var(--text)]">{row.entryPrice > 0n ? formatUsd(row.entryPrice) : "—"}</td>}
+                    {isOpenLike && <td className="data-cell py-1.5 text-right text-[#F0F4FF]">{row.entryPrice > 0n ? formatUsd(row.entryPrice) : "—"}</td>}
                     {isOpenLike && (
                       <td className="py-1.5 text-right">
                         {row.positionSize !== 0n ? (
                           <div className="flex items-center justify-end gap-1">
-                            <span className="data-cell text-[var(--text)]">{formatUsd(row.liqPrice)}</span>
-                            <div className="h-1 w-8 rounded-full bg-[var(--bg-surface)]">
+                            <span className="data-cell text-[#F0F4FF]">{formatUsd(row.liqPrice)}</span>
+                            <div className="h-1 w-8 rounded-full bg-white/[0.06]">
                               <div className={`h-1 rounded-full ${liqBarColor(row.liqHealthPct)}`} style={{ width: `${Math.max(4, row.liqHealthPct)}%` }} />
                             </div>
                           </div>
                         ) : "—"}
                       </td>
                     )}
-                    <td className={`data-cell py-1.5 text-right ${row.pnl > 0n ? "text-[var(--long)]" : row.pnl < 0n ? "text-[var(--short)]" : "text-[var(--text-muted)]"}`}>
+                    <td className={`data-cell py-1.5 text-right ${row.pnl > 0n ? "text-[#00e68a]" : row.pnl < 0n ? "text-[#ff4d6a]" : "text-[#3D4563]"}`}>
                       {formatPnl(row.pnl)}
                     </td>
-                    <td className="data-cell py-1.5 text-right text-[var(--text)]">{formatTokenAmount(row.capital)}</td>
+                    <td className="data-cell py-1.5 text-right text-[#F0F4FF]">{formatTokenAmount(row.capital)}</td>
                     {isOpenLike && (
-                      <td className={`data-cell py-1.5 text-right ${row.marginPct > 50 ? "text-[var(--long)]" : row.marginPct > 20 ? "text-[var(--warning)]" : "text-[var(--short)]"}`}>
+                      <td className={`data-cell py-1.5 text-right ${row.marginPct > 50 ? "text-[#00e68a]" : row.marginPct > 20 ? "text-[#ffaa00]" : "text-[#ff4d6a]"}`}>
                         {row.positionSize !== 0n ? `${row.marginPct.toFixed(1)}%` : "—"}
                       </td>
                     )}

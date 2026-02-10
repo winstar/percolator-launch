@@ -26,7 +26,13 @@ const insuranceService = new InsuranceLPService(crankService);
 
 // Hono app
 const app = new Hono();
-app.use("*", cors());
+// C1: CORS lockdown — only allow configured origins
+const allowedOrigins = (process.env.ALLOWED_ORIGINS ?? "https://percolator-launch.vercel.app,http://localhost:3000").split(",").map(s => s.trim()).filter(Boolean);
+app.use("*", cors({
+  origin: allowedOrigins,
+  allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowHeaders: ["Content-Type", "x-api-key"],
+}));
 
 // Mount routes
 app.route("/", healthRoutes({ crankService, liquidationService }));
@@ -78,5 +84,25 @@ if (config.crankKeypair) {
 } else {
   console.warn("⚠️  CRANK_KEYPAIR not set — crank service disabled");
 }
+
+// Graceful shutdown
+async function shutdown(signal: string) {
+  console.log(`${signal} received, shutting down...`);
+  try {
+    priceEngine.stop();
+    crankService.stop();
+    liquidationService.stop();
+    insuranceService.stop();
+    if (server && typeof (server as any).close === "function") {
+      (server as any).close();
+    }
+  } catch (err) {
+    console.error("Error during shutdown:", err);
+  }
+  process.exit(0);
+}
+
+process.on("SIGTERM", () => shutdown("SIGTERM"));
+process.on("SIGINT", () => shutdown("SIGINT"));
 
 export { app };

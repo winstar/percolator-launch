@@ -26,12 +26,14 @@ export class PriceEngine {
   private slabToSubId = new Map<string, number>();
   private priceHistory = new Map<string, PriceTick[]>();
   private readonly maxHistory = 100;
+  private readonly maxTrackedMarkets = 500;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private reconnectDelay = 1000;
   private readonly maxReconnectDelay = 30_000;
   private rpcMsgId = 1;
   private started = false;
   private pendingSubscriptions: string[] = [];
+  private pendingCleanupTimer: ReturnType<typeof setInterval> | null = null;
 
   private get wsUrl(): string {
     return config.rpcUrl.replace("https://", "wss://");
@@ -41,10 +43,24 @@ export class PriceEngine {
     if (this.started) return;
     this.started = true;
     this.connect();
+
+    // Periodically clean up stale pending subscription responses (older than 30s)
+    this.pendingCleanupTimer = setInterval(() => {
+      const cutoff = Date.now() - 30_000;
+      for (const [msgId, entry] of this._pendingSubResponses) {
+        if (entry.timestamp < cutoff) {
+          this._pendingSubResponses.delete(msgId);
+        }
+      }
+    }, 60_000);
   }
 
   stop(): void {
     this.started = false;
+    if (this.pendingCleanupTimer) {
+      clearInterval(this.pendingCleanupTimer);
+      this.pendingCleanupTimer = null;
+    }
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
@@ -222,7 +238,7 @@ export class PriceEngine {
 
     const msgId = this.rpcMsgId++;
     // Store pending mapping: msgId -> slabAddress (resolved in handleMessage)
-    this._pendingSubResponses.set(msgId, slabAddress);
+    this._pendingSubResponses.set(msgId, { slabAddress, timestamp: Date.now() });
 
     this.ws.send(JSON.stringify({
       jsonrpc: "2.0",
@@ -235,19 +251,19 @@ export class PriceEngine {
     }));
   }
 
-  private _pendingSubResponses = new Map<number, string>();
+  private _pendingSubResponses = new Map<number, { slabAddress: string; timestamp: number }>();
 
   private handleMessage(msg: Record<string, unknown>): void {
     // Subscription response: { id, result: subscriptionId }
     if (msg.id !== undefined && msg.result !== undefined) {
       const msgId = msg.id as number;
       const subId = msg.result as number;
-      const slabAddress = this._pendingSubResponses.get(msgId);
-      if (slabAddress) {
+      const pending = this._pendingSubResponses.get(msgId);
+      if (pending) {
         this._pendingSubResponses.delete(msgId);
-        this.subscriptionIds.set(subId, slabAddress);
-        this.slabToSubId.set(slabAddress, subId);
-        console.log(`[PriceEngine] Subscribed to ${slabAddress} (sub=${subId})`);
+        this.subscriptionIds.set(subId, pending.slabAddress);
+        this.slabToSubId.set(pending.slabAddress, subId);
+        console.log(`[PriceEngine] Subscribed to ${pending.slabAddress} (sub=${subId})`);
       }
       return;
     }
@@ -300,6 +316,20 @@ export class PriceEngine {
     history.push(tick);
     if (history.length > this.maxHistory) {
       history.splice(0, history.length - this.maxHistory);
+    }
+    // Evict least recently updated market if we exceed the global limit
+    if (this.priceHistory.size > this.maxTrackedMarkets) {
+      let oldestKey: string | null = null;
+      let oldestTime = Infinity;
+      for (const [key, hist] of this.priceHistory) {
+        if (key === slabAddress) continue;
+        const lastTs = hist.length > 0 ? hist[hist.length - 1].timestamp : 0;
+        if (lastTs < oldestTime) {
+          oldestTime = lastTs;
+          oldestKey = key;
+        }
+      }
+      if (oldestKey) this.priceHistory.delete(oldestKey);
     }
   }
 }
