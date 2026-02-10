@@ -28,52 +28,27 @@ export const DepositWithdrawCard: FC<{ slabAddress: string }> = ({ slabAddress }
 
   if (!connected) {
     return (
-      <div className="rounded-xl border border-[#1e1e2e] bg-[#12121a] p-5">
-        <h3 className="mb-3 text-xs font-medium uppercase tracking-wider text-[#71717a]">Deposit / Withdraw</h3>
-        <p className="text-sm text-[#52525b]">Connect wallet</p>
+      <div className="rounded-sm border border-[var(--border)] bg-[var(--panel-bg)] p-5">
+        <h3 className="mb-3 text-xs font-medium uppercase tracking-wider text-[var(--text-secondary)]">Deposit / Withdraw</h3>
+        <p className="text-sm text-[var(--text-muted)]">Connect wallet</p>
       </div>
     );
   }
 
   if (!userAccount) {
     return (
-      <div className="rounded-xl border border-[#1e1e2e] bg-[#12121a] p-5">
-        <h3 className="mb-3 text-xs font-medium uppercase tracking-wider text-[#71717a]">Create Account & Deposit</h3>
-        <p className="mb-3 text-xs text-[#71717a]">Enter your initial deposit to create an account and start trading.</p>
-        <div className="mb-3">
-          <input
-            type="text"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ""))}
-            placeholder={`Initial deposit (${symbol})`}
-            className="w-full rounded-lg border border-white/[0.06] bg-white/[0.05] px-3 py-2 text-sm text-[#e4e4e7] placeholder-[#52525b] focus:border-[#00FFB2]/40 focus:outline-none focus:ring-1 focus:ring-[#00FFB2]/20"
-          />
-        </div>
+      <div className="rounded-sm border border-[var(--border)] bg-[var(--panel-bg)] p-5">
+        <h3 className="mb-3 text-xs font-medium uppercase tracking-wider text-[var(--text-secondary)]">Create Account</h3>
+        <p className="mb-3 text-xs text-[var(--text-secondary)]">Create an account to start trading.</p>
         <button
-          onClick={async () => {
-            try {
-              const decimals = tokenMeta?.decimals ?? 6;
-              const depositAmt = parseHumanAmount(amount || "0", decimals);
-              // feePayment = deposit amount — account starts with real capital
-              // so the crank GC won't remove it
-              const fee = depositAmt > 0n ? depositAmt : 10_000n;
-              const sig = await initUser(fee);
-              setLastSig(sig ?? null);
-              setAmount("");
-            } catch { /* error shown via initError */ }
-          }}
-          disabled={initLoading || !amount || amount === "0" || amount === "0."}
-          className="w-full rounded-lg bg-[#00FFB2] py-2.5 text-sm font-medium text-[#06080d] hover:bg-[#00FFB2]/80 disabled:cursor-not-allowed disabled:opacity-50"
+          onClick={async () => { try { const sig = await initUser(); setLastSig(sig ?? null); } catch {} }}
+          disabled={initLoading}
+          className="w-full rounded-sm bg-[var(--accent)] py-2.5 text-sm font-medium text-white hover:bg-[var(--accent-muted)] hover:scale-[1.01] active:scale-[0.99] transition-transform disabled:opacity-50"
         >
-          {initLoading ? "Creating..." : "Create Account & Deposit"}
+          {initLoading ? "Creating..." : "Create Account"}
         </button>
-        <p className="mt-2 text-[10px] text-[#52525b]">Your deposit becomes your trading collateral. Accounts with no capital are recycled.</p>
-        {initError && <p className="mt-2 text-xs text-[#FF4466]">{String(initError)}</p>}
-        {lastSig && (
-          <p className="mt-2 text-xs text-[#52525b]">
-            Tx: <a href={explorerTxUrl(lastSig)} target="_blank" rel="noopener noreferrer" className="text-[#00FFB2] hover:underline">{lastSig.slice(0, 12)}...</a>
-          </p>
-        )}
+        {initError && <p className="mt-2 text-xs text-[var(--short)]">{initError}</p>}
+        {lastSig && <p className="mt-2 text-xs text-[var(--text-muted)]">Tx: {lastSig.slice(0, 12)}...</p>}
       </div>
     );
   }
@@ -96,17 +71,17 @@ export const DepositWithdrawCard: FC<{ slabAddress: string }> = ({ slabAddress }
       }
       setLastSig(sig ?? null);
       setAmount("");
-    } catch { /* error shown via hook error state */ }
+    } catch {}
   }
 
   return (
-    <div className="rounded-xl border border-[#1e1e2e] bg-[#12121a] p-5">
-      <h3 className="mb-1 text-xs font-medium uppercase tracking-wider text-[#71717a]">Deposit / Withdraw</h3>
-      <p className="mb-3 text-lg font-bold text-[#e4e4e7]">{formatTokenAmount(capital)} <span className="text-sm font-normal text-[#71717a]">{symbol}</span></p>
+    <div className="rounded-sm border border-[var(--border)] bg-[var(--panel-bg)] p-5">
+      <h3 className="mb-1 text-xs font-medium uppercase tracking-wider text-[var(--text-secondary)]">Deposit / Withdraw</h3>
+      <p className="mb-3 text-lg font-bold text-[var(--text)]">{formatTokenAmount(capital)} <span className="text-sm font-normal text-[var(--text-secondary)]">{symbol}</span></p>
 
       <div className="mb-3 flex gap-1.5">
-        <button onClick={() => setMode("deposit")} className={`flex-1 rounded-lg py-1.5 text-xs font-medium ${mode === "deposit" ? "bg-emerald-600 text-white" : "bg-[#1a1a2e] text-[#71717a] hover:bg-[#1e1e2e]"}`}>Deposit</button>
-        <button onClick={() => setMode("withdraw")} className={`flex-1 rounded-lg py-1.5 text-xs font-medium ${mode === "withdraw" ? "bg-amber-600 text-white" : "bg-[#1a1a2e] text-[#71717a] hover:bg-[#1e1e2e]"}`}>Withdraw</button>
+        <button onClick={() => setMode("deposit")} className={`flex-1 rounded-sm py-1.5 text-xs font-medium ${mode === "deposit" ? "bg-[var(--long)] text-white shadow-sm" : "bg-[var(--bg-surface)] text-[var(--text-secondary)] hover:bg-[var(--border)]"}`}>Deposit</button>
+        <button onClick={() => setMode("withdraw")} className={`flex-1 rounded-sm py-1.5 text-xs font-medium ${mode === "withdraw" ? "bg-[var(--warning)] text-white shadow-sm" : "bg-[var(--bg-surface)] text-[var(--text-secondary)] hover:bg-[var(--border)]"}`}>Withdraw</button>
       </div>
 
       <div className="mb-3">
@@ -115,24 +90,20 @@ export const DepositWithdrawCard: FC<{ slabAddress: string }> = ({ slabAddress }
           value={amount}
           onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ""))}
           placeholder={`Amount (${symbol})`}
-          className="w-full rounded-lg border border-white/[0.06] bg-white/[0.05] px-3 py-2 text-sm text-[#e4e4e7] placeholder-[#52525b] focus:border-[#00FFB2]/40 focus:outline-none focus:ring-1 focus:ring-[#00FFB2]/20"
+          className="w-full rounded-sm border border-[var(--border)] bg-[var(--bg-surface)] px-3 py-2 text-sm text-[var(--text)] placeholder-[var(--text-muted)] focus:border-[var(--accent)]/40 focus:outline-none focus:ring-1 focus:ring-[var(--accent)]/20"
         />
       </div>
 
       <button
         onClick={handleSubmit}
         disabled={loading || !amount}
-        className="w-full rounded-lg bg-[#00FFB2] py-2.5 text-sm font-medium text-[#06080d] hover:bg-[#00FFB2]/80 disabled:cursor-not-allowed disabled:opacity-50"
+        className="w-full rounded-sm bg-[var(--accent)] py-2.5 text-sm font-medium text-white hover:bg-[var(--accent-muted)] hover:scale-[1.01] active:scale-[0.99] transition-transform disabled:cursor-not-allowed disabled:opacity-50"
       >
         {loading ? "Sending..." : mode === "deposit" ? "Deposit" : "Withdraw"}
       </button>
 
-      {error && <p className="mt-2 text-xs text-[#FF4466]">{String(error)}</p>}
-      {lastSig && (
-        <p className="mt-2 text-xs text-[#52525b]">
-          Tx: <a href={explorerTxUrl(lastSig)} target="_blank" rel="noopener noreferrer" className="text-[#00FFB2] hover:underline">{lastSig.slice(0, 12)}...</a>
-        </p>
-      )}
+      {error && <p className="mt-2 text-xs text-[var(--short)]">{error}</p>}
+      {lastSig && <p className="mt-2 text-xs text-[var(--text-muted)]">Tx: <a href={`${explorerTxUrl(lastSig)}`} target="_blank" rel="noopener noreferrer" className="text-[var(--accent)] hover:underline">{lastSig.slice(0, 12)}...</a></p>}
     </div>
   );
 };

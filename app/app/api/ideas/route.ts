@@ -25,12 +25,11 @@ const TABLE = "ideas";
 async function ensureTable() {
   const sb = getServiceClient();
   // Try a simple query — if it fails, table doesn't exist
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { error } = await (sb as any).from(TABLE).select("id").limit(1);
+  const { error } = await (sb.from as any)(TABLE).select("id").limit(1);
   if (error?.code === "42P01") {
     // table doesn't exist — create it via raw SQL
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (sb as any).rpc("exec_sql", {
+    await (sb.rpc as any)("exec_sql", {
       query: `
         CREATE TABLE IF NOT EXISTS public.ideas (
           id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -49,10 +48,8 @@ async function ensureTable() {
 
 export async function GET() {
   try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const sb = getServiceClient() as any;
-    const { data, error } = await sb
-      .from(TABLE)
+    const sb = getServiceClient();
+    const { data, error } = await (sb.from as any)(TABLE)
       .select("id, handle, idea, created_at")
       .order("created_at", { ascending: false })
       .limit(50);
@@ -104,10 +101,8 @@ export async function POST(req: NextRequest) {
 
     await ensureTable();
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const sb = getServiceClient() as any;
-    const { error } = await sb
-      .from(TABLE)
+    const sb = getServiceClient();
+    const { error } = await (sb.from as any)(TABLE)
       .insert({ handle, idea, contact, ip });
 
     if (error) throw error;
