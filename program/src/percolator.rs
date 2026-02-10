@@ -95,10 +95,10 @@ pub mod constants {
 
     // Default threshold parameters (used at init_market, can be changed via update_config)
     pub const DEFAULT_THRESH_FLOOR: u128 = 0;
-    pub const DEFAULT_THRESH_RISK_BPS: u64 = 50;              // 0.50%
+    pub const DEFAULT_THRESH_RISK_BPS: u64 = 200;             // 2.00% (was 0.50% — too aggressive)
     pub const DEFAULT_THRESH_UPDATE_INTERVAL_SLOTS: u64 = 10;
-    pub const DEFAULT_THRESH_STEP_BPS: u64 = 500;             // 5% max step
-    pub const DEFAULT_THRESH_ALPHA_BPS: u64 = 1000;           // 10% EWMA
+    pub const DEFAULT_THRESH_STEP_BPS: u64 = 2000;            // 20% max step (was 5% — too slow)
+    pub const DEFAULT_THRESH_ALPHA_BPS: u64 = 5000;           // 50% EWMA (was 10% — decayed too slowly)
     pub const DEFAULT_THRESH_MIN: u128 = 0;
     pub const DEFAULT_THRESH_MAX: u128 = 10_000_000_000_000_000_000u128;
     pub const DEFAULT_THRESH_MIN_STEP: u128 = 1;
@@ -1019,6 +1019,8 @@ pub mod error {
         InsuranceBelowThreshold,
         InsuranceZeroAmount,
         InsuranceSupplyMismatch,
+        /// Market is paused — trading, deposits, and withdrawals are disabled
+        MarketPaused,
     }
 
     impl From<PercolatorError> for ProgramError {
@@ -1120,7 +1122,7 @@ pub mod ix {
         /// Skips margin checks. Admin only.
         AdminForceClose { target_idx: u16 },
         /// Update initial and maintenance margin BPS. Admin only.
-        UpdateRiskParams { initial_margin_bps: u64, maintenance_margin_bps: u64 },
+        UpdateRiskParams { initial_margin_bps: u64, maintenance_margin_bps: u64, trading_fee_bps: Option<u64> },
         /// Renounce admin: set admin to all zeros (irreversible). Admin only.
         RenounceAdmin,
         /// Create the insurance LP SPL mint for this market. Admin only, once per market.
@@ -1132,6 +1134,11 @@ pub mod ix {
         /// Burn LP tokens and withdraw proportional share of insurance fund.
         /// Cannot withdraw below risk_reduction_threshold.
         WithdrawInsuranceLP { lp_amount: u64 },
+        /// Pause the market. Admin only. Blocks trade/deposit/withdraw/init_user.
+        /// Crank, liquidation, admin actions, and unpause still allowed.
+        PauseMarket,
+        /// Unpause the market. Admin only. Restores normal operation.
+        UnpauseMarket,
     }
 
     impl Instruction {
@@ -1262,7 +1269,13 @@ pub mod ix {
                 22 => { // UpdateRiskParams
                     let initial_margin_bps = read_u64(&mut rest)?;
                     let maintenance_margin_bps = read_u64(&mut rest)?;
-                    Ok(Instruction::UpdateRiskParams { initial_margin_bps, maintenance_margin_bps })
+                    // Optional: trading_fee_bps (backwards compatible — old clients send 17 bytes, new send 25)
+                    let trading_fee_bps = if rest.len() >= 8 {
+                        Some(read_u64(&mut rest)?)
+                    } else {
+                        None
+                    };
+                    Ok(Instruction::UpdateRiskParams { initial_margin_bps, maintenance_margin_bps, trading_fee_bps })
                 },
                 23 => Ok(Instruction::RenounceAdmin),
                 24 => Ok(Instruction::CreateInsuranceMint),
@@ -1274,6 +1287,8 @@ pub mod ix {
                     let lp_amount = read_u64(&mut rest)?;
                     Ok(Instruction::WithdrawInsuranceLP { lp_amount })
                 },
+                27 => Ok(Instruction::PauseMarket),
+                28 => Ok(Instruction::UnpauseMarket),
                 _ => Err(ProgramError::InvalidInstructionData),
             }
         }
@@ -1428,7 +1443,7 @@ pub mod state {
         pub magic: u64,
         pub version: u32,
         pub bump: u8,
-        pub _padding: [u8; 3],
+        pub _padding: [u8; 3], // _padding[0] = flags byte (bit 0: resolved, bit 1: paused)
         pub admin: [u8; 32],
         pub _reserved: [u8; 24], // [0..8]=nonce, [8..16]=last_thr_slot, [16..24]=dust_base
     }
@@ -1530,6 +1545,24 @@ pub mod state {
         dst.copy_from_slice(src);
     }
 
+    /// Check if the market is paused (bit 1 of flags byte).
+    #[inline]
+    pub fn is_paused(data: &[u8]) -> bool {
+        read_flags(data) & FLAG_PAUSED != 0
+    }
+
+    /// Set or clear the paused flag in the slab data.
+    #[inline]
+    pub fn set_paused(data: &mut [u8], paused: bool) {
+        let mut flags = read_flags(data);
+        if paused {
+            flags |= FLAG_PAUSED;
+        } else {
+            flags &= !FLAG_PAUSED;
+        }
+        write_flags(data, flags);
+    }
+
     /// Read the request nonce from the reserved field in slab header.
     /// The nonce is stored at RESERVED_OFF..RESERVED_OFF+8 as little-endian u64.
     pub fn read_req_nonce(data: &[u8]) -> u64 {
@@ -1574,6 +1607,8 @@ pub mod state {
 
     /// Flag bit: Market is resolved (withdraw-only mode)
     pub const FLAG_RESOLVED: u8 = 1 << 0;
+    /// Flag bit: Market is paused (admin emergency stop)
+    pub const FLAG_PAUSED: u8 = 1 << 1;
 
     /// Read market flags from _padding[0].
     pub fn read_flags(data: &[u8]) -> u8 {
@@ -2925,6 +2960,14 @@ pub mod processor {
         Ok(())
     }
 
+    /// Reject if the market is paused. Used in trade/deposit/withdraw/init_user.
+    fn require_not_paused(data: &[u8]) -> Result<(), ProgramError> {
+        if state::is_paused(data) {
+            return Err(PercolatorError::MarketPaused.into());
+        }
+        Ok(())
+    }
+
     fn check_idx(engine: &RiskEngine, idx: u16) -> Result<(), ProgramError> {
         if (idx as usize) >= MAX_ACCOUNTS || !engine.is_used(idx as usize) {
             return Err(PercolatorError::EngineAccountNotFound.into());
@@ -3165,6 +3208,7 @@ pub mod processor {
                 let mut data = state::slab_data_mut(a_slab)?;
                 slab_guard(program_id, a_slab, &data)?;
                 require_initialized(&data)?;
+                require_not_paused(&data)?;
 
                 // Block new users when market is resolved
                 if state::is_resolved(&data) {
@@ -3249,6 +3293,7 @@ pub mod processor {
                 let mut data = state::slab_data_mut(a_slab)?;
                 slab_guard(program_id, a_slab, &data)?;
                 require_initialized(&data)?;
+                require_not_paused(&data)?;
 
                 // Block deposits when market is resolved
                 if state::is_resolved(&data) {
@@ -3304,6 +3349,7 @@ pub mod processor {
                 let mut data = state::slab_data_mut(a_slab)?;
                 slab_guard(program_id, a_slab, &data)?;
                 require_initialized(&data)?;
+                require_not_paused(&data)?;
                 let mut config = state::read_config(&data);
                 let mint = Pubkey::new_from_array(config.collateral_mint);
 
@@ -3531,7 +3577,7 @@ pub mod processor {
                 // Compute funding rate:
                 // - Hyperp mode: use pre-computed rate (avoids borrow conflict)
                 // - Normal mode: inventory-based funding from LP net position
-                let effective_funding_rate = if let Some(rate) = hyperp_funding_rate {
+                let raw_funding_rate = if let Some(rate) = hyperp_funding_rate {
                     rate
                 } else {
                     // Normal mode: inventory-based funding from LP net position
@@ -3547,6 +3593,26 @@ pub mod processor {
                         config.funding_max_premium_bps,
                         config.funding_max_bps_per_slot,
                     )
+                };
+
+                // F5: Funding rate dampening on low-liquidity markets.
+                // Scale funding by min(1, total_OI / (2 * vault)) to prevent extreme rates
+                // on thin markets where a single position dominates.
+                let effective_funding_rate = {
+                    let oi = engine.total_open_interest.get();
+                    let vault = engine.vault.get();
+                    if vault == 0 || oi == 0 {
+                        raw_funding_rate // no dampening when no positions or empty vault
+                    } else {
+                        let oi_x10000 = (oi as u128).saturating_mul(10_000);
+                        let vault_x2 = (vault as u128).saturating_mul(2);
+                        let scale_bps = core::cmp::min(oi_x10000 / vault_x2.max(1), 10_000) as i64;
+                        // scale_bps: 0..10000 where 10000 = full rate, 0 = fully dampened
+                        // When OI >= 2*vault: scale_bps = 10000 (no dampening)
+                        // When OI = vault: scale_bps = 5000 (50% rate)
+                        // When OI = 0: handled above
+                        (raw_funding_rate as i128 * scale_bps as i128 / 10_000) as i64
+                    }
                 };
                 #[cfg(feature = "cu-audit")]
                 {
@@ -3640,6 +3706,7 @@ pub mod processor {
                 let mut data = state::slab_data_mut(a_slab)?;
                 slab_guard(program_id, a_slab, &data)?;
                 require_initialized(&data)?;
+                require_not_paused(&data)?;
 
                 // Block trading when market is resolved
                 if state::is_resolved(&data) {
@@ -3770,6 +3837,7 @@ pub mod processor {
                     let data = a_slab.try_borrow_data()?;
                     slab_guard(program_id, a_slab, &*data)?;
                     require_initialized(&*data)?;
+                    require_not_paused(&*data)?;
 
                     // Block trading when market is resolved
                     if state::is_resolved(&*data) {
@@ -3993,8 +4061,17 @@ pub mod processor {
                     msg!("CU_CHECKPOINT: liquidate_start");
                     sol_log_compute_units();
                 }
+                // Snapshot pre-liquidation state for event logging
+                let pre_cap = engine.accounts[target_idx as usize].capital.get() as u64;
+                let pre_pos = engine.accounts[target_idx as usize].position_size.get();
                 let _res = engine.liquidate_at_oracle(target_idx, clock.slot, price).map_err(map_risk_error)?;
-                sol_log_64(_res as u64, 0, 0, 0, 4);  // result
+                let post_cap = engine.accounts[target_idx as usize].capital.get() as u64;
+                let post_pos = engine.accounts[target_idx as usize].position_size.get();
+                // Enhanced liquidation event: tag=4, result, pre_cap, post_cap, price
+                sol_log_64(_res as u64, pre_cap, post_cap, price, 4);
+                // Liquidation detail: tag=5, pre_pos(low), pre_pos(high), post_pos(low), partial_flag
+                let is_partial = post_pos != 0;
+                sol_log_64(pre_pos as u64, (pre_pos >> 64) as u64, post_pos as u64, is_partial as u64, 5);
                 #[cfg(feature = "cu-audit")]
                 {
                     msg!("CU_CHECKPOINT: liquidate_end");
@@ -4520,8 +4597,8 @@ pub mod processor {
                 engine.admin_force_close(target_idx, clock.slot, price).map_err(map_risk_error)?;
             }
 
-            Instruction::UpdateRiskParams { initial_margin_bps, maintenance_margin_bps } => {
-                // Update margin parameters. Admin only.
+            Instruction::UpdateRiskParams { initial_margin_bps, maintenance_margin_bps, trading_fee_bps } => {
+                // Update margin + fee parameters. Admin only.
                 // Accounts: [admin(signer), slab(writable)]
                 accounts::expect_len(accounts, 2)?;
                 let a_admin = &accounts[0];
@@ -4548,8 +4625,20 @@ pub mod processor {
                     return Err(PercolatorError::InvalidConfigParam.into());
                 }
 
+                // Validate trading fee if provided (0-1000 bps = 0-10%)
+                if let Some(fee) = trading_fee_bps {
+                    if fee > 1_000 {
+                        return Err(PercolatorError::InvalidConfigParam.into());
+                    }
+                }
+
                 let engine = zc::engine_mut(&mut data)?;
                 engine.set_margin_params(initial_margin_bps, maintenance_margin_bps);
+
+                // Update trading fee if provided (backwards compatible)
+                if let Some(fee) = trading_fee_bps {
+                    engine.params.trading_fee_bps = fee;
+                }
             }
 
             Instruction::RenounceAdmin => {
@@ -4884,6 +4973,48 @@ pub mod processor {
                 )?;
 
                 msg!("Insurance LP withdraw: {} LP burned, {} tokens returned", lp_amount, base_amount);
+            }
+
+            Instruction::PauseMarket => {
+                // Pause the market. Admin only.
+                // When paused: Trade, Deposit, Withdraw, InitUser are blocked.
+                // Still allowed: Crank, Liquidate, AdminForceClose, Unpause, SetRiskThreshold, etc.
+                accounts::expect_len(accounts, 2)?;
+                let a_admin = &accounts[0];
+                let a_slab = &accounts[1];
+
+                accounts::expect_signer(a_admin)?;
+                accounts::expect_writable(a_slab)?;
+
+                let mut data = state::slab_data_mut(a_slab)?;
+                slab_guard(program_id, a_slab, &data)?;
+                require_initialized(&data)?;
+
+                let header = state::read_header(&data);
+                require_admin(header.admin, a_admin.key)?;
+
+                state::set_paused(&mut data, true);
+                msg!("Market paused by admin");
+            }
+
+            Instruction::UnpauseMarket => {
+                // Unpause the market. Admin only.
+                accounts::expect_len(accounts, 2)?;
+                let a_admin = &accounts[0];
+                let a_slab = &accounts[1];
+
+                accounts::expect_signer(a_admin)?;
+                accounts::expect_writable(a_slab)?;
+
+                let mut data = state::slab_data_mut(a_slab)?;
+                slab_guard(program_id, a_slab, &data)?;
+                require_initialized(&data)?;
+
+                let header = state::read_header(&data);
+                require_admin(header.admin, a_admin.key)?;
+
+                state::set_paused(&mut data, false);
+                msg!("Market unpaused by admin");
             }
         }
         Ok(())
