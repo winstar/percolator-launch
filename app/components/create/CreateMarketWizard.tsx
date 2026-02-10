@@ -485,6 +485,10 @@ export const CreateMarketWizard: FC = () => {
   const [balanceLoading, setBalanceLoading] = useState(false);
 
   const [openStep, setOpenStep] = useState(1);
+  const [visitedSteps, setVisitedSteps] = useState<Set<number>>(new Set([1]));
+  const toggleStep = (step: number) => {
+    if (openStep === step) { setOpenStep(0); } else { setOpenStep(step); setVisitedSteps((prev) => new Set(prev).add(step)); }
+  };
 
   // vAMM state (manual wizard)
   const [enableVammManual, setEnableVammManual] = useState(false);
@@ -768,7 +772,7 @@ export const CreateMarketWizard: FC = () => {
       )}
 
       {wizardMode === "manual" && <>
-      <StepSection open={openStep === 1} onToggle={() => setOpenStep(openStep === 1 ? 0 : 1)} title="Token & Oracle" stepNum={1} valid={step1Valid}>
+      <StepSection open={openStep === 1} onToggle={() => toggleStep(1)} title="Token & Oracle" stepNum={1} valid={visitedSteps.has(1) && step1Valid}>
         <div className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-[#F0F4FF]">Collateral Mint Address</label>
@@ -924,7 +928,7 @@ export const CreateMarketWizard: FC = () => {
         </div>
       </StepSection>
 
-      <StepSection open={openStep === 2} onToggle={() => setOpenStep(openStep === 2 ? 0 : 2)} title="Risk Parameters" stepNum={2} valid={step2Valid}>
+      <StepSection open={openStep === 2} onToggle={() => toggleStep(2)} title="Risk Parameters" stepNum={2} valid={visitedSteps.has(2) && step2Valid}>
         <div className="space-y-4">
           {/* Slab Tier Selector */}
           <div>
@@ -974,7 +978,7 @@ export const CreateMarketWizard: FC = () => {
         </div>
       </StepSection>
 
-      <StepSection open={openStep === 3} onToggle={() => setOpenStep(openStep === 3 ? 0 : 3)} title="Liquidity Setup" stepNum={3} valid={step3Valid}>
+      <StepSection open={openStep === 3} onToggle={() => toggleStep(3)} title="Liquidity Setup" stepNum={3} valid={visitedSteps.has(3) && step3Valid}>
         <div className="space-y-4">
           {tokenBalance !== null && tokenMeta && (
             <div className="rounded-lg bg-white/[0.03] p-3">
@@ -1001,7 +1005,7 @@ export const CreateMarketWizard: FC = () => {
         </div>
       </StepSection>
 
-      <StepSection open={openStep === 4} onToggle={() => setOpenStep(openStep === 4 ? 0 : 4)} title="Review & Create" stepNum={4} valid={false}>
+      <StepSection open={openStep === 4} onToggle={() => toggleStep(4)} title="Review & Create" stepNum={4} valid={false}>
         <div className="space-y-4">
           <table className="w-full text-sm">
             <tbody className="divide-y divide-white/[0.06]">
