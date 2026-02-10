@@ -1,10 +1,9 @@
 "use client";
 
-import { useRef, useEffect } from "react";
-import gsap from "gsap";
 import { useWallet } from "@solana/wallet-adapter-react";
 import dynamic from "next/dynamic";
 import { CreateMarketWizard } from "@/components/create/CreateMarketWizard";
+import { ScrollReveal } from "@/components/ui/ScrollReveal";
 
 const WalletMultiButton = dynamic(
   () => import("@solana/wallet-adapter-react-ui").then((m) => m.WalletMultiButton),
@@ -13,48 +12,58 @@ const WalletMultiButton = dynamic(
 
 export default function CreatePage() {
   const { connected } = useWallet();
-  const pageRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!pageRef.current) return;
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-      pageRef.current.style.opacity = "1";
-      return;
-    }
-    gsap.fromTo(pageRef.current, { opacity: 0 }, { opacity: 1, duration: 0.3, ease: "power2.out" });
-  }, []);
 
   return (
-    <div ref={pageRef} className="mx-auto max-w-3xl px-4 py-10 gsap-fade">
-      <h1 className="text-3xl font-bold text-white" style={{ fontFamily: "var(--font-space-grotesk)" }}>
-        launch a market
-      </h1>
-      <p className="mt-2 text-sm text-[#8B95B0]">
-        takes about 60 seconds and some sol.
-      </p>
+    <div className="min-h-[calc(100vh-48px)] relative">
+      {/* Grid background */}
+      <div className="absolute inset-x-0 top-0 h-48 bg-grid pointer-events-none" />
 
-      <div className="mt-4 rounded-[4px] border border-[#7B61FF]/20 bg-[#7B61FF]/[0.05] p-4">
-        <p className="text-xs font-medium text-[#7B61FF] mb-2" style={{ fontFamily: "var(--font-space-grotesk)" }}>how it works</p>
-        <div className="flex flex-col gap-1 text-xs text-[#71717a]" style={{ fontFamily: "var(--font-jetbrains-mono)" }}>
-          <span><span className="text-[#00FFB2]">1.</span> paste any solana token address</span>
-          <span><span className="text-[#00FFB2]">2.</span> set leverage &amp; fees</span>
-          <span><span className="text-[#00FFB2]">3.</span> your market goes live instantly</span>
-        </div>
-      </div>
+      <div className="relative mx-auto max-w-4xl px-4 py-10">
+        {/* Page header */}
+        <ScrollReveal>
+          <div className="mb-8">
+            <div className="mb-2 text-[10px] font-medium uppercase tracking-[0.25em] text-[var(--accent)]/60">
+              // deploy
+            </div>
+            <h1
+              className="text-xl font-medium tracking-[-0.01em] text-white sm:text-2xl"
+              style={{ fontFamily: "var(--font-heading)" }}
+            >
+              <span className="font-normal text-white/50">Launch a </span>Market
+            </h1>
+            <p className="mt-2 text-[13px] text-[var(--text-secondary)]">
+              Deploy a perpetual futures market in ~60 seconds.
+            </p>
+            <div
+              className="mt-2 text-[11px] text-[var(--text-dim)]"
+              style={{ fontFamily: "var(--font-mono)" }}
+            >
+              small: ~0.5 SOL &middot; medium: ~2 SOL &middot; large: ~7 SOL
+            </div>
+          </div>
+        </ScrollReveal>
 
-      <div className="mt-2 text-xs text-[#5a6382]" style={{ fontFamily: "var(--font-jetbrains-mono)" }}>
-        small: ~0.5 SOL &middot; medium: ~2 SOL &middot; large: ~7 SOL
-      </div>
+        {/* Wallet warning */}
+        {!connected && (
+          <div className="mb-6 flex items-center justify-between border border-[var(--warning)]/20 bg-[var(--warning)]/[0.04] px-5 py-4">
+            <div className="flex items-center gap-3">
+              <div className="flex h-5 w-5 items-center justify-center border border-[var(--warning)]/30">
+                <span className="text-[10px] text-[var(--warning)]">!</span>
+              </div>
+              <p className="text-[12px] font-medium text-[var(--warning)]">
+                Connect your wallet to continue.
+              </p>
+            </div>
+            <WalletMultiButton />
+          </div>
+        )}
 
-      {!connected && (
-        <div className="mt-6 flex items-center gap-3 rounded-[4px] border border-[#FFB800]/20 bg-[#FFB800]/[0.05] p-4">
-          <p className="flex-1 text-sm text-[#FFB800]">connect your wallet first.</p>
-          <WalletMultiButton />
-        </div>
-      )}
-
-      <div className="mt-8 rounded-[4px] border border-white/[0.06] bg-white/[0.03] backdrop-blur-xl p-6 md:p-8">
-        <CreateMarketWizard />
+        {/* Main wizard container */}
+        <ScrollReveal delay={0.1}>
+          <div className="border border-[var(--border)] bg-[var(--panel-bg)]">
+            <CreateMarketWizard />
+          </div>
+        </ScrollReveal>
       </div>
     </div>
   );

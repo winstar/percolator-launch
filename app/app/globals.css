@@ -1,15 +1,42 @@
 @import "tailwindcss";
 
 :root {
-  --bg: #09090b;
-  --card: #111113;
-  --border: #1a1a1f;
-  --accent: #00FFB2;
-  --text: #fafafa;
-  --text-secondary: #71717a;
-  --text-muted: #3f3f46;
-  --long: #22c55e;
-  --short: #ef4444;
+  /* ─── Solana Terminal Palette ─── */
+  --bg: #0A0A0F;
+  --bg-elevated: #0F1018;
+  --bg-surface: #141820;
+  --panel-bg: #0D0E15;
+  --border: #1C1F2E;
+  --border-subtle: #14161F;
+
+  --accent: #9945FF;
+  --accent-muted: #7B38CC;
+  --accent-subtle: rgba(153,69,255,0.06);
+
+  --cyan: #14F195;
+  --cyan-muted: rgba(20,241,149,0.08);
+
+  --text: #E1E2E8;
+  --text-secondary: #7A7F96;
+  --text-muted: #454B5F;
+  --text-dim: #2A2E3D;
+
+  --long: #14F195;
+  --short: #FF3B5C;
+  --warning: #E5A100;
+
+  /* Timing */
+  --timing-fast: 150ms;
+  --timing-normal: 300ms;
+  --timing-slow: 500ms;
+
+  /* HUD Lines */
+  --hud-line: rgba(153,69,255,0.20);
+  --hud-line-hover: rgba(153,69,255,0.45);
+}
+
+html {
+  scroll-behavior: smooth;
 }
 
 @theme inline {
@@ -18,37 +45,121 @@
   --color-accent: var(--accent);
   --color-long: var(--long);
   --color-short: var(--short);
-  --font-sans: var(--font-space-grotesk), var(--font-geist-sans), system-ui;
+  --font-sans: var(--font-jetbrains-mono), var(--font-geist-mono), monospace;
   --font-mono: var(--font-jetbrains-mono), var(--font-geist-mono), monospace;
-  --font-display: var(--font-space-grotesk), var(--font-geist-sans), system-ui;
+  --font-display: var(--font-outfit), var(--font-space-grotesk), system-ui;
+  --font-heading: var(--font-jetbrains-mono), var(--font-geist-mono), monospace;
 }
 
 body {
   background: var(--bg);
   color: var(--text);
   font-family: var(--font-sans);
+  font-variant-numeric: tabular-nums;
 }
 
-/* ─── Shimmer (simplified) ─── */
-/* ─── GSAP fade-in fallback ─── */
-/* Pages start with opacity-0 for GSAP animation. This ensures they become
-   visible even if GSAP fails to load, JS is slow, or reduced-motion is on. */
-.gsap-fade {
-  opacity: 0;
-  animation: gsap-fallback 0s ease forwards;
-  animation-delay: 0.4s; /* give GSAP 400ms to take over, then force visible */
+/* ─── Noise Texture Overlay ─── */
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  pointer-events: none;
+  opacity: 0.015;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 512 512' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+  background-repeat: repeat;
+  background-size: 512px 512px;
 }
 
-@keyframes gsap-fallback {
-  to { opacity: 1; }
+/* ─── CRT Scan Lines Background ─── */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(153, 69, 255, 0.012) 2px,
+      rgba(153, 69, 255, 0.012) 4px
+    );
 }
 
-/* If GSAP ran successfully, it sets inline opacity — the animation is overridden */
-
+/* ─── Keyframes ─── */
 @keyframes shimmer {
   0% { opacity: 0.5; }
   50% { opacity: 1; }
   100% { opacity: 0.5; }
+}
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes blurIn {
+  from { opacity: 0; filter: blur(8px); }
+  to { opacity: 1; filter: blur(0); }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-6px); }
+}
+
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 20px rgba(153, 69, 255, 0.08); }
+  50% { box-shadow: 0 0 40px rgba(153, 69, 255, 0.15); }
+}
+
+@keyframes gradient-shift {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+@keyframes shimmer-sweep {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+@keyframes cursor-fade-out {
+  0%, 70% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+@keyframes scale-in {
+  0% { transform: scale(0); opacity: 0; }
+  50% { transform: scale(1.1); }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+@keyframes flow-line {
+  0% { background-position: -30% 0; }
+  100% { background-position: 130% 0; }
+}
+
+@keyframes fade-in-up {
+  from { opacity: 0; transform: translateY(24px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 .shimmer {
@@ -56,20 +167,333 @@ body {
   animation: shimmer 1.5s ease-in-out infinite;
 }
 
+/* ─── Animation Classes ─── */
+.animate-fade-in-up { animation: fade-in-up 0.6s cubic-bezier(0.16, 1, 0.3, 1) both; }
+.animate-fade-in { animation: fade-in 0.4s ease-out both; }
+.animate-float { animation: float 5s ease-in-out infinite; }
+.animate-scale-in { animation: scale-in 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) 0.2s both; }
+.animate-flow-line { background-size: 30% 100%; background-repeat: no-repeat; animation: flow-line 3s linear infinite; }
+
+.delay-100 { animation-delay: 100ms; }
+.delay-200 { animation-delay: 200ms; }
+.delay-300 { animation-delay: 300ms; }
+.delay-400 { animation-delay: 400ms; }
+.delay-500 { animation-delay: 500ms; }
+.delay-600 { animation-delay: 600ms; }
+.delay-800 { animation-delay: 800ms; }
+
+/* ─── HUD Corner Brackets (cards) ─── */
+.hud-corners {
+  position: relative;
+}
+.hud-corners::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  pointer-events: none;
+  z-index: 1;
+  opacity: 0.6;
+  transition: opacity 0.2s ease;
+  background:
+    linear-gradient(var(--hud-line), var(--hud-line)) 0 0 / 12px 2px no-repeat,
+    linear-gradient(var(--hud-line), var(--hud-line)) 0 0 / 2px 12px no-repeat,
+    linear-gradient(var(--hud-line), var(--hud-line)) 100% 0 / 12px 2px no-repeat,
+    linear-gradient(var(--hud-line), var(--hud-line)) 100% 0 / 2px 12px no-repeat,
+    linear-gradient(var(--hud-line), var(--hud-line)) 0 100% / 12px 2px no-repeat,
+    linear-gradient(var(--hud-line), var(--hud-line)) 0 100% / 2px 12px no-repeat,
+    linear-gradient(var(--hud-line), var(--hud-line)) 100% 100% / 12px 2px no-repeat,
+    linear-gradient(var(--hud-line), var(--hud-line)) 100% 100% / 2px 12px no-repeat;
+}
+.hud-corners:hover::before {
+  opacity: 1;
+}
+
+/* ─── HUD Corner Brackets (buttons — smaller) ─── */
+.hud-btn-corners {
+  position: relative;
+}
+.hud-btn-corners::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  pointer-events: none;
+  z-index: 1;
+  opacity: 0.5;
+  transition: opacity 0.15s ease;
+  background:
+    linear-gradient(var(--accent), var(--accent)) 0 0 / 6px 1px no-repeat,
+    linear-gradient(var(--accent), var(--accent)) 0 0 / 1px 6px no-repeat,
+    linear-gradient(var(--accent), var(--accent)) 100% 0 / 6px 1px no-repeat,
+    linear-gradient(var(--accent), var(--accent)) 100% 0 / 1px 6px no-repeat,
+    linear-gradient(var(--accent), var(--accent)) 0 100% / 6px 1px no-repeat,
+    linear-gradient(var(--accent), var(--accent)) 0 100% / 1px 6px no-repeat,
+    linear-gradient(var(--accent), var(--accent)) 100% 100% / 6px 1px no-repeat,
+    linear-gradient(var(--accent), var(--accent)) 100% 100% / 1px 6px no-repeat;
+}
+.hud-btn-corners:hover::before {
+  opacity: 1;
+}
+
+/* ─── Grid Background ─── */
+.bg-grid {
+  position: relative;
+}
+.bg-grid::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(153, 69, 255, 0.12) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(153, 69, 255, 0.12) 1px, transparent 1px);
+  background-size: 80px 80px;
+  mask-image: radial-gradient(ellipse 100% 90% at 50% 0%, black 30%, transparent 80%);
+  -webkit-mask-image: radial-gradient(ellipse 100% 90% at 50% 0%, black 30%, transparent 80%);
+  pointer-events: none;
+}
+
+/* ─── Accent Top Border ─── */
+.accent-top {
+  position: relative;
+}
+.accent-top::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  opacity: 0.6;
+  z-index: 1;
+}
+
+/* ─── Ticker Banner ─── */
+.ticker-banner {
+  height: 28px;
+  display: flex;
+  align-items: center;
+  white-space: nowrap;
+}
+.ticker-track {
+  display: inline-flex;
+  width: max-content;
+  animation: ticker-scroll 40s linear infinite;
+}
+@keyframes ticker-scroll {
+  0% { transform: translate3d(0, 0, 0); }
+  100% { transform: translate3d(-50%, 0, 0); }
+}
+.ticker-banner:hover .ticker-track {
+  animation-play-state: paused;
+}
+
+/* ─── Press Effect ─── */
+.press { transition: transform 150ms ease; }
+.press:active { transform: scale(0.98); }
+
+/* ─── Range Slider — Terminal Style ─── */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 2px;
+  background: var(--border);
+  outline: none;
+  cursor: pointer;
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  background: var(--bg);
+  border: 2px solid var(--accent);
+  cursor: pointer;
+  transition: background 150ms ease, border-color 150ms ease, box-shadow 150ms ease;
+}
+input[type="range"]::-webkit-slider-thumb:hover {
+  background: var(--accent);
+  box-shadow: 0 0 8px rgba(153, 69, 255, 0.4);
+}
+input[type="range"]::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  background: var(--bg);
+  border: 2px solid var(--accent);
+  border-radius: 0;
+  cursor: pointer;
+  transition: background 150ms ease, border-color 150ms ease, box-shadow 150ms ease;
+}
+input[type="range"]::-moz-range-thumb:hover {
+  background: var(--accent);
+  box-shadow: 0 0 8px rgba(153, 69, 255, 0.4);
+}
+input[type="range"]::-moz-range-track {
+  height: 2px;
+  background: var(--border);
+  border: none;
+}
+input[type="range"]:focus-visible::-webkit-slider-thumb {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(153, 69, 255, 0.2);
+}
+
 /* ─── Scrollbar ─── */
-::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: var(--bg); }
-::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; transition: background 200ms; }
+::-webkit-scrollbar-thumb:hover { background: rgba(153, 69, 255, 0.3); }
 
 /* ─── Selection ─── */
 ::selection {
-  background: rgba(0, 255, 178, 0.2);
+  background: rgba(153,69,255,0.2);
   color: var(--text);
+}
+
+/* ─── Cursor Glow (set via JS) ─── */
+.cursor-glow {
+  position: fixed;
+  width: 500px;
+  height: 500px;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 0;
+  background: radial-gradient(circle, rgba(153, 69, 255, 0.06) 0%, transparent 70%);
+  transform: translate(-50%, -50%);
+  transition: opacity 0.3s ease;
+  opacity: 0;
+}
+.cursor-glow.active {
+  opacity: 1;
+}
+
+/* ─── Hero Data Stream Background ─── */
+.hero-data-stream {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  overflow: hidden;
+  opacity: 0.4;
+}
+.hero-data-stream::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 600px 200px at 20% 50%, rgba(153, 69, 255, 0.06), transparent),
+    radial-gradient(ellipse 600px 200px at 80% 50%, rgba(20, 241, 149, 0.04), transparent);
+}
+.hero-data-stream::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 800px;
+  height: 800px;
+  background: radial-gradient(circle, rgba(153, 69, 255, 0.05) 0%, transparent 70%);
+  animation: hero-pulse 6s ease-in-out infinite;
+}
+
+@keyframes hero-pulse {
+  0%, 100% { opacity: 0.3; transform: translate(-50%, -50%) scale(1); }
+  50% { opacity: 0.6; transform: translate(-50%, -50%) scale(1.05); }
+}
+
+/* ─── Hero Horizontal Rules ─── */
+.hero-hud-lines {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  overflow: hidden;
+}
+.hero-hud-lines::before,
+.hero-hud-lines::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 1px;
+}
+.hero-hud-lines::before {
+  top: 25%;
+  background: linear-gradient(90deg, transparent 5%, rgba(153, 69, 255, 0.06) 20%, rgba(153, 69, 255, 0.06) 80%, transparent 95%);
+}
+.hero-hud-lines::after {
+  bottom: 25%;
+  background: linear-gradient(90deg, transparent 5%, rgba(153, 69, 255, 0.04) 20%, rgba(153, 69, 255, 0.04) 80%, transparent 95%);
+}
+
+/* ─── Hero Brand Name — underline ─── */
+.hero-brand-name {
+  position: relative;
+  display: inline-block;
+}
+.hero-brand-name::after {
+  content: "";
+  position: absolute;
+  bottom: -4px;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  opacity: 0.5;
+}
+
+/* ─── Hero Status Indicator ─── */
+.hero-status-bar {
+  position: relative;
+}
+.hero-status-bar::before {
+  content: "";
+  position: absolute;
+  left: -12px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 4px;
+  height: 4px;
+  background: var(--accent);
+  clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);
+}
+
+/* ─── Hero Headline Accent Line ─── */
+.hero-headline-rule {
+  width: 60px;
+  height: 1px;
+  background: linear-gradient(90deg, var(--accent), transparent);
+  opacity: 0.6;
+  margin: 0 auto;
+}
+
+/* ─── Hero Metric Divider ─── */
+.hero-metric-divider {
+  width: 1px;
+  height: 28px;
+  background: linear-gradient(180deg, transparent, var(--border), transparent);
+}
+
+/* ─── Hero Terminal Cursor ─── */
+.hero-terminal-cursor {
+  display: inline-block;
+  width: 8px;
+  height: 1.1em;
+  background: var(--accent);
+  vertical-align: middle;
+  margin-left: 2px;
+  animation: blink 1s step-end infinite;
+}
+
+@keyframes border-spin {
+  to { transform: rotate(360deg); }
 }
 
 /* ─── Reduced Motion ─── */
 @media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
   *, *::before, *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
@@ -77,55 +501,239 @@ body {
   }
 }
 
-/* ─── Wallet Adapter Overrides ─── */
+/* ─── Wallet Adapter Overrides — Terminal Style ─── */
+
+/* Header connect button */
 .wallet-adapter-button {
-  background-color: #00FFB2 !important;
-  color: #09090b !important;
-  border-radius: 4px !important;
-  font-size: 0.875rem !important;
+  background-color: transparent !important;
+  color: var(--accent) !important;
+  border-radius: 0 !important;
+  font-family: var(--font-sans) !important;
+  font-size: 0.6875rem !important;
   font-weight: 600 !important;
-  height: 2.5rem !important;
-  padding: 0 1.25rem !important;
-  transition: opacity 200ms ease !important;
+  letter-spacing: 0.05em !important;
+  text-transform: uppercase !important;
+  height: 2.25rem !important;
+  padding: 0 1rem !important;
+  transition: all 200ms ease !important;
+  border: 1px solid rgba(153, 69, 255, 0.3) !important;
+  position: relative !important;
 }
 .wallet-adapter-button:not([disabled]):hover {
-  opacity: 0.85 !important;
+  background-color: rgba(153, 69, 255, 0.08) !important;
+  border-color: rgba(153, 69, 255, 0.6) !important;
 }
+/* HUD corners on connect button */
+.wallet-adapter-button::before {
+  content: "" !important;
+  position: absolute !important;
+  inset: -1px !important;
+  pointer-events: none !important;
+  z-index: 1 !important;
+  opacity: 0.4 !important;
+  transition: opacity 0.15s ease !important;
+  background:
+    linear-gradient(var(--accent), var(--accent)) 0 0 / 5px 1px no-repeat,
+    linear-gradient(var(--accent), var(--accent)) 0 0 / 1px 5px no-repeat,
+    linear-gradient(var(--accent), var(--accent)) 100% 0 / 5px 1px no-repeat,
+    linear-gradient(var(--accent), var(--accent)) 100% 0 / 1px 5px no-repeat,
+    linear-gradient(var(--accent), var(--accent)) 0 100% / 5px 1px no-repeat,
+    linear-gradient(var(--accent), var(--accent)) 0 100% / 1px 5px no-repeat,
+    linear-gradient(var(--accent), var(--accent)) 100% 100% / 5px 1px no-repeat,
+    linear-gradient(var(--accent), var(--accent)) 100% 100% / 1px 5px no-repeat !important;
+}
+.wallet-adapter-button:hover::before {
+  opacity: 0.8 !important;
+}
+/* Connected state — show address in mono */
+.wallet-adapter-button-trigger {
+  font-family: var(--font-mono) !important;
+  font-size: 0.6875rem !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+}
+/* Wallet icon inside button */
+.wallet-adapter-button .wallet-adapter-button-start-icon {
+  margin-right: 8px !important;
+}
+.wallet-adapter-button .wallet-adapter-button-start-icon img {
+  width: 16px !important;
+  height: 16px !important;
+}
+
+/* Dropdown (connected wallet menu) */
 .wallet-adapter-dropdown-list {
-  background-color: #111113 !important;
-  border: 1px solid #1a1a1f !important;
-  border-radius: 4px !important;
+  background-color: var(--bg) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 0 !important;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.6) !important;
+  padding: 2px !important;
 }
 .wallet-adapter-dropdown-list-item {
   background-color: transparent !important;
-  color: var(--text) !important;
+  color: var(--text-secondary) !important;
+  border-radius: 0 !important;
+  font-family: var(--font-sans) !important;
+  font-size: 0.6875rem !important;
+  font-weight: 500 !important;
+  letter-spacing: 0.04em !important;
+  text-transform: uppercase !important;
+  padding: 10px 14px !important;
+  transition: all 150ms ease !important;
 }
 .wallet-adapter-dropdown-list-item:hover {
-  background-color: rgba(255, 255, 255, 0.04) !important;
+  background-color: rgba(153, 69, 255, 0.06) !important;
+  color: var(--text) !important;
+}
+.wallet-adapter-dropdown-list-item:not(:last-child) {
+  border-bottom: 1px solid var(--border) !important;
+}
+
+/* ─── Modal (wallet selection screen) ─── */
+.wallet-adapter-modal-overlay {
+  background-color: rgba(5, 5, 8, 0.85) !important;
+  backdrop-filter: blur(8px) !important;
 }
 .wallet-adapter-modal-wrapper {
-  background-color: #111113 !important;
+  background-color: var(--bg) !important;
   color: var(--text) !important;
-  border-radius: 4px !important;
-  border: 1px solid #1a1a1f !important;
+  border-radius: 0 !important;
+  border: 1px solid var(--border) !important;
+  box-shadow:
+    0 0 0 1px rgba(153, 69, 255, 0.08),
+    0 32px 80px rgba(0, 0, 0, 0.7) !important;
+  max-width: 420px !important;
+  font-family: var(--font-sans) !important;
+  padding: 0 !important;
+  overflow: hidden !important;
 }
+/* HUD corners on modal */
+.wallet-adapter-modal-wrapper::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  pointer-events: none;
+  z-index: 10;
+  opacity: 0.5;
+  background:
+    linear-gradient(var(--accent), var(--accent)) 0 0 / 16px 1px no-repeat,
+    linear-gradient(var(--accent), var(--accent)) 0 0 / 1px 16px no-repeat,
+    linear-gradient(var(--accent), var(--accent)) 100% 0 / 16px 1px no-repeat,
+    linear-gradient(var(--accent), var(--accent)) 100% 0 / 1px 16px no-repeat,
+    linear-gradient(var(--accent), var(--accent)) 0 100% / 16px 1px no-repeat,
+    linear-gradient(var(--accent), var(--accent)) 0 100% / 1px 16px no-repeat,
+    linear-gradient(var(--accent), var(--accent)) 100% 100% / 16px 1px no-repeat,
+    linear-gradient(var(--accent), var(--accent)) 100% 100% / 1px 16px no-repeat;
+}
+
+/* Modal title */
 .wallet-adapter-modal-title {
   color: var(--text) !important;
-  padding-right: 56px !important;
+  font-family: var(--font-sans) !important;
+  font-size: 0.8125rem !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.08em !important;
+  text-transform: uppercase !important;
+  text-align: left !important;
+  padding: 20px 56px 16px 24px !important;
+  border-bottom: 1px solid var(--border) !important;
+  margin: 0 !important;
+  line-height: 1 !important;
+}
+
+/* Modal middle content — the wallet icon + "You'll need a wallet" text */
+.wallet-adapter-modal-middle {
+  padding: 32px 24px !important;
+  border-bottom: 1px solid var(--border) !important;
+}
+.wallet-adapter-modal-middle-button {
+  display: none !important;
+}
+
+/* Wallet list */
+.wallet-adapter-modal-list {
+  padding: 8px !important;
+  margin: 0 !important;
+}
+.wallet-adapter-modal-list li {
+  margin: 0 !important;
 }
 .wallet-adapter-modal-list .wallet-adapter-button {
-  background-color: rgba(255, 255, 255, 0.04) !important;
+  background-color: var(--panel-bg) !important;
   color: var(--text) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 0 !important;
+  width: 100% !important;
+  height: auto !important;
+  padding: 12px 16px !important;
+  font-size: 0.75rem !important;
+  font-weight: 500 !important;
+  letter-spacing: 0.03em !important;
+  text-transform: none !important;
+  justify-content: flex-start !important;
+  transition: all 150ms ease !important;
+  margin-bottom: 2px !important;
+}
+.wallet-adapter-modal-list .wallet-adapter-button::before {
+  display: none !important;
 }
 .wallet-adapter-modal-list .wallet-adapter-button:hover {
-  background-color: rgba(255, 255, 255, 0.08) !important;
+  background-color: rgba(153, 69, 255, 0.06) !important;
+  border-color: rgba(153, 69, 255, 0.25) !important;
+  color: var(--accent) !important;
 }
+.wallet-adapter-modal-list .wallet-adapter-button .wallet-adapter-button-end-icon {
+  display: none !important;
+}
+
+/* Collapse/expand ("More options") button */
+.wallet-adapter-modal-list-more {
+  color: var(--text-muted) !important;
+  font-family: var(--font-sans) !important;
+  font-size: 0.625rem !important;
+  font-weight: 500 !important;
+  letter-spacing: 0.1em !important;
+  text-transform: uppercase !important;
+  cursor: pointer !important;
+  padding: 10px 16px !important;
+  transition: color 150ms ease !important;
+  border-radius: 0 !important;
+}
+.wallet-adapter-modal-list-more:hover {
+  color: var(--accent) !important;
+}
+.wallet-adapter-modal-list-more svg {
+  fill: var(--text-muted) !important;
+  transition: fill 150ms ease !important;
+}
+.wallet-adapter-modal-list-more:hover svg {
+  fill: var(--accent) !important;
+}
+
+/* Close button */
 .wallet-adapter-modal-button-close {
-  background-color: rgba(255, 255, 255, 0.04) !important;
+  background-color: transparent !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 0 !important;
+  width: 28px !important;
+  height: 28px !important;
+  padding: 0 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  transition: all 150ms ease !important;
+  top: 16px !important;
+  right: 16px !important;
+}
+.wallet-adapter-modal-button-close:hover {
+  background-color: rgba(153, 69, 255, 0.08) !important;
+  border-color: rgba(153, 69, 255, 0.3) !important;
 }
 .wallet-adapter-modal-button-close svg {
-  fill: var(--text) !important;
+  fill: var(--text-muted) !important;
+  width: 12px !important;
+  height: 12px !important;
 }
-.wallet-adapter-modal-overlay {
-  background-color: rgba(0, 0, 0, 0.7) !important;
+.wallet-adapter-modal-button-close:hover svg {
+  fill: var(--accent) !important;
 }
