@@ -491,6 +491,78 @@ async function main() {
   });
 
   // ============================================================
+  // STEP 8b: Multiple rapid direction flips
+  // Open LONG → Close → Open SHORT → Close → Open LONG → Close
+  // Verifies risk gate doesn't accumulate and block after multiple cycles
+  // ============================================================
+  await runTest("8b. Multiple rapid direction flips (LONG → SHORT → LONG)", async () => {
+    const [lpPda] = deriveLpPda(PROGRAM_ID, slab.publicKey, lpIdx);
+
+    // Helper: trade + crank
+    async function tradeAndCrank(size: string, label: string) {
+      const tradeData = encodeTradeCpi({ lpIdx, userIdx: traderIdx, size });
+      const tradeKeys = buildAccountMetas(ACCOUNTS_TRADE_CPI, [
+        trader.publicKey, lpOwner.publicKey, slab.publicKey,
+        WELL_KNOWN.clock, slab.publicKey,
+        MATCHER_PROGRAM_ID, matcherCtxKp.publicKey, lpPda,
+      ]);
+      const tx = new Transaction();
+      tx.add(ComputeBudgetProgram.setComputeUnitLimit({ units: 400_000 }));
+      tx.add(buildIx({ programId: PROGRAM_ID, keys: tradeKeys, data: tradeData }));
+      await sendAndConfirmTransaction(connection, tx, [payer, trader], { commitment: "confirmed" });
+
+      const crankData = encodeKeeperCrank({ callerIdx: 65535, allowPanic: false });
+      const crankKeys = buildAccountMetas(ACCOUNTS_KEEPER_CRANK, [
+        payer.publicKey, slab.publicKey, SYSVAR_CLOCK_PUBKEY, slab.publicKey,
+      ]);
+      const crankTx = new Transaction();
+      crankTx.add(ComputeBudgetProgram.setComputeUnitLimit({ units: 200_000 }));
+      crankTx.add(buildIx({ programId: PROGRAM_ID, keys: crankKeys, data: crankData }));
+      await sendAndConfirmTransaction(connection, crankTx, [payer], { commitment: "confirmed", skipPreflight: true });
+      console.log(`    ${label} ✓`);
+    }
+
+    // Open LONG
+    await tradeAndCrank("50000000", "Open LONG (50)");
+    // Close LONG
+    const data1 = await fetchSlab(connection, slab.publicKey);
+    const acct1 = parseAccount(data1, traderIdx);
+    await tradeAndCrank((-acct1.positionSize).toString(), "Close LONG");
+    // Open SHORT
+    await tradeAndCrank("-50000000", "Open SHORT (50)");
+    // Close SHORT
+    const data2 = await fetchSlab(connection, slab.publicKey);
+    const acct2 = parseAccount(data2, traderIdx);
+    await tradeAndCrank((-acct2.positionSize).toString(), "Close SHORT");
+    // Open LONG again
+    await tradeAndCrank("50000000", "Open LONG again (50)");
+    // Close LONG again
+    const data3 = await fetchSlab(connection, slab.publicKey);
+    const acct3 = parseAccount(data3, traderIdx);
+    await tradeAndCrank((-acct3.positionSize).toString(), "Close LONG (final)");
+
+    const dataFinal = await fetchSlab(connection, slab.publicKey);
+    const acctFinal = parseAccount(dataFinal, traderIdx);
+    assert(acctFinal.positionSize === 0n, "Position is flat after all flips");
+    console.log("    All rapid direction flips succeeded — risk gate OK ✅");
+  });
+
+  // ============================================================
+  // STEP 8c: Read risk threshold from slab
+  // ============================================================
+  await runTest("8c. Read risk_reduction_threshold from slab", async () => {
+    const data = await fetchSlab(connection, slab.publicKey);
+    const engine = parseEngine(data);
+    const params = parseParams(data);
+    console.log(`    Engine numUsedAccounts: ${engine.numUsedAccounts}`);
+    console.log(`    risk_reduction_threshold: ${params.riskReductionThreshold}`);
+    // With v2 defaults, threshold should be 0 or very small
+    const threshold = BigInt(params.riskReductionThreshold);
+    assert(threshold <= 1000n, `risk_reduction_threshold should be ≤ 1000 but got ${threshold}`);
+    console.log("    ✓ Risk threshold is low as expected with v2 defaults");
+  });
+
+  // ============================================================
   // Cleanup
   // ============================================================
   try {

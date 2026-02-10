@@ -29,6 +29,7 @@ import {
   encodeInitMarket,
   encodeInitUser,
   encodeDepositCollateral,
+  encodeWithdrawCollateral,
   encodeKeeperCrank,
   encodeTradeCpi,
   encodeInitLP,
@@ -40,6 +41,7 @@ import {
   ACCOUNTS_INIT_MARKET,
   ACCOUNTS_INIT_USER,
   ACCOUNTS_DEPOSIT_COLLATERAL,
+  ACCOUNTS_WITHDRAW_COLLATERAL,
   ACCOUNTS_KEEPER_CRANK,
   ACCOUNTS_TRADE_CPI,
   ACCOUNTS_INIT_LP,
@@ -406,6 +408,241 @@ async function main() {
     tx.add(buildIx({ programId: PROGRAM_ID, keys: depositKeys, data: depositData }));
     await sendAndConfirmTransaction(connection, tx, [payer, trader], { commitment: "confirmed" });
     console.log("    Deposit succeeded after unpause ✓");
+  });
+
+  // ============================================================
+  // STEP 6b: Withdraw while paused → Custom(33)
+  // (Market is currently unpaused from step 10 — re-pause first)
+  // ============================================================
+  await runTest("6b. Withdraw while paused → Custom(33)", async () => {
+    // Pause again
+    const pauseData = encodePauseMarket();
+    const pauseKeys = [
+      { pubkey: payer.publicKey, isSigner: true, isWritable: true },
+      { pubkey: slab.publicKey, isSigner: false, isWritable: true },
+    ];
+    const pauseTx = new Transaction();
+    pauseTx.add(ComputeBudgetProgram.setComputeUnitLimit({ units: 50_000 }));
+    pauseTx.add(buildIx({ programId: PROGRAM_ID, keys: pauseKeys, data: pauseData }));
+    await sendAndConfirmTransaction(connection, pauseTx, [payer], { commitment: "confirmed" });
+    console.log("    Market re-paused for withdraw test");
+
+    // Try withdraw — should fail with Custom(33)
+    const withdrawData = encodeWithdrawCollateral({ userIdx: traderIdx, amount: "1000000" });
+    const withdrawKeys = buildAccountMetas(ACCOUNTS_WITHDRAW_COLLATERAL, [
+      trader.publicKey, slab.publicKey, vault, traderAta,
+      vaultPda, WELL_KNOWN.tokenProgram, WELL_KNOWN.clock, slab.publicKey,
+    ]);
+    const tx = new Transaction();
+    tx.add(ComputeBudgetProgram.setComputeUnitLimit({ units: 50_000 }));
+    tx.add(buildIx({ programId: PROGRAM_ID, keys: withdrawKeys, data: withdrawData }));
+    await expectCustomError(connection, tx, [payer, trader], 33, "Withdraw while paused");
+
+    // Unpause for subsequent tests
+    const unpauseData = encodeUnpauseMarket();
+    const unpauseKeys = [
+      { pubkey: payer.publicKey, isSigner: true, isWritable: true },
+      { pubkey: slab.publicKey, isSigner: false, isWritable: true },
+    ];
+    const unpauseTx = new Transaction();
+    unpauseTx.add(ComputeBudgetProgram.setComputeUnitLimit({ units: 50_000 }));
+    unpauseTx.add(buildIx({ programId: PROGRAM_ID, keys: unpauseKeys, data: unpauseData }));
+    await sendAndConfirmTransaction(connection, unpauseTx, [payer], { commitment: "confirmed" });
+  });
+
+  // ============================================================
+  // STEP 8b: Non-admin tries to pause → should fail
+  // ============================================================
+  await runTest("8b. Non-admin tries to pause → Custom(15) EngineUnauthorized", async () => {
+    const fakeAdmin = Keypair.generate();
+    // Fund the fake admin so they can sign
+    const fundTx = new Transaction().add(SystemProgram.transfer({
+      fromPubkey: payer.publicKey, toPubkey: fakeAdmin.publicKey,
+      lamports: LAMPORTS_PER_SOL / 20,
+    }));
+    await sendAndConfirmTransaction(connection, fundTx, [payer]);
+    await sleep(500);
+
+    const pauseData = encodePauseMarket();
+    const pauseKeys = [
+      { pubkey: fakeAdmin.publicKey, isSigner: true, isWritable: true },
+      { pubkey: slab.publicKey, isSigner: false, isWritable: true },
+    ];
+    const tx = new Transaction();
+    tx.add(ComputeBudgetProgram.setComputeUnitLimit({ units: 50_000 }));
+    tx.add(buildIx({ programId: PROGRAM_ID, keys: pauseKeys, data: pauseData }));
+    await expectCustomError(connection, tx, [fakeAdmin], 15, "Non-admin PauseMarket");
+  });
+
+  // ============================================================
+  // STEP 11b: Trade while paused → Custom(33)
+  // Set up LP, pause, try trade, unpause
+  // ============================================================
+  await runTest("11b. Trade while paused → Custom(33)", async () => {
+    // Init LP via matcher (needed for TradeCpi)
+    lpOwner = Keypair.generate();
+    const fundLpTx = new Transaction().add(SystemProgram.transfer({
+      fromPubkey: payer.publicKey, toPubkey: lpOwner.publicKey,
+      lamports: LAMPORTS_PER_SOL / 5,
+    }));
+    await sendAndConfirmTransaction(connection, fundLpTx, [payer]);
+    await sleep(1000);
+
+    const lpAtaAccount = await getOrCreateAssociatedTokenAccount(connection, payer, mint, lpOwner.publicKey);
+    lpAta = lpAtaAccount.address;
+    await mintTo(connection, payer, mint, lpAta, payer, 500_000_000n);
+    await sleep(500);
+
+    matcherCtxKp = Keypair.generate();
+    const matcherCtxRent = await connection.getMinimumBalanceForRentExemption(MATCHER_CTX_SIZE);
+    const [lpPda] = deriveLpPda(PROGRAM_ID, slab.publicKey, lpIdx);
+
+    const instructions: TransactionInstruction[] = [];
+
+    // Create matcher context
+    instructions.push(SystemProgram.createAccount({
+      fromPubkey: payer.publicKey, newAccountPubkey: matcherCtxKp.publicKey,
+      lamports: matcherCtxRent, space: MATCHER_CTX_SIZE,
+      programId: MATCHER_PROGRAM_ID,
+    }));
+
+    // Init vAMM (Tag 2)
+    const vammData = new Uint8Array(66);
+    const dv = new DataView(vammData.buffer);
+    let off = 0;
+    vammData[off] = 2; off += 1;
+    vammData[off] = 0; off += 1;
+    dv.setUint32(off, 50, true); off += 4;
+    dv.setUint32(off, 50, true); off += 4;
+    dv.setUint32(off, 200, true); off += 4;
+    dv.setUint32(off, 0, true); off += 4;
+    dv.setBigUint64(off, 10_000_000_000_000n, true); off += 8;
+    dv.setBigUint64(off, 0n, true); off += 8;
+    dv.setBigUint64(off, 1_000_000_000_000n, true); off += 8;
+    dv.setBigUint64(off, 0n, true); off += 8;
+    dv.setBigUint64(off, 0n, true); off += 8;
+    dv.setBigUint64(off, 0n, true); off += 8;
+
+    instructions.push(new TransactionInstruction({
+      programId: MATCHER_PROGRAM_ID,
+      keys: [
+        { pubkey: lpPda, isSigner: false, isWritable: false },
+        { pubkey: matcherCtxKp.publicKey, isSigner: false, isWritable: true },
+      ],
+      data: Buffer.from(vammData),
+    }));
+
+    // Init LP
+    const initLpData = encodeInitLP({
+      matcherProgram: MATCHER_PROGRAM_ID,
+      matcherContext: matcherCtxKp.publicKey,
+      feePayment: "1000000",
+    });
+    const initLpKeys = buildAccountMetas(ACCOUNTS_INIT_LP, [
+      lpOwner.publicKey, slab.publicKey, lpAta, vault, WELL_KNOWN.tokenProgram,
+    ]);
+    instructions.push(buildIx({ programId: PROGRAM_ID, keys: initLpKeys, data: initLpData }));
+
+    const setupTx = new Transaction();
+    setupTx.add(ComputeBudgetProgram.setComputeUnitLimit({ units: 300_000 }));
+    instructions.forEach((ix) => setupTx.add(ix));
+    await sendAndConfirmTransaction(connection, setupTx, [payer, matcherCtxKp, lpOwner], { commitment: "confirmed" });
+
+    // Deposit LP collateral
+    const depositData = encodeDepositCollateral({ userIdx: lpIdx, amount: "400000000" });
+    const depositKeys = buildAccountMetas(ACCOUNTS_DEPOSIT_COLLATERAL, [
+      lpOwner.publicKey, slab.publicKey, lpAta, vault,
+      WELL_KNOWN.tokenProgram, WELL_KNOWN.clock,
+    ]);
+    const depositTx = new Transaction();
+    depositTx.add(ComputeBudgetProgram.setComputeUnitLimit({ units: 50_000 }));
+    depositTx.add(buildIx({ programId: PROGRAM_ID, keys: depositKeys, data: depositData }));
+    await sendAndConfirmTransaction(connection, depositTx, [payer, lpOwner], { commitment: "confirmed" });
+
+    // Crank
+    const crankData = encodeKeeperCrank({ callerIdx: 65535, allowPanic: false });
+    const crankKeys = buildAccountMetas(ACCOUNTS_KEEPER_CRANK, [
+      payer.publicKey, slab.publicKey, SYSVAR_CLOCK_PUBKEY, slab.publicKey,
+    ]);
+    const crankTx = new Transaction();
+    crankTx.add(ComputeBudgetProgram.setComputeUnitLimit({ units: 200_000 }));
+    crankTx.add(buildIx({ programId: PROGRAM_ID, keys: crankKeys, data: crankData }));
+    await sendAndConfirmTransaction(connection, crankTx, [payer], { commitment: "confirmed", skipPreflight: true });
+    console.log("    LP set up for trade test");
+
+    // Now pause the market
+    const pauseData = encodePauseMarket();
+    const pauseKeys = [
+      { pubkey: payer.publicKey, isSigner: true, isWritable: true },
+      { pubkey: slab.publicKey, isSigner: false, isWritable: true },
+    ];
+    const pauseTx = new Transaction();
+    pauseTx.add(ComputeBudgetProgram.setComputeUnitLimit({ units: 50_000 }));
+    pauseTx.add(buildIx({ programId: PROGRAM_ID, keys: pauseKeys, data: pauseData }));
+    await sendAndConfirmTransaction(connection, pauseTx, [payer], { commitment: "confirmed" });
+    console.log("    Market paused — attempting trade");
+
+    // Try TradeCpi → should fail with Custom(33)
+    const tradeData = encodeTradeCpi({
+      lpIdx, userIdx: traderIdx, size: "10000000",
+    });
+    const tradeKeys = buildAccountMetas(ACCOUNTS_TRADE_CPI, [
+      trader.publicKey, lpOwner.publicKey, slab.publicKey,
+      WELL_KNOWN.clock, slab.publicKey,
+      MATCHER_PROGRAM_ID, matcherCtxKp.publicKey, lpPda,
+    ]);
+    const tradeTx = new Transaction();
+    tradeTx.add(ComputeBudgetProgram.setComputeUnitLimit({ units: 400_000 }));
+    tradeTx.add(buildIx({ programId: PROGRAM_ID, keys: tradeKeys, data: tradeData }));
+    await expectCustomError(connection, tradeTx, [payer, trader], 33, "TradeCpi while paused");
+
+    // Unpause
+    const unpauseData = encodeUnpauseMarket();
+    const unpauseKeys = [
+      { pubkey: payer.publicKey, isSigner: true, isWritable: true },
+      { pubkey: slab.publicKey, isSigner: false, isWritable: true },
+    ];
+    const unpauseTx = new Transaction();
+    unpauseTx.add(ComputeBudgetProgram.setComputeUnitLimit({ units: 50_000 }));
+    unpauseTx.add(buildIx({ programId: PROGRAM_ID, keys: unpauseKeys, data: unpauseData }));
+    await sendAndConfirmTransaction(connection, unpauseTx, [payer], { commitment: "confirmed" });
+    console.log("    Market unpaused ▶️");
+  });
+
+  // ============================================================
+  // STEP 11c: Double pause (idempotent) — pause already-paused market
+  // ============================================================
+  await runTest("11c. Double pause (idempotent) → should succeed", async () => {
+    // Pause
+    const pauseData = encodePauseMarket();
+    const pauseKeys = [
+      { pubkey: payer.publicKey, isSigner: true, isWritable: true },
+      { pubkey: slab.publicKey, isSigner: false, isWritable: true },
+    ];
+    const pauseTx1 = new Transaction();
+    pauseTx1.add(ComputeBudgetProgram.setComputeUnitLimit({ units: 50_000 }));
+    pauseTx1.add(buildIx({ programId: PROGRAM_ID, keys: pauseKeys, data: pauseData }));
+    await sendAndConfirmTransaction(connection, pauseTx1, [payer], { commitment: "confirmed" });
+    console.log("    First pause ✓");
+
+    // Pause again — should be idempotent
+    const pauseTx2 = new Transaction();
+    pauseTx2.add(ComputeBudgetProgram.setComputeUnitLimit({ units: 50_000 }));
+    pauseTx2.add(buildIx({ programId: PROGRAM_ID, keys: pauseKeys, data: pauseData }));
+    await sendAndConfirmTransaction(connection, pauseTx2, [payer], { commitment: "confirmed" });
+    console.log("    Second pause (idempotent) ✓");
+
+    // Unpause to leave market in clean state
+    const unpauseData = encodeUnpauseMarket();
+    const unpauseKeys = [
+      { pubkey: payer.publicKey, isSigner: true, isWritable: true },
+      { pubkey: slab.publicKey, isSigner: false, isWritable: true },
+    ];
+    const unpauseTx = new Transaction();
+    unpauseTx.add(ComputeBudgetProgram.setComputeUnitLimit({ units: 50_000 }));
+    unpauseTx.add(buildIx({ programId: PROGRAM_ID, keys: unpauseKeys, data: unpauseData }));
+    await sendAndConfirmTransaction(connection, unpauseTx, [payer], { commitment: "confirmed" });
+    console.log("    Unpaused — market clean ▶️");
   });
 
   // ============================================================
