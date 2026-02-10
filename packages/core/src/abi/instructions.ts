@@ -42,6 +42,8 @@ export const IX_TAG = {
   CreateInsuranceMint: 24,
   DepositInsuranceLP: 25,
   WithdrawInsuranceLP: 26,
+  PauseMarket: 27,
+  UnpauseMarket: 28,
 } as const;
 
 /**
@@ -448,14 +450,19 @@ export function encodeAdminForceClose(args: AdminForceCloseArgs): Uint8Array {
 export interface UpdateRiskParamsArgs {
   initialMarginBps: bigint | string;
   maintenanceMarginBps: bigint | string;
+  tradingFeeBps?: bigint | string;
 }
 
 export function encodeUpdateRiskParams(args: UpdateRiskParamsArgs): Uint8Array {
-  return concatBytes(
+  const parts = [
     encU8(IX_TAG.UpdateRiskParams),
     encU64(args.initialMarginBps),
     encU64(args.maintenanceMarginBps),
-  );
+  ];
+  if (args.tradingFeeBps !== undefined) {
+    parts.push(encU64(args.tradingFeeBps));
+  }
+  return concatBytes(...parts);
 }
 
 /**
@@ -496,6 +503,22 @@ export interface WithdrawInsuranceLPArgs {
 
 export function encodeWithdrawInsuranceLP(args: WithdrawInsuranceLPArgs): Uint8Array {
   return concatBytes(encU8(IX_TAG.WithdrawInsuranceLP), encU64(args.lpAmount));
+}
+
+/**
+ * PauseMarket instruction data (1 byte)
+ * Pauses the market — disables trading, deposits, and withdrawals.
+ */
+export function encodePauseMarket(): Uint8Array {
+  return encU8(IX_TAG.PauseMarket);
+}
+
+/**
+ * UnpauseMarket instruction data (1 byte)
+ * Unpauses the market — re-enables trading, deposits, and withdrawals.
+ */
+export function encodeUnpauseMarket(): Uint8Array {
+  return encU8(IX_TAG.UnpauseMarket);
 }
 
 // ============================================================================

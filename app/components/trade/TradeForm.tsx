@@ -43,7 +43,7 @@ export const TradeForm: FC<{ slabAddress: string }> = ({ slabAddress }) => {
   const userAccount = useUserAccount();
   const { trade, loading, error } = useTrade(slabAddress);
   const { engine, params } = useEngineState();
-  const { accounts, config: mktConfig } = useSlabState();
+  const { accounts, config: mktConfig, header } = useSlabState();
   const tokenMeta = useTokenMeta(mktConfig?.collateralMint ?? null);
   const { priceUsd } = useLivePrice();
   const symbol = tokenMeta?.symbol ?? "Token";
@@ -201,6 +201,16 @@ export const TradeForm: FC<{ slabAddress: string }> = ({ slabAddress }) => {
       <h3 className="mb-4 text-xs font-medium uppercase tracking-wider text-[var(--text-muted)]">
         Trade
       </h3>
+
+      {/* Market paused banner */}
+      {header?.paused && (
+        <div className="mb-4 rounded-sm border border-[var(--short)]/30 bg-[var(--short)]/10 p-4 text-center">
+          <p className="text-sm font-bold text-[var(--short)]">⛔ MARKET PAUSED</p>
+          <p className="mt-1 text-xs text-[var(--short)]/70">
+            Trading, deposits, and withdrawals are disabled by the market admin.
+          </p>
+        </div>
+      )}
 
       {/* Risk gate warning */}
       {riskGateActive && (

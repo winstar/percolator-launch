@@ -246,6 +246,22 @@ export const ACCOUNTS_INIT_VAMM: readonly AccountSpec[] = [
   { name: "lpPda", signer: false, writable: false },
 ] as const;
 
+/**
+ * PauseMarket: 2 accounts
+ */
+export const ACCOUNTS_PAUSE_MARKET: readonly AccountSpec[] = [
+  { name: "admin", signer: true, writable: true },
+  { name: "slab", signer: false, writable: true },
+] as const;
+
+/**
+ * UnpauseMarket: 2 accounts
+ */
+export const ACCOUNTS_UNPAUSE_MARKET: readonly AccountSpec[] = [
+  { name: "admin", signer: true, writable: true },
+  { name: "slab", signer: false, writable: true },
+] as const;
+
 // ============================================================================
 // ACCOUNT META BUILDERS
 // ============================================================================

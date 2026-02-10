@@ -50,6 +50,7 @@ export interface SlabHeader {
   bump: number;
   flags: number;
   resolved: boolean;
+  paused: boolean;
   admin: PublicKey;
   nonce: bigint;
   lastThrUpdateSlot: bigint;
@@ -135,6 +136,7 @@ export function parseHeader(data: Uint8Array): SlabHeader {
     bump,
     flags,
     resolved: (flags & FLAG_RESOLVED) !== 0,
+    paused: (flags & 0x02) !== 0,
     admin,
     nonce,
     lastThrUpdateSlot,
