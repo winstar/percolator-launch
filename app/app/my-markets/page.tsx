@@ -121,15 +121,15 @@ const MarketCard: FC<{
   const cfg = getConfig();
 
   const slab = market.slabAddress.toBase58();
-  const oi = market.engine.totalOpenInterest;
-  const vault = market.engine.vault;
-  const insurance = market.engine.insuranceFund.balance;
-  const lastCrank = market.engine.lastCrankSlot;
-  const currentSlot = market.engine.currentSlot;
+  const oi = market.engine?.totalOpenInterest ?? 0n;
+  const vault = market.engine?.vault ?? 0n;
+  const insurance = market.engine?.insuranceFund?.balance ?? 0n;
+  const lastCrank = market.engine?.lastCrankSlot ?? 0n;
+  const currentSlot = market.engine?.currentSlot ?? 0n;
   const staleness = Number(currentSlot - lastCrank);
-  const healthy = staleness < Number(market.engine.maxCrankStalenessSlots);
-  const oraclePrice = market.config.authorityPriceE6;
-  const oracleAuthority = market.config.oracleAuthority.toBase58();
+  const healthy = staleness < Number(market.engine?.maxCrankStalenessSlots ?? 100n);
+  const oraclePrice = market.config?.authorityPriceE6 ?? 0n;
+  const oracleAuthority = market.config?.oracleAuthority?.toBase58?.() ?? PublicKey.default.toBase58();
   const hasOracleAuthority = oracleAuthority !== PublicKey.default.toBase58();
   const isOracleAuthority = wallet.publicKey?.toBase58() === oracleAuthority;
   const crankIsAuthority = cfg.crankWallet ? oracleAuthority === cfg.crankWallet : false;
