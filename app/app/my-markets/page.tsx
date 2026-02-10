@@ -166,9 +166,16 @@ const MarketCard: FC<{
               {shortAddr(slab)} &rarr;
             </a>
           </div>
-          <span className={`text-xs font-bold ${healthy ? "text-[#00FFB2]" : "text-[#FF4466]"}`}>
-            {healthy ? "healthy" : "stale"}
-          </span>
+          <div className="flex items-center gap-2">
+            {market.header?.paused && (
+              <span className="rounded-full bg-[#FFB800]/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[#FFB800]">
+                PAUSED
+              </span>
+            )}
+            <span className={`text-xs font-bold ${healthy ? "text-[#00FFB2]" : "text-[#FF4466]"}`}>
+              {healthy ? "healthy" : "stale"}
+            </span>
+          </div>
         </div>
 
         {/* Stats Grid */}
@@ -243,6 +250,23 @@ const MarketCard: FC<{
                   className="text-xs text-[#71717a] hover:text-[#fafafa] transition-colors disabled:opacity-40"
                 >
                   {actions.loading === "createInsuranceMint" ? "creating..." : "create insurance mint"}
+                </button>
+              )}
+              {!market.header?.paused ? (
+                <button
+                  onClick={() => handleAction("Pause Market", () => actions.pauseMarket(market))}
+                  disabled={actions.loading === "pauseMarket"}
+                  className="text-xs text-[#FFB800] hover:text-[#FFD700] transition-colors disabled:opacity-40"
+                >
+                  {actions.loading === "pauseMarket" ? "pausing..." : "pause market"}
+                </button>
+              ) : (
+                <button
+                  onClick={() => handleAction("Unpause Market", () => actions.unpauseMarket(market))}
+                  disabled={actions.loading === "unpauseMarket"}
+                  className="text-xs text-[#00FFB2] hover:text-[#00FFD5] transition-colors disabled:opacity-40"
+                >
+                  {actions.loading === "unpauseMarket" ? "unpausing..." : "unpause market"}
                 </button>
               )}
               <button

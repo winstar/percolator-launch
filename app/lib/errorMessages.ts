@@ -36,6 +36,7 @@ const ERROR_CODE_MAP: Record<number, string> = {
   30: "Insurance fund below minimum threshold.",
   31: "Insurance deposit/withdrawal amount must be > 0.",
   32: "Insurance LP supply mismatch.",
+  33: "Market is paused — trading, deposits, and withdrawals are disabled by the admin.",
 };
 
 /** Legacy Anchor error map (unused but kept for compatibility) */

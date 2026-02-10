@@ -11,6 +11,8 @@ import {
   encodeRenounceAdmin,
   encodeCreateInsuranceMint,
   encodeSetRiskThreshold,
+  encodePauseMarket,
+  encodeUnpauseMarket,
   buildAccountMetas,
   buildIx,
   deriveVaultAuthority,
@@ -21,6 +23,8 @@ import {
   ACCOUNTS_UPDATE_ADMIN,
   ACCOUNTS_CREATE_INSURANCE_MINT,
   ACCOUNTS_SET_RISK_THRESHOLD,
+  ACCOUNTS_PAUSE_MARKET,
+  ACCOUNTS_UNPAUSE_MARKET,
 } from "@percolator/core";
 import { sendTx } from "@/lib/tx";
 import type { DiscoveredMarket } from "@percolator/core";
@@ -159,6 +163,44 @@ export function useAdminActions() {
     [connection, wallet],
   );
 
+  const pauseMarket = useCallback(
+    async (market: DiscoveredMarket) => {
+      if (!wallet.publicKey || !wallet.signTransaction) throw new Error("Wallet not connected");
+      setLoading("pauseMarket");
+      try {
+        const data = encodePauseMarket();
+        const keys = buildAccountMetas(ACCOUNTS_PAUSE_MARKET, [
+          wallet.publicKey,
+          market.slabAddress,
+        ]);
+        const ix = buildIx({ programId: market.programId, keys, data });
+        return await sendTx({ connection, wallet, instructions: [ix] });
+      } finally {
+        setLoading(null);
+      }
+    },
+    [connection, wallet],
+  );
+
+  const unpauseMarket = useCallback(
+    async (market: DiscoveredMarket) => {
+      if (!wallet.publicKey || !wallet.signTransaction) throw new Error("Wallet not connected");
+      setLoading("unpauseMarket");
+      try {
+        const data = encodeUnpauseMarket();
+        const keys = buildAccountMetas(ACCOUNTS_UNPAUSE_MARKET, [
+          wallet.publicKey,
+          market.slabAddress,
+        ]);
+        const ix = buildIx({ programId: market.programId, keys, data });
+        return await sendTx({ connection, wallet, instructions: [ix] });
+      } finally {
+        setLoading(null);
+      }
+    },
+    [connection, wallet],
+  );
+
   return {
     loading,
     setOracleAuthority,
@@ -167,5 +209,7 @@ export function useAdminActions() {
     createInsuranceMint,
     renounceAdmin,
     resetRiskGate,
+    pauseMarket,
+    unpauseMarket,
   };
 }
