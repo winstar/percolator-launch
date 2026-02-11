@@ -34,7 +34,7 @@ const HELIUS_RPC = `https://devnet.helius-rpc.com/?api-key=${process.env.NEXT_PU
 const PUBLIC_DEVNET_RPC = "https://api.devnet.solana.com";
 
 const DevnetMintContent: FC = () => {
-  const { publicKey, signTransaction, connected } = useWallet();
+  const { publicKey, signTransaction } = useWallet();
   const prefersReducedMotion = usePrefersReducedMotion();
   const successCardRef = useRef<HTMLDivElement>(null);
 
@@ -309,34 +309,7 @@ const DevnetMintContent: FC = () => {
   const inputClass = "w-full bg-[var(--panel-bg)] border border-[var(--border)] px-3 py-2 text-sm text-white placeholder-[var(--text-muted)] focus:border-[var(--accent)]/40 focus:outline-none transition-shadow duration-200";
 
   const lowSol = balance !== null && balance < 0.01;
-
-  /* ---- Not connected ---- */
-  if (!connected) {
-    return (
-      <div className="min-h-[calc(100vh-48px)] relative">
-        <div className="absolute inset-x-0 top-0 h-48 bg-grid pointer-events-none" />
-        <div className="relative mx-auto max-w-4xl px-4 py-10">
-          <div className="mb-2 text-[10px] font-medium uppercase tracking-[0.25em] text-[var(--accent)]/60">// faucet</div>
-          <h1 className="text-xl font-medium tracking-[-0.01em] text-white sm:text-2xl" style={{ fontFamily: "var(--font-heading)" }}>
-            <span className="font-normal text-white/50">Devnet </span>Token Factory
-          </h1>
-          <p className="mt-2 mb-8 text-[13px] text-[var(--text-secondary)]">Create SPL tokens on devnet for testing with the launch wizard.</p>
-          <div className="max-w-xl space-y-6">
-            <ScrollReveal delay={0}>
-              <div className={cardClass}>
-                <h2 className="mb-3 text-[10px] font-medium uppercase tracking-[0.15em] text-[var(--text-muted)]">Step 1 · Connect Wallet</h2>
-                <p className="text-sm text-[var(--warning)]">Connect your wallet using the button in the header</p>
-              </div>
-            </ScrollReveal>
-            <ShimmerSkeleton className="h-[88px]" />
-            <ShimmerSkeleton className="h-[200px]" />
-            <ShimmerSkeleton className="h-[100px]" />
-            <ShimmerSkeleton className="h-[220px]" />
-          </div>
-        </div>
-      </div>
-    );
-  }
+  const walletReady = !!publicKey && !!signTransaction;
 
   return (
     <div className="min-h-[calc(100vh-48px)] relative">
@@ -358,9 +331,13 @@ const DevnetMintContent: FC = () => {
           <ScrollReveal delay={0}>
             <div className={cardClass}>
               <h2 className="mb-3 text-[10px] font-medium uppercase tracking-[0.15em] text-[var(--text-muted)]">Step 1 · Connect Wallet</h2>
-              <p className="text-sm text-[var(--accent)]">
-                Connected: <span className="font-mono text-xs">{publicKey?.toBase58()}</span>
-              </p>
+              {walletReady ? (
+                <p className="text-sm text-[var(--accent)]">
+                  Connected: <span className="font-mono text-xs">{publicKey.toBase58()}</span>
+                </p>
+              ) : (
+                <p className="text-sm text-[var(--warning)]">Connect your wallet using the button in the header</p>
+              )}
             </div>
           </ScrollReveal>
 
@@ -375,29 +352,34 @@ const DevnetMintContent: FC = () => {
                     {balance !== null ? `${balance.toFixed(4)} SOL` : "..."}
                   </span>
                 </span>
-                <button className={btnPrimary} onClick={handleAirdrop} disabled={airdropping}>
-                  {airdropping ? "Airdropping..." : "Airdrop 2 SOL"}
+                <button className={btnPrimary} onClick={refreshBalance} disabled={!walletReady}>
+                  Refresh
                 </button>
               </div>
-              {/* Inline airdrop status */}
+              {lowSol && (
+                <p className="mt-2 text-xs text-[var(--short)]">You need SOL to create tokens.</p>
+              )}
+              {/* Web faucet — primary method */}
+              <div className="mt-3 border border-[var(--accent)]/20 bg-[var(--accent)]/[0.03] p-3">
+                <p className="text-xs text-[var(--text-secondary)]">
+                  Get devnet SOL from the{" "}
+                  <a href={webFaucetUrl} target="_blank" rel="noopener noreferrer" className="text-[var(--accent)] underline hover:text-white">
+                    Solana Faucet →
+                  </a>
+                  {" "}then hit Refresh.
+                </p>
+              </div>
+              {/* Programmatic airdrop — secondary */}
+              <div className="mt-2 flex items-center justify-between">
+                <span className="text-[10px] text-[var(--text-dim)]">Or try programmatic airdrop (often rate-limited):</span>
+                <button className="border border-[var(--border)] px-3 py-1.5 text-[10px] text-[var(--text-muted)] transition-all hover:border-[var(--accent)]/30 hover:text-[var(--text)] disabled:opacity-40" onClick={handleAirdrop} disabled={airdropping || !walletReady}>
+                  {airdropping ? "Trying..." : "Airdrop 2 SOL"}
+                </button>
+              </div>
               {airdropStatus && (
-                <p className={`mt-3 text-xs ${airdropStatus.startsWith("Airdrop successful") ? "text-[var(--accent)]" : airdropFailed ? "text-[var(--short)]" : "text-[var(--text-muted)]"}`}>
+                <p className={`mt-2 text-[10px] ${airdropStatus.startsWith("Airdrop successful") ? "text-[var(--accent)]" : airdropFailed ? "text-[var(--short)]" : "text-[var(--text-muted)]"}`}>
                   {airdropStatus}
                 </p>
-              )}
-              {/* Fallback web faucet link */}
-              {airdropFailed && (
-                <div className="mt-2 border border-[var(--warning)]/20 bg-[var(--warning)]/[0.04] p-3">
-                  <p className="text-xs text-[var(--warning)]">
-                    Devnet faucet might be rate-limited.{" "}
-                    <a href={webFaucetUrl} target="_blank" rel="noopener noreferrer" className="underline hover:text-[var(--accent)]">
-                      Try the Solana web faucet →
-                    </a>
-                  </p>
-                </div>
-              )}
-              {lowSol && !airdropping && (
-                <p className="mt-2 text-xs text-[var(--short)]">You need SOL to create tokens. Airdrop some first.</p>
               )}
             </div>
           </ScrollReveal>
@@ -479,8 +461,11 @@ const DevnetMintContent: FC = () => {
               <div className={cardClass}>
                 <h2 className="mb-3 text-[10px] font-medium uppercase tracking-[0.15em] text-[var(--text-muted)]">Step 4 · Create &amp; Mint</h2>
 
-                {lowSol && (
-                  <p className="mb-3 text-xs text-[var(--short)]">Not enough SOL — you need at least 0.01 SOL. Airdrop some in Step 2.</p>
+                {!walletReady && (
+                  <p className="mb-3 text-xs text-[var(--warning)]">Connect your wallet first (Step 1).</p>
+                )}
+                {walletReady && lowSol && (
+                  <p className="mb-3 text-xs text-[var(--short)]">Not enough SOL — you need at least 0.01 SOL. Get some in Step 2.</p>
                 )}
 
                 {/* Inline progress */}
@@ -496,8 +481,8 @@ const DevnetMintContent: FC = () => {
                   <p className="mb-3 text-xs text-[var(--short)]">{createStatus}</p>
                 )}
 
-                <button className={`${btnPrimary} w-full`} onClick={handleCreateAndMint} disabled={loading || !recipient || lowSol}>
-                  {loading ? "Creating..." : `Create Mint + Mint ${Number(supply).toLocaleString()} Tokens`}
+                <button className={`${btnPrimary} w-full`} onClick={handleCreateAndMint} disabled={loading || !recipient || lowSol || !walletReady}>
+                  {!walletReady ? "Connect Wallet First" : loading ? "Creating..." : `Create Mint + Mint ${Number(supply).toLocaleString()} Tokens`}
                 </button>
               </div>
             )}
@@ -537,8 +522,8 @@ const DevnetMintContent: FC = () => {
                     )}
                   </p>
                 )}
-                <button className={`${btnPrimary} w-full`} onClick={handleMintMore} disabled={mintingMore || !existingMint || !mintMoreAmount || !!mintAuthError}>
-                  {mintingMore ? "Minting..." : `Mint ${Number(mintMoreAmount).toLocaleString()} More Tokens`}
+                <button className={`${btnPrimary} w-full`} onClick={handleMintMore} disabled={mintingMore || !existingMint || !mintMoreAmount || !!mintAuthError || !walletReady}>
+                  {!walletReady ? "Connect Wallet First" : mintingMore ? "Minting..." : `Mint ${Number(mintMoreAmount).toLocaleString()} More Tokens`}
                 </button>
               </div>
             </div>
