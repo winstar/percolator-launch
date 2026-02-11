@@ -96,14 +96,23 @@ export default function MarketsPage() {
   const merged = useMemo<MergedMarket[]>(() => {
     const sbMap = new Map<string, MarketWithStats>();
     for (const m of supabaseMarkets) sbMap.set(m.slab_address, m);
-    return discovered.map((d) => {
-      const addr = d.slabAddress.toBase58();
-      const mint = d.config.collateralMint.toBase58();
-      const sb = sbMap.get(addr) ?? null;
-      const maxLev = d.params.initialMarginBps > 0n ? Math.floor(10000 / Number(d.params.initialMarginBps)) : 0;
-      const isAdminOracle = d.config.indexFeedId.equals(PublicKey.default);
-      return { slabAddress: addr, mintAddress: mint, symbol: sb?.symbol ?? null, name: sb?.name ?? null, maxLeverage: maxLev, isAdminOracle, onChain: d, supabase: sb };
-    });
+    return discovered
+      .filter((d) => {
+        // Skip malformed markets with undefined PublicKey fields
+        if (!d?.slabAddress || !d?.config?.collateralMint || !d?.config?.indexFeedId || !d?.params) {
+          console.warn("[Markets] Skipping malformed market:", d);
+          return false;
+        }
+        return true;
+      })
+      .map((d) => {
+        const addr = d.slabAddress.toBase58();
+        const mint = d.config.collateralMint.toBase58();
+        const sb = sbMap.get(addr) ?? null;
+        const maxLev = d.params.initialMarginBps > 0n ? Math.floor(10000 / Number(d.params.initialMarginBps)) : 0;
+        const isAdminOracle = d.config.indexFeedId.equals(PublicKey.default);
+        return { slabAddress: addr, mintAddress: mint, symbol: sb?.symbol ?? null, name: sb?.name ?? null, maxLeverage: maxLev, isAdminOracle, onChain: d, supabase: sb };
+      });
   }, [discovered, supabaseMarkets]);
 
   // Only show mock data in development (never in production)
