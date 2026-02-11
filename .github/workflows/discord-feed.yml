@@ -16,24 +16,23 @@ jobs:
         if: github.event_name == 'push'
         env:
           WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_URL }}
-          COMMITS_JSON: ${{ toJson(github.event.commits) }}
           COMMIT_MSG: ${{ github.event.head_commit.message }}
-          AUTHOR: ${{ github.event.head_commit.author.username }}
+          AUTHOR: ${{ github.event.sender.login }}
           COMPARE: ${{ github.event.compare }}
           SHA: ${{ github.event.after }}
+          COMMIT_COUNT: ${{ github.event.size }}
         run: |
           SHORT_SHA=$(echo "$SHA" | cut -c1-7)
-          COMMIT_COUNT=$(echo "$COMMITS_JSON" | jq length)
           MSG=$(echo "$COMMIT_MSG" | head -1 | cut -c1-80)
           
-          PAYLOAD=$(jq -n \
+          jq -n \
             --arg desc "[\`$SHORT_SHA\`]($COMPARE) $MSG" \
-            --arg author "$AUTHOR" \
-            --arg icon "https://github.com/$AUTHOR.png?size=32" \
-            --arg footer "$COMMIT_COUNT commit(s) to main" \
-            '{embeds: [{color: 5025616, author: {name: $author, icon_url: $icon}, description: $desc, footer: {text: $footer}}]}')
+            --arg author "${AUTHOR:-unknown}" \
+            --arg icon "https://github.com/${AUTHOR:-ghost}.png?size=32" \
+            --arg footer "${COMMIT_COUNT:-1} commit(s) to main" \
+            '{embeds: [{color: 5025616, author: {name: $author, icon_url: $icon}, description: $desc, footer: {text: $footer}}]}' > /tmp/payload.json
           
-          curl -s -X POST "$WEBHOOK" -H "Content-Type: application/json" -d "$PAYLOAD"
+          curl -s -X POST "$WEBHOOK" -H "Content-Type: application/json" -d @/tmp/payload.json
 
       - name: PR notification
         if: github.event_name == 'pull_request'
@@ -61,15 +60,15 @@ jobs:
           
           TITLE=$(echo "$PR_TITLE" | cut -c1-80)
           
-          PAYLOAD=$(jq -n \
+          jq -n \
             --argjson color "$COLOR" \
             --arg desc "[#$PR_NUM]($PR_URL) $TITLE — +$ADDS -$DELS ($FILES files)" \
             --arg author "$AUTHOR" \
             --arg icon "https://github.com/$AUTHOR.png?size=32" \
             --arg footer "$STATUS" \
-            '{embeds: [{color: $color, author: {name: $author, icon_url: $icon}, description: $desc, footer: {text: $footer}}]}')
+            '{embeds: [{color: $color, author: {name: $author, icon_url: $icon}, description: $desc, footer: {text: $footer}}]}' > /tmp/payload.json
           
-          curl -s -X POST "$WEBHOOK" -H "Content-Type: application/json" -d "$PAYLOAD"
+          curl -s -X POST "$WEBHOOK" -H "Content-Type: application/json" -d @/tmp/payload.json
 
       - name: Issue notification
         if: github.event_name == 'issues'
@@ -89,12 +88,12 @@ jobs:
           
           TITLE=$(echo "$ISSUE_TITLE" | cut -c1-80)
           
-          PAYLOAD=$(jq -n \
+          jq -n \
             --argjson color "$COLOR" \
             --arg desc "[#$ISSUE_NUM]($ISSUE_URL) $TITLE" \
             --arg author "$AUTHOR" \
             --arg icon "https://github.com/$AUTHOR.png?size=32" \
             --arg footer "$STATUS" \
-            '{embeds: [{color: $color, author: {name: $author, icon_url: $icon}, description: $desc, footer: {text: $footer}}]}')
+            '{embeds: [{color: $color, author: {name: $author, icon_url: $icon}, description: $desc, footer: {text: $footer}}]}' > /tmp/payload.json
           
-          curl -s -X POST "$WEBHOOK" -H "Content-Type: application/json" -d "$PAYLOAD"
+          curl -s -X POST "$WEBHOOK" -H "Content-Type: application/json" -d @/tmp/payload.json
