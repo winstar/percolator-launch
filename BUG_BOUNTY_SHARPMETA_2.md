@@ -3,8 +3,8 @@
 **Date:** Feb 12, 2026 20:53 UTC  
 **Reporter:** @sharpmetaa (Discord)  
 **Severity:** CRITICAL  
-**Status:** ✅ FIXED (PR #139, commit 75d60d6)  
-**Bounty Status:** ⏳ UNPAID (awaiting PR merge + payment approval)  
+**Status:** ✅ FIXED & MERGED (PR #139, commit 119aee1)  
+**Bounty Status:** ⏳ UNPAID (awaiting payment approval)  
 **Bounty Wallet:** 3S1Q4FeAHabTgPqfYyVhQ85FPicGUizJhJEwFZEMZaTs
 
 ---
@@ -290,8 +290,8 @@ vaultPubkey (not in interface)
 - [x] Root cause investigated (API drift, test never worked)
 - [x] Fix implemented (all 9 params added)
 - [x] PR created (#139)
-- [ ] CI passed
-- [ ] PR merged
+- [x] CI passed (E2E, Integration, Type Check, Security all green)
+- [x] PR merged (commit 119aee1, Feb 12 21:01 UTC)
 - [ ] Bounty UNPAID (awaiting payment approval)
 
 ---
