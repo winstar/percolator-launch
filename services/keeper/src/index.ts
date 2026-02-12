@@ -19,6 +19,24 @@ dotenv.config();
 
 const PROGRAM_ID = getProgramId();
 const CRANK_INTERVAL_MS = 5_000;
+const MAX_BACKOFF_MS = 60_000; // 60 seconds max backoff
+
+// Graceful shutdown flag
+let running = true;
+let backoffMs = CRANK_INTERVAL_MS;
+let consecutiveFailures = 0;
+const MAX_FAILURES = 20; // Exit after 20 consecutive failures
+
+// Signal handlers for graceful shutdown
+process.on("SIGINT", () => {
+  console.log("\nReceived SIGINT, shutting down gracefully...");
+  running = false;
+});
+
+process.on("SIGTERM", () => {
+  console.log("\nReceived SIGTERM, shutting down gracefully...");
+  running = false;
+});
 
 async function main() {
   const rpcUrl = process.env.RPC_URL;
@@ -41,7 +59,10 @@ async function main() {
 
   console.log(`Keeper started. Cranking ${slabs.length} markets every ${CRANK_INTERVAL_MS / 1000}s.`);
 
-  while (true) {
+  // Run loop with graceful shutdown and backoff
+  while (running) {
+    let cycleSuccess = false;
+    
     for (const slab of slabs) {
       try {
         const slabPk = new PublicKey(slab);
@@ -54,14 +75,34 @@ async function main() {
           data: encodeKeeperCrank({ callerIdx: 65535, allowPanic: false }),
         }));
 
-        const sig = await connection.sendTransaction(tx, [payer], { skipPreflight: true });
+        // Remove skipPreflight to catch errors before on-chain submission
+        const sig = await connection.sendTransaction(tx, [payer]);
         console.log(`  [${slab.slice(0, 8)}] Cranked → ${sig.slice(0, 16)}...`);
+        cycleSuccess = true;
       } catch (e) {
         console.error(`  [${slab.slice(0, 8)}] Crank error:`, e);
       }
     }
-    await new Promise((r) => setTimeout(r, CRANK_INTERVAL_MS));
+    
+    // Reset on success, increment failures if all cranks failed
+    if (cycleSuccess) {
+      backoffMs = CRANK_INTERVAL_MS;
+      consecutiveFailures = 0;
+    } else {
+      consecutiveFailures++;
+      if (consecutiveFailures >= MAX_FAILURES) {
+        console.error(\`Too many failures (\${MAX_FAILURES}), exiting...\`);
+        process.exit(1);
+      }
+      backoffMs = Math.min(backoffMs * 2, MAX_BACKOFF_MS);
+      console.log(\`Backing off: \${backoffMs}ms (failures: \${consecutiveFailures})\`);
+    }
+    
+    await new Promise((r) => setTimeout(r, backoffMs));
   }
+
+  console.log("Keeper service stopped gracefully");
+  process.exit(0);
 }
 
 main().catch(console.error);
