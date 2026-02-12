@@ -1,6 +1,6 @@
 "use client";
 
-import { FC, useState, useEffect, useRef } from "react";
+import { FC, useState, useEffect, useRef, useMemo } from "react";
 import Link from "next/link";
 import gsap from "gsap";
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
@@ -8,10 +8,6 @@ import { PublicKey } from "@solana/web3.js";
 import { useMyMarkets, type MyMarket } from "@/hooks/useMyMarkets";
 import { useAdminActions } from "@/hooks/useAdminActions";
 import { useToast } from "@/hooks/useToast";
-import { GlassCard } from "@/components/ui/GlassCard";
-import { GlowButton } from "@/components/ui/GlowButton";
-import { ShimmerSkeleton } from "@/components/ui/ShimmerSkeleton";
-import { ScrollReveal } from "@/components/ui/ScrollReveal";
 import { getConfig, explorerAccountUrl } from "@/lib/config";
 import { deriveInsuranceLpMint } from "@percolator/core";
 import { isMockMode } from "@/lib/mock-mode";
@@ -55,19 +51,26 @@ const ConfirmDialog: FC<{
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-      <div className="mx-4 max-w-md rounded-[4px] border border-[#1a1a1f] bg-[#111113] p-8">
-        <h3 className="text-lg font-bold text-white">{title}</h3>
-        <p className="mt-2 text-sm text-[#71717a]">{description}</p>
+      <div className="mx-4 max-w-md rounded-none border border-[var(--border)]/50 bg-[var(--bg)] p-8">
+        <h3 className="text-sm font-semibold uppercase tracking-[0.1em] text-[var(--text)]">{title}</h3>
+        <p className="mt-2 text-[11px] text-[var(--text-secondary)]">{description}</p>
         <div className="mt-6 flex gap-3">
-          <GlowButton variant="ghost" size="sm" onClick={onCancel}>cancel</GlowButton>
-          <GlowButton
-            variant={danger ? "secondary" : "primary"}
-            size="sm"
+          <button
+            onClick={onCancel}
+            className="border border-[var(--border)]/30 px-4 py-1.5 text-[10px] uppercase tracking-[0.15em] text-[var(--text-muted)] transition-colors hover:border-[var(--border)] hover:text-[var(--text)]"
+          >
+            cancel
+          </button>
+          <button
             onClick={onConfirm}
-            className={danger ? "!border-[#FF4466]/30 !text-[#FF4466] hover:!bg-[#FF4466]/10" : ""}
+            className={`border px-4 py-1.5 text-[10px] uppercase tracking-[0.15em] transition-colors ${
+              danger
+                ? "border-[var(--short)]/30 text-[var(--short)] hover:bg-[var(--short)]/10"
+                : "border-[var(--accent)]/30 text-[var(--accent)] hover:bg-[var(--accent)]/10"
+            }`}
           >
             {confirmLabel}
-          </GlowButton>
+          </button>
         </div>
       </div>
     </div>
@@ -88,25 +91,30 @@ const InputDialog: FC<{
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-      <div className="mx-4 max-w-md w-full rounded-[4px] border border-[#1a1a1f] bg-[#111113] p-8">
-        <h3 className="text-lg font-bold text-white">{title}</h3>
-        <p className="mt-2 text-sm text-[#71717a]">{description}</p>
+      <div className="mx-4 max-w-md w-full rounded-none border border-[var(--border)]/50 bg-[var(--bg)] p-8">
+        <h3 className="text-sm font-semibold uppercase tracking-[0.1em] text-[var(--text)]">{title}</h3>
+        <p className="mt-2 text-[11px] text-[var(--text-secondary)]">{description}</p>
         <input
           value={value}
           onChange={(e) => setValue(e.target.value)}
           placeholder={placeholder}
-          className="mt-4 w-full rounded-[4px] border border-[#1a1a1f] bg-[#09090b] px-4 py-2.5 text-sm text-white placeholder-[#3f3f46] outline-none focus:border-[#3f3f46]"
+          className="mt-4 w-full rounded-none border border-[var(--border)]/50 bg-transparent px-3 py-2 text-[11px] text-[var(--text)] placeholder-[var(--text-dim)] outline-none focus:border-[var(--accent)]/40"
+          style={{ fontFamily: "var(--font-mono)" }}
         />
         <div className="mt-4 flex gap-3">
-          <GlowButton variant="ghost" size="sm" onClick={onCancel}>cancel</GlowButton>
-          <GlowButton
-            variant="primary"
-            size="sm"
+          <button
+            onClick={onCancel}
+            className="border border-[var(--border)]/30 px-4 py-1.5 text-[10px] uppercase tracking-[0.15em] text-[var(--text-muted)] transition-colors hover:border-[var(--border)] hover:text-[var(--text)]"
+          >
+            cancel
+          </button>
+          <button
             disabled={!value.trim()}
             onClick={() => { onConfirm(value.trim()); setValue(""); }}
+            className="border border-[var(--accent)]/30 px-4 py-1.5 text-[10px] uppercase tracking-[0.15em] text-[var(--accent)] transition-colors hover:bg-[var(--accent)]/10 disabled:opacity-40"
           >
             {confirmLabel}
-          </GlowButton>
+          </button>
         </div>
       </div>
     </div>
@@ -155,38 +163,41 @@ const MarketCard: FC<{
     }
   }
 
+  const actionBtnClass = "text-[10px] uppercase tracking-[0.1em] text-[var(--text-dim)] hover:text-[var(--text)] transition-colors disabled:opacity-40";
+
   return (
     <>
-      <div className="rounded-[4px] border border-[#1a1a1f] bg-[#111113]">
+      <div className="border border-[var(--border)]/50 bg-[var(--panel-bg)]">
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-[#1a1a1f] p-5">
-          <div>
-            <p className="font-semibold text-white">{market.label}</p>
+        <div className="flex items-center justify-between border-b border-[var(--border)]/30 px-4 py-3">
+          <div className="flex items-center gap-3">
+            <span className="text-sm font-semibold text-[var(--text)]">{market.label}</span>
             <a
               href={explorerAccountUrl(slab)}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-xs text-[#71717a] hover:text-[#00FFB2] transition-colors"
+              className="text-[10px] text-[var(--text-dim)] hover:text-[var(--accent)] transition-colors"
+              style={{ fontFamily: "var(--font-mono)" }}
             >
-              {shortAddr(slab)} &rarr;
+              {shortAddr(slab)} ↗
             </a>
           </div>
           <div className="flex items-center gap-2">
             {market.header?.paused && (
-              <span className="rounded-full bg-[#FFB800]/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[#FFB800]">
+              <span className="border border-[var(--warning)]/30 bg-[var(--warning)]/5 px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.15em] text-[var(--warning)]">
                 PAUSED
               </span>
             )}
-            <span className={`text-xs font-bold ${healthy ? "text-[#00FFB2]" : "text-[#FF4466]"}`}>
-              {healthy ? "healthy" : "stale"}
+            <span className={`text-[10px] font-bold uppercase tracking-[0.1em] ${healthy ? "text-[var(--long)]" : "text-[var(--short)]"}`}>
+              {healthy ? "● healthy" : "● stale"}
             </span>
           </div>
         </div>
 
         {/* Stats Grid */}
-        <div className="grid grid-cols-2 gap-px sm:grid-cols-4">
+        <div className="grid grid-cols-2 sm:grid-cols-4">
           {[
-            { label: "oracle price", value: oraclePrice > 0n ? fmtPrice(oraclePrice) : "N/A" },
+            { label: "oracle price", value: oraclePrice > 0n ? fmtPrice(oraclePrice) : "—" },
             { label: "open interest", value: fmt(oi) },
             { label: "vault balance", value: fmt(vault) },
             { label: "insurance", value: fmt(insurance) },
@@ -194,68 +205,67 @@ const MarketCard: FC<{
             { label: "staleness", value: `${staleness} slots` },
             { label: "oracle authority", value: hasOracleAuthority ? shortAddr(oracleAuthority) : "none" },
             { label: "active accounts", value: market.engine?.numUsedAccounts?.toString() ?? "0" },
-          ].map((s) => (
-            <div key={s.label} className="border-t border-[#1a1a1f] p-4">
-              <p className="text-[10px] uppercase tracking-wider text-[#3f3f46]">{s.label}</p>
-              <p className="mt-1 text-sm text-white" style={{ fontFamily: "var(--font-jetbrains-mono)" }}>{s.value}</p>
+          ].map((s, i) => (
+            <div key={s.label} className="border-t border-[var(--border)]/30 px-4 py-3">
+              <p className="text-[9px] uppercase tracking-[0.15em] text-[var(--text-dim)]">{s.label}</p>
+              <p className="mt-1 text-[11px] text-[var(--text)]" style={{ fontFamily: "var(--font-mono)" }}>{s.value}</p>
             </div>
           ))}
         </div>
 
         {/* Actions */}
-        <div className="flex flex-wrap items-center gap-2 border-t border-[#1a1a1f] p-5">
-          <span className={`mr-1 rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider ${
+        <div className="flex flex-wrap items-center gap-3 border-t border-[var(--border)]/30 px-4 py-3">
+          <span className={`mr-1 border px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.15em] ${
             market.role === "admin"
-              ? "bg-[#7B61FF]/10 text-[#7B61FF]"
+              ? "border-[var(--accent)]/30 text-[var(--accent)]"
               : market.role === "lp"
-                ? "bg-[#00FFB2]/10 text-[#00FFB2]"
-                : "bg-[#FFB800]/10 text-[#FFB800]"
+                ? "border-[var(--long)]/30 text-[var(--long)]"
+                : "border-[var(--warning)]/30 text-[var(--warning)]"
           }`}>
             {market.role}
           </span>
           {market.role === "admin" && (
             <>
-              <button onClick={() => setShowOracleInput(true)} disabled={actions.loading === "setOracleAuthority"} className="text-xs text-[#71717a] hover:text-[#fafafa] transition-colors disabled:opacity-40">
+              <button onClick={() => setShowOracleInput(true)} disabled={actions.loading === "setOracleAuthority"} className={actionBtnClass}>
                 set oracle authority
               </button>
               {isOracleAuthority ? (
-                <button onClick={() => setShowPriceInput(true)} disabled={actions.loading === "pushPrice"} className="text-xs text-[#71717a] hover:text-[#fafafa] transition-colors disabled:opacity-40" title="On devnet, you push prices manually. On mainnet, prices come from live oracle feeds automatically.">
+                <button onClick={() => setShowPriceInput(true)} disabled={actions.loading === "pushPrice"} className={actionBtnClass} title="On devnet, you push prices manually. On mainnet, prices come from live oracle feeds automatically.">
                   push price
                 </button>
               ) : crankIsAuthority ? (
-                <span className="text-xs text-[var(--text-dim)]" title={`Oracle: crank (${shortAddr(oracleAuthority)})`}>auto-price (crank)</span>
+                <span className="text-[10px] text-[var(--text-dim)]" title={`Oracle: crank (${shortAddr(oracleAuthority)})`}>auto-price (crank)</span>
               ) : hasOracleAuthority ? (
-                <span className="text-xs text-[var(--text-dim)]" title={`Oracle: ${oracleAuthority}`}>delegated</span>
+                <span className="text-[10px] text-[var(--text-dim)]" title={`Oracle: ${oracleAuthority}`}>delegated</span>
               ) : null}
               {isOracleAuthority && cfg.crankWallet && (
                 <button
                   onClick={() => handleAction("Delegate to Crank", () => actions.setOracleAuthority(market, cfg.crankWallet!))}
                   disabled={actions.loading === "setOracleAuthority"}
-                  className="text-xs text-[var(--text-dim)] hover:text-[#fafafa] transition-colors disabled:opacity-40"
+                  className={actionBtnClass}
                 >
                   delegate to crank
                 </button>
               )}
-              <button onClick={() => setShowTopUpInput(true)} disabled={actions.loading === "topUpInsurance"} className="text-xs text-[#71717a] hover:text-[#fafafa] transition-colors disabled:opacity-40">
+              <button onClick={() => setShowTopUpInput(true)} disabled={actions.loading === "topUpInsurance"} className={actionBtnClass}>
                 top up insurance
               </button>
               {riskGateActive && (
                 <button
                   onClick={() => handleAction("Reset Risk Gate", () => actions.resetRiskGate(market))}
                   disabled={actions.loading === "resetRiskGate"}
-                  className="text-xs text-[#FFB800] hover:text-[#FFD700] transition-colors disabled:opacity-40 animate-pulse"
+                  className="text-[10px] uppercase tracking-[0.1em] text-[var(--warning)] hover:text-[var(--warning)] transition-colors disabled:opacity-40 animate-pulse"
                 >
                   {actions.loading === "resetRiskGate" ? "resetting..." : "reset risk gate"}
                 </button>
               )}
-              {/* P-HIGH-7: Show loading state during insurance mint check */}
               {insuranceMintChecking ? (
-                <span className="text-xs text-[#71717a]">checking insurance mint...</span>
+                <span className="text-[10px] text-[var(--text-dim)]">checking insurance mint...</span>
               ) : !insuranceMintExists ? (
                 <button
                   onClick={() => handleAction("Create Insurance Mint", () => actions.createInsuranceMint(market))}
                   disabled={actions.loading === "createInsuranceMint"}
-                  className="text-xs text-[#71717a] hover:text-[#fafafa] transition-colors disabled:opacity-40"
+                  className={actionBtnClass}
                 >
                   {actions.loading === "createInsuranceMint" ? "creating..." : "create insurance mint"}
                 </button>
@@ -264,7 +274,7 @@ const MarketCard: FC<{
                 <button
                   onClick={() => handleAction("Pause Market", () => actions.pauseMarket(market))}
                   disabled={actions.loading === "pauseMarket"}
-                  className="text-xs text-[#FFB800] hover:text-[#FFD700] transition-colors disabled:opacity-40"
+                  className="text-[10px] uppercase tracking-[0.1em] text-[var(--warning)] hover:brightness-125 transition-colors disabled:opacity-40"
                 >
                   {actions.loading === "pauseMarket" ? "pausing..." : "pause market"}
                 </button>
@@ -272,7 +282,7 @@ const MarketCard: FC<{
                 <button
                   onClick={() => handleAction("Unpause Market", () => actions.unpauseMarket(market))}
                   disabled={actions.loading === "unpauseMarket"}
-                  className="text-xs text-[#00FFB2] hover:text-[#00FFD5] transition-colors disabled:opacity-40"
+                  className="text-[10px] uppercase tracking-[0.1em] text-[var(--long)] hover:brightness-125 transition-colors disabled:opacity-40"
                 >
                   {actions.loading === "unpauseMarket" ? "unpausing..." : "unpause market"}
                 </button>
@@ -280,14 +290,14 @@ const MarketCard: FC<{
               <button
                 onClick={() => setShowBurnConfirm(true)}
                 disabled={actions.loading === "renounceAdmin"}
-                className="text-xs text-[#FF4466]/70 hover:text-[#FF4466] transition-colors disabled:opacity-40"
+                className="text-[10px] uppercase tracking-[0.1em] text-[var(--short)]/70 hover:text-[var(--short)] transition-colors disabled:opacity-40"
               >
                 burn admin key
               </button>
             </>
           )}
-          <Link href={`/trade/${slab}`} className="text-xs text-[#00FFB2] hover:opacity-80 transition-opacity">
-            trade &rarr;
+          <Link href={`/trade/${slab}`} className="text-[10px] uppercase tracking-[0.1em] text-[var(--long)] hover:brightness-125 transition-all">
+            trade →
           </Link>
         </div>
       </div>
@@ -323,35 +333,39 @@ const MarketCard: FC<{
       {/* Burn admin key - requires typing BURN to confirm */}
       {showBurnConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-          <div className="mx-4 max-w-md w-full rounded-[4px] border border-[#1a1a1f] bg-[#111113] p-8">
-            <h3 className="text-lg font-bold text-white">burn admin key</h3>
-            <p className="mt-2 text-sm text-[#71717a]">
+          <div className="mx-4 max-w-md w-full rounded-none border border-[var(--border)]/50 bg-[var(--bg)] p-8">
+            <h3 className="text-sm font-semibold uppercase tracking-[0.1em] text-[var(--text)]">burn admin key</h3>
+            <p className="mt-2 text-[11px] text-[var(--text-secondary)]">
               This is permanent and irreversible. You will never be able to update config, set oracle, or perform any admin actions on this market again.
             </p>
-            <p className="mt-4 text-sm font-semibold text-[#FF4466]">
-              Type "BURN" to confirm:
+            <p className="mt-4 text-[11px] font-semibold text-[var(--short)]">
+              Type &quot;BURN&quot; to confirm:
             </p>
             <input
               value={burnConfirmText}
               onChange={(e) => setBurnConfirmText(e.target.value)}
               placeholder="BURN"
-              className="mt-2 w-full rounded-[4px] border border-[#1a1a1f] bg-[#09090b] px-4 py-2.5 text-sm text-white placeholder-[#3f3f46] outline-none focus:border-[#3f3f46]"
+              className="mt-2 w-full rounded-none border border-[var(--border)]/50 bg-transparent px-3 py-2 text-[11px] text-[var(--text)] placeholder-[var(--text-dim)] outline-none focus:border-[var(--short)]/40"
+              style={{ fontFamily: "var(--font-mono)" }}
             />
             <div className="mt-4 flex gap-3">
-              <GlowButton variant="ghost" size="sm" onClick={() => { setShowBurnConfirm(false); setBurnConfirmText(""); }}>cancel</GlowButton>
-              <GlowButton
-                variant="secondary"
-                size="sm"
+              <button
+                onClick={() => { setShowBurnConfirm(false); setBurnConfirmText(""); }}
+                className="border border-[var(--border)]/30 px-4 py-1.5 text-[10px] uppercase tracking-[0.15em] text-[var(--text-muted)] transition-colors hover:border-[var(--border)] hover:text-[var(--text)]"
+              >
+                cancel
+              </button>
+              <button
                 disabled={burnConfirmText !== "BURN"}
-                onClick={() => { 
-                  setShowBurnConfirm(false); 
+                onClick={() => {
+                  setShowBurnConfirm(false);
                   setBurnConfirmText("");
-                  handleAction("Burn Admin Key", () => actions.renounceAdmin(market)); 
+                  handleAction("Burn Admin Key", () => actions.renounceAdmin(market));
                 }}
-                className="!border-[#FF4466]/30 !text-[#FF4466] hover:!bg-[#FF4466]/10 disabled:opacity-40"
+                className="border border-[var(--short)]/30 px-4 py-1.5 text-[10px] uppercase tracking-[0.15em] text-[var(--short)] transition-colors hover:bg-[var(--short)]/10 disabled:opacity-40"
               >
                 burn it
-              </GlowButton>
+              </button>
             </div>
           </div>
         </div>
@@ -365,13 +379,11 @@ const LoadingSkeleton: FC = () => (
   <div className="min-h-[calc(100vh-48px)] relative">
     <div className="absolute inset-x-0 top-0 h-48 bg-grid pointer-events-none" />
     <main className="relative mx-auto max-w-4xl px-4 py-10">
-      <ShimmerSkeleton className="mb-2 h-3 w-16" />
-      <ShimmerSkeleton className="mb-2 h-7 w-48" />
-      <ShimmerSkeleton className="mb-8 h-4 w-64" />
-      <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-3">
-        {[1, 2, 3].map((i) => <ShimmerSkeleton key={i} className="h-20" />)}
-      </div>
-      {[1, 2].map((i) => <ShimmerSkeleton key={i} className="mb-4 h-64" />)}
+      <div className="mb-2 h-3 w-16 animate-pulse bg-[var(--border)]/20" />
+      <div className="mb-2 h-7 w-48 animate-pulse bg-[var(--border)]/20" />
+      <div className="mb-8 h-4 w-64 animate-pulse bg-[var(--border)]/20" />
+      <div className="mb-8 h-12 w-full animate-pulse bg-[var(--border)]/20" />
+      {[1, 2].map((i) => <div key={i} className="mb-4 h-64 animate-pulse bg-[var(--border)]/20" />)}
     </main>
   </div>
 );
@@ -381,11 +393,12 @@ const MyMarketsPage: FC = () => {
   const { myMarkets: realMyMarkets, loading: realLoading, error, connected: walletConnected } = useMyMarkets();
   const mockMode = isMockMode();
   const connected = walletConnected || mockMode;
-  const myMarkets = (realMyMarkets.length === 0 && mockMode && !walletConnected ? getMockMyMarkets() : realMyMarkets) as MyMarket[];
-  const loading = mockMode && !walletConnected ? false : realLoading;
+  const mockMarkets = useMemo(() => mockMode ? getMockMyMarkets() : [], [mockMode]);
+  const myMarkets = (realMyMarkets.length === 0 && mockMode ? mockMarkets : realMyMarkets) as MyMarket[];
+  const loading = mockMode ? false : realLoading;
   const { connection } = useConnection();
+  const [filter, setFilter] = useState<"all" | "admin" | "lp" | "trader">("all");
   const [insuranceMintMap, setInsuranceMintMap] = useState<Record<string, boolean>>({});
-  // P-HIGH-7: Add loading state for insurance mint checks
   const [insuranceMintChecking, setInsuranceMintChecking] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const pageRef = useRef<HTMLDivElement>(null);
@@ -399,11 +412,9 @@ const MyMarketsPage: FC = () => {
     gsap.fromTo(pageRef.current, { opacity: 0 }, { opacity: 1, duration: 0.3, ease: "power2.out" });
   }, []);
 
-  // P-MED-13: Manual refresh function
   const handleRefresh = async () => {
     setRefreshing(true);
     setInsuranceMintChecking(true);
-    // Re-check insurance mints
     if (myMarkets.length > 0) {
       const pdas = myMarkets.map((m) => ({
         key: m.slabAddress.toBase58(),
@@ -452,20 +463,24 @@ const MyMarketsPage: FC = () => {
     return () => { cancelled = true; };
   }, [myMarkets, connection]);
 
+  const pageHeader = (
+    <div className="mb-2 text-[10px] font-medium uppercase tracking-[0.25em] text-[var(--accent)]/60">
+      // admin
+    </div>
+  );
+
   if (!connected) {
     return (
       <div className="min-h-[calc(100vh-48px)] relative">
         <div className="absolute inset-x-0 top-0 h-48 bg-grid pointer-events-none" />
         <main className="relative mx-auto max-w-4xl px-4 py-10">
-          <div className="mb-2 text-[10px] font-medium uppercase tracking-[0.25em] text-[var(--accent)]/60">
-            // admin
-          </div>
-          <h1 className="text-xl font-medium tracking-[-0.01em] text-white sm:text-2xl" style={{ fontFamily: "var(--font-heading)" }}>
-            <span className="font-normal text-white/50">Your </span>Markets
+          {pageHeader}
+          <h1 className="text-xl font-medium tracking-[-0.01em] text-[var(--text)] sm:text-2xl" style={{ fontFamily: "var(--font-heading)" }}>
+            <span className="font-normal text-[var(--text-muted)]">Your </span>Markets
           </h1>
-          <p className="mt-2 mb-8 text-[13px] text-[var(--text-secondary)]">manage what you&apos;ve built.</p>
-          <div className="border border-[var(--border)] bg-[var(--panel-bg)] p-10 text-center">
-            <p className="text-[13px] text-[var(--text-secondary)]">connect your wallet to see your markets</p>
+          <p className="mt-2 mb-8 text-[13px] text-[var(--text-secondary)]">manage your markets and positions.</p>
+          <div className="border border-[var(--border)]/50 bg-[var(--panel-bg)] p-10 text-center">
+            <p className="text-[11px] text-[var(--text-secondary)]">connect your wallet to see your markets</p>
           </div>
         </main>
       </div>
@@ -479,15 +494,13 @@ const MyMarketsPage: FC = () => {
       <div className="min-h-[calc(100vh-48px)] relative">
         <div className="absolute inset-x-0 top-0 h-48 bg-grid pointer-events-none" />
         <main className="relative mx-auto max-w-4xl px-4 py-10">
-          <div className="mb-2 text-[10px] font-medium uppercase tracking-[0.25em] text-[var(--accent)]/60">
-            // admin
-          </div>
-          <h1 className="text-xl font-medium tracking-[-0.01em] text-white sm:text-2xl" style={{ fontFamily: "var(--font-heading)" }}>
-            <span className="font-normal text-white/50">Your </span>Markets
+          {pageHeader}
+          <h1 className="text-xl font-medium tracking-[-0.01em] text-[var(--text)] sm:text-2xl" style={{ fontFamily: "var(--font-heading)" }}>
+            <span className="font-normal text-[var(--text-muted)]">Your </span>Markets
           </h1>
-          <p className="mt-2 mb-8 text-[13px] text-[var(--text-secondary)]">manage what you&apos;ve built.</p>
-          <div className="border border-[var(--border)] bg-[var(--panel-bg)] p-10 text-center">
-            <p className="text-[13px] text-[var(--short)]">{error}</p>
+          <p className="mt-2 mb-8 text-[13px] text-[var(--text-secondary)]">manage your markets and positions.</p>
+          <div className="border border-[var(--border)]/50 bg-[var(--panel-bg)] p-10 text-center">
+            <p className="text-[11px] text-[var(--short)]">{error}</p>
           </div>
         </main>
       </div>
@@ -499,25 +512,23 @@ const MyMarketsPage: FC = () => {
       <div className="min-h-[calc(100vh-48px)] relative">
         <div className="absolute inset-x-0 top-0 h-48 bg-grid pointer-events-none" />
         <main className="relative mx-auto max-w-4xl px-4 py-10">
-          <div className="mb-2 text-[10px] font-medium uppercase tracking-[0.25em] text-[var(--accent)]/60">
-            // admin
-          </div>
-          <h1 className="text-xl font-medium tracking-[-0.01em] text-white sm:text-2xl" style={{ fontFamily: "var(--font-heading)" }}>
-            <span className="font-normal text-white/50">Your </span>Markets
+          {pageHeader}
+          <h1 className="text-xl font-medium tracking-[-0.01em] text-[var(--text)] sm:text-2xl" style={{ fontFamily: "var(--font-heading)" }}>
+            <span className="font-normal text-[var(--text-muted)]">Your </span>Markets
           </h1>
-          <p className="mt-2 mb-8 text-[13px] text-[var(--text-secondary)]">manage what you&apos;ve built.</p>
-          <div className="border border-[var(--border)] bg-[var(--panel-bg)] p-10 text-center">
-            <p className="mb-4 text-[13px] text-[var(--text-secondary)]">
+          <p className="mt-2 mb-8 text-[13px] text-[var(--text-secondary)]">manage your markets and positions.</p>
+          <div className="border border-[var(--border)]/50 bg-[var(--panel-bg)] p-10 text-center">
+            <p className="mb-4 text-[11px] text-[var(--text-secondary)]">
               no markets created or traded on with this wallet.
               <br />
               create a market or open a position to see it here.
             </p>
             <div className="flex justify-center gap-3">
-              <Link href="/create">
-                <GlowButton>launch a market</GlowButton>
+              <Link href="/create" className="border border-[var(--accent)]/30 px-4 py-1.5 text-[10px] uppercase tracking-[0.15em] text-[var(--accent)] transition-colors hover:bg-[var(--accent)]/10">
+                launch a market
               </Link>
-              <Link href="/markets">
-                <GlowButton variant="ghost">browse markets</GlowButton>
+              <Link href="/markets" className="border border-[var(--border)]/30 px-4 py-1.5 text-[10px] uppercase tracking-[0.15em] text-[var(--text-muted)] transition-colors hover:border-[var(--border)] hover:text-[var(--text)]">
+                browse markets
               </Link>
             </div>
           </div>
@@ -533,57 +544,74 @@ const MyMarketsPage: FC = () => {
   return (
     <div className="min-h-[calc(100vh-48px)] relative">
       <div className="absolute inset-x-0 top-0 h-48 bg-grid pointer-events-none" />
-    <main ref={pageRef} className="relative mx-auto max-w-4xl px-4 py-10 gsap-fade">
-      <ScrollReveal>
-        <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <div className="mb-2 text-[10px] font-medium uppercase tracking-[0.25em] text-[var(--accent)]/60">
-              // admin
-            </div>
-            <h1 className="text-xl font-medium tracking-[-0.01em] text-white sm:text-2xl" style={{ fontFamily: "var(--font-heading)" }}>
-              <span className="font-normal text-white/50">Your </span>Markets
-            </h1>
-            <p className="mt-2 text-[13px] text-[var(--text-secondary)]">manage what you&apos;ve built.</p>
+      <main ref={pageRef} className="relative mx-auto max-w-4xl px-4 py-10 gsap-fade">
+        {/* Page Title */}
+        <div className="mb-2 text-[10px] font-medium uppercase tracking-[0.25em] text-[var(--accent)]/60">// admin</div>
+        <h1 className="text-xl font-medium tracking-[-0.01em] text-[var(--text)] sm:text-2xl" style={{ fontFamily: "var(--font-heading)" }}>
+          <span className="font-normal text-[var(--text-muted)]">Your </span>Markets
+        </h1>
+        <p className="mt-2 mb-6 text-[13px] text-[var(--text-secondary)]">manage your markets and positions.</p>
+
+        {/* Summary Stats Bar */}
+        <div className="hud-corners mb-8 flex flex-col gap-4 border border-[var(--border)]/50 bg-[var(--panel-bg)] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-1">
+            {[
+              { label: "Total Markets", value: totalMarkets.toString() },
+              { label: "TVL", value: "$" + fmt(totalVault) },
+              { label: "Insurance", value: "$" + fmt(totalInsurance) },
+            ].map((s) => (
+              <span key={s.label} className="flex items-center gap-1.5">
+                <span className="text-[9px] uppercase tracking-[0.15em] text-[var(--text-dim)]">{s.label}:</span>
+                <span className="text-[11px] text-[var(--text)]" style={{ fontFamily: "var(--font-mono)" }}>{s.value}</span>
+              </span>
+            ))}
           </div>
           <div className="flex gap-2">
             <button
               onClick={handleRefresh}
               disabled={refreshing || loading}
-              className="border border-[var(--border)] px-3 py-1.5 text-xs text-[var(--text-muted)] transition-all hover:border-[var(--accent)]/30 hover:text-[var(--text)] disabled:opacity-40"
+              className="border border-[var(--border)]/30 px-3 py-1 text-[10px] uppercase tracking-[0.1em] text-[var(--text-muted)] transition-all hover:border-[var(--accent)]/30 hover:text-[var(--text)] disabled:opacity-40"
             >
-              {refreshing ? "Refreshing..." : "Refresh"}
+              {refreshing ? "refreshing..." : "refresh"}
             </button>
-            <Link href="/create">
-              <GlowButton size="sm">+ new market</GlowButton>
+            <Link href="/create" className="border border-[var(--accent)]/30 bg-[var(--accent)]/5 px-3 py-1 text-[10px] uppercase tracking-[0.1em] text-[var(--accent)] transition-all hover:bg-[var(--accent)]/10">
+              + new market
             </Link>
           </div>
         </div>
-      </ScrollReveal>
 
-      <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-3">
-        {[
-          { label: "total markets", value: totalMarkets.toString() },
-          { label: "total TVL", value: fmt(totalVault) },
-          { label: "total insurance", value: fmt(totalInsurance) },
-        ].map((s) => (
-          <div key={s.label} className="rounded-[4px] border border-[#1a1a1f] bg-[#111113] p-4">
-            <p className="text-xs text-[#71717a]">{s.label}</p>
-            <p className="mt-1 text-xl font-bold text-white">{s.value}</p>
-          </div>
-        ))}
-      </div>
+        {/* Filter Tabs */}
+        <div className="mb-4 flex border-b border-[var(--border)]/50">
+          {(["all", "admin", "lp", "trader"] as const).map((tab) => {
+            const count = tab === "all" ? myMarkets.length : myMarkets.filter(m => m.role === tab).length;
+            return (
+              <button
+                key={tab}
+                onClick={() => setFilter(tab)}
+                className={`px-3 py-1.5 text-[10px] font-medium uppercase tracking-[0.15em] transition-colors border-b-2 ${
+                  filter === tab
+                    ? "border-[var(--accent)] text-[var(--accent)]"
+                    : "border-transparent text-[var(--text-muted)] hover:text-[var(--text-secondary)]"
+                }`}
+              >
+                {tab === "lp" ? "LP" : tab} ({count})
+              </button>
+            );
+          })}
+        </div>
 
-      <div className="grid gap-6">
-        {myMarkets.map((m) => (
-          <MarketCard
-            key={m.slabAddress.toBase58()}
-            market={m}
-            insuranceMintExists={insuranceMintMap[m.slabAddress.toBase58()] ?? false}
-            insuranceMintChecking={insuranceMintChecking}
-          />
-        ))}
-      </div>
-    </main>
+        {/* Market Cards */}
+        <div className="grid gap-4">
+          {myMarkets.filter(m => filter === "all" || m.role === filter).map((m) => (
+            <MarketCard
+              key={m.slabAddress.toBase58()}
+              market={m}
+              insuranceMintExists={insuranceMintMap[m.slabAddress.toBase58()] ?? false}
+              insuranceMintChecking={insuranceMintChecking}
+            />
+          ))}
+        </div>
+      </main>
     </div>
   );
 };
