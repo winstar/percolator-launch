@@ -10,6 +10,8 @@ import { ScrollReveal } from "@/components/ui/ScrollReveal";
 import { GlowButton } from "@/components/ui/GlowButton";
 import { useMultiTokenMeta } from "@/hooks/useMultiTokenMeta";
 import { PublicKey } from "@solana/web3.js";
+import { isMockMode } from "@/lib/mock-mode";
+import { getMockPortfolioPositions } from "@/lib/mock-trade-data";
 
 const WalletMultiButton = dynamic(
   () => import("@solana/wallet-adapter-react-ui").then((m) => m.WalletMultiButton),
@@ -25,8 +27,18 @@ function formatPnl(pnl: bigint | undefined | null, decimals = 6): string {
 }
 
 export default function PortfolioPage() {
-  const { connected } = useWallet();
-  const { positions, totalPnl, totalDeposited, loading, refresh } = usePortfolio();
+  const { connected: walletConnected } = useWallet();
+  const mockMode = isMockMode();
+  const connected = walletConnected || mockMode;
+  const portfolio = usePortfolio();
+
+  // In mock mode, use synthetic positions
+  const mockPositions = mockMode && !walletConnected ? getMockPortfolioPositions() : null;
+  const positions = mockPositions ?? portfolio.positions;
+  const totalPnl = mockPositions ? mockPositions.reduce((s, p) => s + p.account.pnl, 0n) : portfolio.totalPnl;
+  const totalDeposited = mockPositions ? mockPositions.reduce((s, p) => s + p.account.capital, 0n) : portfolio.totalDeposited;
+  const loading = mockPositions ? false : portfolio.loading;
+  const refresh = portfolio.refresh;
 
   // P-HIGH-2: Add auto-refresh every 15s
   useEffect(() => {

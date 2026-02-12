@@ -14,6 +14,8 @@ import { ShimmerSkeleton } from "@/components/ui/ShimmerSkeleton";
 import { ScrollReveal } from "@/components/ui/ScrollReveal";
 import { getConfig, explorerAccountUrl } from "@/lib/config";
 import { deriveInsuranceLpMint } from "@percolator/core";
+import { isMockMode } from "@/lib/mock-mode";
+import { getMockMyMarkets } from "@/lib/mock-trade-data";
 
 /* helpers */
 function fmt(v: bigint, decimals = 6): string {
@@ -376,7 +378,11 @@ const LoadingSkeleton: FC = () => (
 
 /* main page */
 const MyMarketsPage: FC = () => {
-  const { myMarkets, loading, error, connected } = useMyMarkets();
+  const { myMarkets: realMyMarkets, loading: realLoading, error, connected: walletConnected } = useMyMarkets();
+  const mockMode = isMockMode();
+  const connected = walletConnected || mockMode;
+  const myMarkets = (realMyMarkets.length === 0 && mockMode && !walletConnected ? getMockMyMarkets() : realMyMarkets) as MyMarket[];
+  const loading = mockMode && !walletConnected ? false : realLoading;
   const { connection } = useConnection();
   const [insuranceMintMap, setInsuranceMintMap] = useState<Record<string, boolean>>({});
   // P-HIGH-7: Add loading state for insurance mint checks

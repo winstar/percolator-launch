@@ -1,5 +1,7 @@
 @import "tailwindcss";
 
+/* stripped — borders handled per-component */
+
 :root {
   /* ─── Solana Terminal Palette ─── */
   --bg: #0A0A0F;
@@ -358,7 +360,7 @@ input[type="range"]:focus-visible::-webkit-slider-thumb {
   border-radius: 50%;
   pointer-events: none;
   z-index: 0;
-  background: radial-gradient(circle, rgba(153, 69, 255, 0.06) 0%, transparent 70%);
+  background: radial-gradient(circle, rgba(153, 69, 255, 0.08) 0%, transparent 70%);
   transform: translate(-50%, -50%);
   transition: opacity 0.3s ease;
   opacity: 0;
@@ -518,6 +520,17 @@ input[type="range"]:focus-visible::-webkit-slider-thumb {
   transition: all 200ms ease !important;
   border: 1px solid rgba(153, 69, 255, 0.3) !important;
   position: relative !important;
+  white-space: nowrap !important;
+  overflow: visible !important;
+  max-width: 160px !important;
+}
+@media (max-width: 380px) {
+  .wallet-adapter-button {
+    font-size: 0.5625rem !important;
+    padding: 0 0.625rem !important;
+    max-width: 120px !important;
+    letter-spacing: 0.03em !important;
+  }
 }
 .wallet-adapter-button:not([disabled]):hover {
   background-color: rgba(153, 69, 255, 0.08) !important;
@@ -567,7 +580,10 @@ input[type="range"]:focus-visible::-webkit-slider-thumb {
   border: 1px solid var(--border) !important;
   border-radius: 0 !important;
   box-shadow: 0 16px 48px rgba(0, 0, 0, 0.6) !important;
-  padding: 2px !important;
+  padding: 0 !important;
+  margin-top: 0 !important;
+  top: 100% !important;
+  gap: 0 !important;
 }
 .wallet-adapter-dropdown-list-item {
   background-color: transparent !important;
@@ -605,7 +621,7 @@ input[type="range"]:focus-visible::-webkit-slider-thumb {
   max-width: 420px !important;
   font-family: var(--font-sans) !important;
   padding: 0 !important;
-  overflow: hidden !important;
+  overflow: visible !important;
 }
 /* HUD corners on modal */
 .wallet-adapter-modal-wrapper::before {
@@ -683,7 +699,38 @@ input[type="range"]:focus-visible::-webkit-slider-thumb {
   color: var(--accent) !important;
 }
 .wallet-adapter-modal-list .wallet-adapter-button .wallet-adapter-button-end-icon {
-  display: none !important;
+  margin-left: auto !important;
+  font-size: 0.625rem !important;
+  opacity: 0.5 !important;
+  display: flex !important;
+  white-space: nowrap !important;
+}
+.wallet-adapter-modal-list .wallet-adapter-button .wallet-adapter-button-start-icon {
+  margin-right: 10px !important;
+  flex-shrink: 0 !important;
+}
+.wallet-adapter-modal-list .wallet-adapter-button {
+  gap: 8px !important;
+  overflow: visible !important;
+  display: flex !important;
+  align-items: center !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+}
+.wallet-adapter-modal-list,
+.wallet-adapter-modal-list ul {
+  width: 100% !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+}
+.wallet-adapter-modal-list li {
+  margin: 0 !important;
+  width: 100% !important;
+  list-style: none !important;
+}
+/* Close button fix */
+.wallet-adapter-modal-button-close {
+  overflow: visible !important;
 }
 
 /* Collapse/expand ("More options") button */

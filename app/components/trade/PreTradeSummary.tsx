@@ -64,7 +64,7 @@ export const PreTradeSummary: FC<PreTradeSummaryProps> = ({
   const isLong = direction === "long";
 
   return (
-    <div className="mb-4 rounded-lg border border-white/[0.06] bg-white/[0.02] px-3.5 py-3 text-xs backdrop-blur-sm">
+    <div className="mb-4 rounded-none border border-[var(--border)]/50 bg-[var(--bg)]/80 px-3.5 py-3 text-xs">
       <div className="mb-2 flex items-center gap-2">
         <div className={`h-1.5 w-1.5 rounded-full ${isLong ? "bg-[var(--long)]" : "bg-[var(--short)]"}`} />
         <span className="text-[10px] font-semibold uppercase tracking-widest text-[var(--text-muted)]">

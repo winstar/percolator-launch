@@ -46,7 +46,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <body className={`${geistSans.variable} ${geistMono.variable} ${spaceGrotesk.variable} ${jetbrainsMono.variable} ${interTight.variable} ${outfit.variable} min-h-screen bg-[#050508] text-[#eeeef0] antialiased`}>
         <Providers>
           <CursorGlow />
-          <div className="flex min-h-screen flex-col">
+          <div className="relative z-[1] flex min-h-screen flex-col">
             <TickerBanner />
             <Header />
             <main className="flex-1">{children}</main>

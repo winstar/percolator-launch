@@ -179,6 +179,214 @@ export function getMockSlabState(address: string) {
   return { header, config, engine, params, accounts };
 }
 
+/* ── Helpers re-exported for mock components ── */
+
+export const MOCK_SLAB_ADDRESSES = Object.keys(MOCK_MAP);
+
+export function getMockMarketData(address: string): MockMarketData | null {
+  return MOCK_MAP[address] ?? null;
+}
+
+/* ── Mock user account for trade page ── */
+
+export function getMockUserAccount(address: string) {
+  const m = MOCK_MAP[address];
+  if (!m) return null;
+  const priceE6 = BigInt(Math.round(m.priceUsd * 1_000_000));
+  // User with capital deposited, an open LONG position
+  const entryE6 = BigInt(Math.round(m.priceUsd * 0.97 * 1_000_000));
+  const capital = 50_000_000n; // 50 tokens
+  const posSize = 150_000_000n; // 150 tokens long (3x leverage)
+  const pnl = (posSize * (priceE6 - entryE6)) / 1_000_000n;
+  return {
+    idx: 2,
+    account: {
+      kind: AccountKind.User,
+      accountId: 2n,
+      capital,
+      pnl,
+      reservedPnl: 0n,
+      warmupStartedAtSlot: 0n,
+      warmupSlopePerStep: 0n,
+      positionSize: posSize,
+      entryPrice: entryE6,
+      fundingIndex: 0n,
+      matcherProgram: PublicKey.default,
+      matcherContext: PublicKey.default,
+      owner: new PublicKey("7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU"),
+      feeCredits: 0n,
+      lastFeeSlot: 0n,
+    } as Account,
+  };
+}
+
+/** Mock user account with NO open position (for showing the trade form) */
+export function getMockUserAccountIdle(address: string) {
+  const m = MOCK_MAP[address];
+  if (!m) return null;
+  const capital = 50_000_000n;
+  return {
+    idx: 2,
+    account: {
+      kind: AccountKind.User,
+      accountId: 2n,
+      capital,
+      pnl: 0n,
+      reservedPnl: 0n,
+      warmupStartedAtSlot: 0n,
+      warmupSlopePerStep: 0n,
+      positionSize: 0n,
+      entryPrice: 0n,
+      fundingIndex: 0n,
+      matcherProgram: PublicKey.default,
+      matcherContext: PublicKey.default,
+      owner: new PublicKey("7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU"),
+      feeCredits: 0n,
+      lastFeeSlot: 0n,
+    } as Account,
+  };
+}
+
+/* ── Mock trade history ── */
+
+export function getMockTrades(address: string) {
+  const m = MOCK_MAP[address];
+  if (!m) return [];
+  const now = Date.now();
+  const trades = [];
+  // Seeded PRNG
+  let seed = 0;
+  for (let i = 0; i < address.length; i++) seed = ((seed << 5) - seed + address.charCodeAt(i)) | 0;
+  function rand() { seed = (seed * 16807 + 0) % 2147483647; return (seed & 0x7fffffff) / 0x7fffffff; }
+
+  for (let i = 0; i < 20; i++) {
+    const side = rand() > 0.5 ? "long" : "short";
+    const size = Math.round((500 + rand() * 5000) * 1_000_000);
+    const priceOffset = (rand() - 0.5) * m.priceUsd * 0.02;
+    const price = Math.round((m.priceUsd + priceOffset) * 1_000_000);
+    const time = new Date(now - i * 180_000 - Math.round(rand() * 60_000));
+    trades.push({
+      id: `mock-${i}`,
+      side,
+      size,
+      price,
+      fee: Math.round(size * 0.003),
+      trader: "7xKXtg" + i.toString().padStart(2, "0"),
+      tx_signature: "mock" + "x".repeat(80) + i,
+      created_at: time.toISOString(),
+    });
+  }
+  return trades;
+}
+
+/* ── Mock portfolio positions ── */
+
+export function getMockPortfolioPositions() {
+  const positions = [];
+  const slabs = Object.entries(MOCK_MAP);
+  // Pick a subset that have open positions
+  const withPositions = slabs.filter((_, i) => i < 4);
+  for (const [slabAddr, m] of withPositions) {
+    const priceE6 = BigInt(Math.round(m.priceUsd * 1_000_000));
+    const isLong: boolean = positions.length % 2 === 0;
+    const entryOffset: number = isLong ? 0.97 : 1.03;
+    const entryE6: bigint = BigInt(Math.round(m.priceUsd * entryOffset * 1_000_000));
+    const posSize: bigint = BigInt(Math.round((1000 + positions.length * 500) * 1_000_000)) * (isLong ? 1n : -1n);
+    const priceDiff: bigint = priceE6 - entryE6;
+    const pnl: bigint = isLong ? (posSize * priceDiff / 1_000_000n) : (-posSize * priceDiff / 1_000_000n);
+    const capital: bigint = BigInt(Math.round((500 + positions.length * 200) * 1_000_000));
+    const mintPk = (() => { try { return new PublicKey(m.mint); } catch { return PublicKey.default; } })();
+
+    positions.push({
+      slabAddress: slabAddr,
+      symbol: m.symbol,
+      idx: 2,
+      account: {
+        kind: AccountKind.User,
+        accountId: BigInt(positions.length + 1),
+        capital,
+        pnl,
+        reservedPnl: 0n,
+        warmupStartedAtSlot: 0n,
+        warmupSlopePerStep: 0n,
+        positionSize: posSize,
+        entryPrice: entryE6,
+        fundingIndex: 0n,
+        matcherProgram: PublicKey.default,
+        matcherContext: PublicKey.default,
+        owner: new PublicKey("7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU"),
+        feeCredits: 0n,
+        lastFeeSlot: 0n,
+      } as Account,
+      market: {
+        slabAddress: new PublicKey(slabAddr),
+        programId: PublicKey.default,
+        header: { magic: new Uint8Array(8), version: 1, maxAccounts: 256, admin: PublicKey.default, paused: false } as any,
+        config: {
+          collateralMint: mintPk,
+          lastEffectivePriceE6: priceE6,
+        } as any,
+        engine: {
+          vault: m.vault,
+          insuranceFund: { balance: m.insurance, feeRevenue: 0n },
+          totalOpenInterest: m.oi,
+          numUsedAccounts: m.numAccounts,
+        } as any,
+        params: {
+          initialMarginBps: BigInt(m.initialMarginBps),
+          maintenanceMarginBps: BigInt(m.initialMarginBps / 2),
+          tradingFeeBps: BigInt(m.tradingFeeBps),
+        } as any,
+      },
+    });
+  }
+  return positions;
+}
+
+/* ── Mock my-markets data ── */
+
+export function getMockMyMarkets() {
+  const slabs = Object.entries(MOCK_MAP).slice(0, 3);
+  return slabs.map(([slabAddr, m], i) => {
+    const mintPk = (() => { try { return new PublicKey(m.mint); } catch { return PublicKey.default; } })();
+    const priceE6 = BigInt(Math.round(m.priceUsd * 1_000_000));
+    return {
+      slabAddress: new PublicKey(slabAddr),
+      programId: PublicKey.default,
+      label: `${m.symbol}/USD`,
+      role: (i === 0 ? "admin" : i === 1 ? "lp" : "trader") as "admin" | "lp" | "trader",
+      header: {
+        magic: new Uint8Array(8),
+        version: 1,
+        maxAccounts: 256,
+        admin: new PublicKey("7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU"),
+        paused: false,
+      } as any,
+      config: {
+        collateralMint: mintPk,
+        lastEffectivePriceE6: priceE6,
+        authorityPriceE6: priceE6,
+        oracleAuthority: new PublicKey("7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU"),
+      } as any,
+      engine: {
+        vault: m.vault,
+        insuranceFund: { balance: m.insurance, feeRevenue: 0n },
+        totalOpenInterest: m.oi,
+        currentSlot: 300_000_000n,
+        lastCrankSlot: 299_999_995n,
+        maxCrankStalenessSlots: 100n,
+        numUsedAccounts: m.numAccounts,
+      } as any,
+      params: {
+        initialMarginBps: BigInt(m.initialMarginBps),
+        maintenanceMarginBps: BigInt(m.initialMarginBps / 2),
+        tradingFeeBps: BigInt(m.tradingFeeBps),
+        riskReductionThreshold: 0n,
+      } as any,
+    };
+  });
+}
+
 /** Generate synthetic 24h price history for mock markets */
 export function getMockPriceHistory(address: string): { price_e6: number; timestamp: number }[] {
   const m = MOCK_MAP[address];
