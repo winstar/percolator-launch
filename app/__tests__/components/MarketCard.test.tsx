@@ -189,8 +189,8 @@ describe("MarketBrowser Component Tests", () => {
     it("should display all markets without pagination for now", () => {
       const mockMarkets = [
         createMockMarket({ slabAddress: new PublicKey("11111111111111111111111111111111") }),
-        createMockMarket({ slabAddress: new PublicKey("22222222222222222222222222222222") }),
-        createMockMarket({ slabAddress: new PublicKey("33333333333333333333333333333333") }),
+        createMockMarket({ slabAddress: new PublicKey("2kVU3naG2r4kezerqcuDB6nadtd7vmyeRTsqcbWBTscb") }),
+        createMockMarket({ slabAddress: new PublicKey("8rxVYS7HdWpmqGgNPTCZXTqGATZLde9Lv5e9kaUrZGCQ") }),
       ];
 
       (useMarketDiscovery as any).mockReturnValue({
@@ -252,7 +252,7 @@ describe("MarketBrowser Component Tests", () => {
 
     it("should sort markets by health level correctly", () => {
       const market1 = createMockMarket({
-        slabAddress: new PublicKey("11111111111111111111111111111111"),
+        slabAddress: new PublicKey("4FJ3MMh1MQMP1dSUiRmwF1P7b69HPmEjW42dxpbXNcpM"),
       });
       market1.engine.vault = 100n; // Low vault = warning
       market1.engine.totalOpenInterest = 0n;
@@ -260,7 +260,7 @@ describe("MarketBrowser Component Tests", () => {
       market1.engine.numUsedAccounts = 0;
       
       const market2 = createMockMarket({
-        slabAddress: new PublicKey("22222222222222222222222222222222"),
+        slabAddress: new PublicKey("7Q5yyfpxSybsCqoKZL4TJkyXCZCmQDSm6cH3fjxDCuam"),
       });
       market2.engine.vault = 10000000n; // High vault = healthy
       market2.engine.totalOpenInterest = 5000000n;
@@ -408,7 +408,7 @@ describe("MarketBrowser Component Tests", () => {
     });
 
     it("should render trade link with correct href", () => {
-      const slabKey = new PublicKey("DummySlab11111111111111111111111111111");
+      const slabKey = new PublicKey("EfgWMhW4VeL1CyP8nvkmsXduF1Uf9KmRgy6F1c3GEyWr");
       const mockMarkets = [
         createMockMarket({
           slabAddress: slabKey,
@@ -455,7 +455,7 @@ describe("MarketBrowser Component Tests", () => {
     });
 
     it("should show Pyth badge for non-zero oracle feed ID", () => {
-      const pythKey = new PublicKey("DummyPythFeed111111111111111111111111");
+      const pythKey = new PublicKey("2kVU3naG2r4kezerqcuDB6nadtd7vmyeRTsqcbWBTscb");
       const market = createMockMarket({});
       market.config.indexFeedId = pythKey; // Pyth oracle
       const mockMarkets = [market];

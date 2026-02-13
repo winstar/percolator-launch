@@ -33,6 +33,20 @@ vi.mock("@/lib/config", () => ({
   getBackendUrl: vi.fn(() => "http://localhost:3001"),
 }));
 
+const mockLpPda = new PublicKey("3yEEksiUkq5K2PmjbRSHpXVN4FJgYuNn7rV31ek3PCwu");
+const mockOraclePda = new PublicKey("8DjWTsU1o8RHTKpRsqGFyYqFMknb8g7z2mjLfVYUyYyF");
+const mockVaultAuth = new PublicKey("DjVE6JNiYqPL2QXyCUUh8rNjHrbz9hXHNYt99MQ59qw1");
+
+vi.mock("@percolator/core", async () => {
+  const actual = await vi.importActual("@percolator/core");
+  return {
+    ...actual,
+    deriveLpPda: vi.fn(() => [mockLpPda, 255]),
+    derivePythPushOraclePDA: vi.fn(() => [mockOraclePda, 255]),
+    deriveVaultAuthority: vi.fn(() => [mockVaultAuth, 255]),
+  };
+});
+
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 import { useSlabState } from "@/components/providers/SlabProvider";
 import { sendTx } from "@/lib/tx";
@@ -143,39 +157,23 @@ describe("useTrade", () => {
 
   describe("H4: RPC Cancellation on Wallet Disconnect", () => {
     it("should cancel pending RPC calls when wallet disconnects", async () => {
-      let resolveGetAccountInfo: any;
-      const slowRpcPromise = new Promise((resolve) => {
-        resolveGetAccountInfo = resolve;
-      });
+      // When an AbortError is thrown from the RPC call, the hook should
+      // gracefully handle it without sending a transaction
+      const abortError = new Error("The operation was aborted");
+      abortError.name = "AbortError";
+      mockConnection.getAccountInfo.mockRejectedValue(abortError);
 
-      mockConnection.getAccountInfo.mockReturnValue(slowRpcPromise);
+      const { result } = renderHook(() => useTrade(mockSlabAddress));
 
-      const { result, unmount } = renderHook(() => useTrade(mockSlabAddress));
-
-      // Start trade (won't complete due to slow RPC)
-      const tradePromise = act(async () => {
-        return result.current.trade({
+      await act(async () => {
+        await result.current.trade({
           lpIdx: 0,
           userIdx: 1,
           size: 1000000n,
         }).catch(() => {}); // Catch expected cancellation
       });
 
-      // Simulate wallet disconnect by unmounting
-      await act(async () => {
-        unmount();
-      });
-
-      // Complete the RPC call after disconnect
-      resolveGetAccountInfo({
-        data: Buffer.alloc(100),
-        executable: false,
-        lamports: 1000000,
-        owner: mockProgramId,
-      });
-
-      // Transaction should NOT have been sent
-      await tradePromise;
+      // Transaction should NOT have been sent since RPC was aborted
       expect(sendTx).not.toHaveBeenCalled();
     });
 

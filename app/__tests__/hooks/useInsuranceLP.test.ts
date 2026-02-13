@@ -54,7 +54,7 @@ describe("useInsuranceLP", () => {
   const mockSlabPubkey = new PublicKey(mockSlabAddress);
   const mockLpMintPubkey = new PublicKey("9xQeWvG816bUx9EPjHmaT23yvVM2ZWbrrpZb9PusVFin");
   const mockCollateralMint = new PublicKey("So11111111111111111111111111111111111111112");
-  const mockVault = new PublicKey("Vault1111111111111111111111111111111111111111");
+  const mockVault = new PublicKey("EfgWMhW4VeL1CyP8nvkmsXduF1Uf9KmRgy6F1c3GEyWr");
   
   let mockConnection: any;
   let mockWallet: any;

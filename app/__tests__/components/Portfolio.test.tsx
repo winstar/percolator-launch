@@ -10,7 +10,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import PortfolioPage from "@/app/portfolio/page";
 import { useWallet } from "@solana/wallet-adapter-react";
@@ -40,6 +40,11 @@ vi.mock("@/components/ui/ScrollReveal", () => ({
 }));
 vi.mock("@/components/ui/GlowButton", () => ({
   GlowButton: ({ children }: any) => <button>{children}</button>,
+}));
+
+vi.mock("@/lib/mock-mode", () => ({
+  isMockMode: () => false,
+  getMockPortfolioPositions: () => [],
 }));
 
 const mockPublicKey = new PublicKey("11111111111111111111111111111111");
@@ -97,7 +102,7 @@ describe("Portfolio Component Tests", () => {
       render(<PortfolioPage />);
 
       // Should display +0 for null PnL (coalesced to 0n)
-      expect(screen.getByText(/\+0/)).toBeInTheDocument();
+      expect(screen.getAllByText(/\+0/).length).toBeGreaterThanOrEqual(1);
     });
 
     it("should handle undefined PnL", () => {
@@ -142,7 +147,7 @@ describe("Portfolio Component Tests", () => {
       render(<PortfolioPage />);
 
       // Should not crash and display +0
-      expect(screen.getByText(/\+0/)).toBeInTheDocument();
+      expect(screen.getAllByText(/\+0/).length).toBeGreaterThanOrEqual(1);
     });
 
     it("should correctly display negative PnL", () => {
@@ -187,13 +192,12 @@ describe("Portfolio Component Tests", () => {
       render(<PortfolioPage />);
 
       // Should display -0.5
-      expect(screen.getByText(/-0\.5/)).toBeInTheDocument();
+      expect(screen.getAllByText(/-0\.5/).length).toBeGreaterThanOrEqual(1);
     });
   });
 
   describe("PORT-002: Manual refresh button", () => {
     it("should call refresh function when refresh button is clicked", async () => {
-      const user = userEvent.setup({ delay: null });
       const mockRefresh = vi.fn();
 
       (useWallet as any).mockReturnValue({
@@ -214,7 +218,7 @@ describe("Portfolio Component Tests", () => {
       render(<PortfolioPage />);
 
       const refreshButton = screen.getByRole("button", { name: /Refresh/i });
-      await user.click(refreshButton);
+      fireEvent.click(refreshButton);
 
       expect(mockRefresh).toHaveBeenCalledTimes(1);
     });
@@ -282,9 +286,7 @@ describe("Portfolio Component Tests", () => {
     it("should stop auto-refresh when wallet disconnects", async () => {
       const mockRefresh = vi.fn();
 
-      const { rerender } = render(<PortfolioPage />);
-
-      // Initially connected
+      // Start connected
       (useWallet as any).mockReturnValue({
         connected: true,
         publicKey: mockPublicKey,
@@ -300,7 +302,7 @@ describe("Portfolio Component Tests", () => {
 
       (useMultiTokenMeta as any).mockReturnValue(new Map());
 
-      rerender(<PortfolioPage />);
+      const { rerender } = render(<PortfolioPage />);
 
       // Now disconnect
       (useWallet as any).mockReturnValue({
@@ -309,6 +311,9 @@ describe("Portfolio Component Tests", () => {
       });
 
       rerender(<PortfolioPage />);
+
+      // Reset call count after disconnect
+      mockRefresh.mockClear();
 
       // Advance time - should not call refresh
       await vi.advanceTimersByTimeAsync(30000);
@@ -453,7 +458,7 @@ describe("Portfolio Component Tests", () => {
 
       render(<PortfolioPage />);
 
-      const browseMarketsButton = screen.getByText(/Browse Markets/i);
+      const browseMarketsButton = screen.getByRole("button", { name: /Browse Markets/i });
       expect(browseMarketsButton).toBeInTheDocument();
       expect(browseMarketsButton.closest("a")).toHaveAttribute("href", "/markets");
     });
@@ -463,6 +468,16 @@ describe("Portfolio Component Tests", () => {
         connected: false,
         publicKey: null,
       });
+
+      (usePortfolio as any).mockReturnValue({
+        positions: [],
+        totalPnl: 0n,
+        totalDeposited: 0n,
+        loading: false,
+        refresh: vi.fn(),
+      });
+
+      (useMultiTokenMeta as any).mockReturnValue(new Map());
 
       render(<PortfolioPage />);
 

@@ -45,7 +45,8 @@ describe('Guide Page', () => {
     ];
 
     expectedSections.forEach((section) => {
-      expect(screen.getByText(section)).toBeInTheDocument();
+      const matches = screen.getAllByText(section);
+      expect(matches.length).toBeGreaterThanOrEqual(1);
     });
   });
 
@@ -94,7 +95,7 @@ describe('Guide Page', () => {
   it('should render Overview section with key content', () => {
     render(<GuidePage />);
 
-    expect(screen.getByText(/What is Percolator\?/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/What is Percolator\?/i).length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText(/pump\.fun for perps/i)).toBeInTheDocument();
     expect(screen.getByText(/No approvals, no gatekeepers/i)).toBeInTheDocument();
   });
@@ -130,9 +131,9 @@ describe('Guide Page', () => {
     expect(screen.getByText('4,096')).toBeInTheDocument();
 
     // Check for cost estimates
-    expect(screen.getByText(/~\$65/i)).toBeInTheDocument();
-    expect(screen.getByText(/~\$260/i)).toBeInTheDocument();
-    expect(screen.getByText(/~\$1,000/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/~\$65/i).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText(/~\$260/i).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText(/~\$1,000/i).length).toBeGreaterThanOrEqual(1);
   });
 
   /**
@@ -142,10 +143,10 @@ describe('Guide Page', () => {
     render(<GuidePage />);
 
     // Check for key concepts
-    expect(screen.getByText(/Coin-Margined/i)).toBeInTheDocument();
-    expect(screen.getByText(/vAMM Liquidity/i)).toBeInTheDocument();
-    expect(screen.getByText(/Crank Service/i)).toBeInTheDocument();
-    expect(screen.getByText(/Insurance Fund/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/Coin-Margined/i).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText(/vAMM Liquidity/i).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText(/Crank Service/i).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText(/Insurance Fund/i).length).toBeGreaterThanOrEqual(1);
 
     // Check descriptions
     expect(screen.getByText(/You deposit the same token you are trading/i)).toBeInTheDocument();
@@ -158,9 +159,9 @@ describe('Guide Page', () => {
   it('should render Oracle Modes section with all modes', () => {
     render(<GuidePage />);
 
-    expect(screen.getByText(/Admin Oracle/i)).toBeInTheDocument();
-    expect(screen.getByText(/Pyth Oracle/i)).toBeInTheDocument();
-    expect(screen.getByText(/DexScreener \/ Jupiter/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/Admin Oracle/i).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText(/Pyth Oracle/i).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText(/DexScreener \/ Jupiter/i).length).toBeGreaterThanOrEqual(1);
 
     // Check for mode descriptions
     expect(screen.getByText(/Market creator pushes prices manually/i)).toBeInTheDocument();
@@ -173,12 +174,12 @@ describe('Guide Page', () => {
   it('should render Getting Started section with step-by-step guide', () => {
     render(<GuidePage />);
 
-    expect(screen.getByText(/Connect Phantom/i)).toBeInTheDocument();
-    expect(screen.getByText(/Get Test SOL/i)).toBeInTheDocument();
-    expect(screen.getByText(/Create a Test Token/i)).toBeInTheDocument();
-    expect(screen.getByText(/Launch a Market/i)).toBeInTheDocument();
-    expect(screen.getByText(/Push Oracle Prices/i)).toBeInTheDocument();
-    expect(screen.getByText(/Open Trades/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/Connect Phantom/i).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText(/Get Test SOL/i).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText(/Create a Test Token/i).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText(/Launch a Market/i).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText(/Push Oracle Prices/i).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText(/Open Trades/i).length).toBeGreaterThanOrEqual(1);
 
     // Check for step numbers
     expect(screen.getByText('01')).toBeInTheDocument();
@@ -233,8 +234,8 @@ describe('Guide Page', () => {
   it('should render page header with title and description', () => {
     render(<GuidePage />);
 
-    expect(screen.getByText(/Percolator/i)).toBeInTheDocument();
-    expect(screen.getByText(/Guide/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/Percolator/i).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText(/Guide/i).length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText(/Everything you need to know about launching and trading/i)).toBeInTheDocument();
   });
 
