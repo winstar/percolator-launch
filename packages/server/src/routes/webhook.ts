@@ -6,6 +6,7 @@ import { eventBus } from "../services/events.js";
 
 const TRADE_TAGS = new Set<number>([IX_TAG.TradeNoCpi, IX_TAG.TradeCpi]);
 const PROGRAM_IDS = new Set(config.allProgramIds);
+const BASE58_PUBKEY = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
 
 /**
  * Helius Enhanced Transaction webhook receiver.
@@ -129,10 +130,8 @@ function extractTradesFromEnhancedTx(tx: any): TradeData[] {
     const slabAddress = accounts.length > 2 ? accounts[2] : "";
     if (!trader || !slabAddress) continue;
 
-    // Extract price from token transfers associated with this tx
     // Validate pubkey formats
-    const base58Regex = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
-    if (!base58Regex.test(trader) || !base58Regex.test(slabAddress)) continue;
+    if (!BASE58_PUBKEY.test(trader) || !BASE58_PUBKEY.test(slabAddress)) continue;
 
     // Extract price from program logs, fee from balance changes
     const price = extractPriceFromLogs(tx);
@@ -181,6 +180,8 @@ function extractTradesFromEnhancedTx(tx: any): TradeData[] {
       const trader = accounts[0] ?? "";
       const slabAddress = accounts.length > 2 ? accounts[2] : "";
       if (!trader || !slabAddress) continue;
+
+      if (!BASE58_PUBKEY.test(trader) || !BASE58_PUBKEY.test(slabAddress)) continue;
 
       const price = extractPriceFromLogs(tx);
       const fee = extractFeeFromTransfers(tx, trader);
