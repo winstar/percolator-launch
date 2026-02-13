@@ -3,20 +3,33 @@ import { getSupabase } from "./client.js";
 export interface MarketRow {
   id: string;
   slab_address: string;
-  mint: string;
-  admin: string;
-  oracle_type: string;
+  mint_address: string;
+  symbol: string;
+  name: string;
+  decimals: number;
+  deployer: string;
+  oracle_authority: string | null;
+  initial_price_e6: number | null;
+  max_leverage: number;
+  trading_fee_bps: number;
   status: string;
   created_at: string;
-  metadata: Record<string, unknown> | null;
+  updated_at: string;
 }
 
 export interface MarketStatsRow {
   slab_address: string;
-  last_crank_at: string;
-  crank_success_count: number;
-  crank_failure_count: number;
-  last_price_e6: string;
+  last_price: number | null;
+  mark_price: number | null;
+  index_price: number | null;
+  volume_24h: number | null;
+  volume_total: number | null;
+  open_interest_long: number | null;
+  open_interest_short: number | null;
+  insurance_fund: number | null;
+  total_accounts: number | null;
+  funding_rate: number | null;
+  updated_at: string | null;
 }
 
 export interface TradeRow {
