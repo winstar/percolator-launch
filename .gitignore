@@ -44,3 +44,10 @@ lerna-debug.log*
 # Turbo
 .turbo
 .env.vercel.preview
+
+Percolator-Deck-Final.pdf
+Percolator-Deck-v2.pdf
+Percolator-Pitch-Deck.pdf
+pitch-deck.html
+render-pdf.cjs
+render-pdf.mjs

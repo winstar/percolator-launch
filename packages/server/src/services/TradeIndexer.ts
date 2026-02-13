@@ -11,22 +11,23 @@ const TRADE_TAGS = new Set<number>([IX_TAG.TradeNoCpi, IX_TAG.TradeCpi]);
 /** How many recent signatures to fetch per slab per cycle */
 const MAX_SIGNATURES = 50;
 
-/** Poll interval for trade indexing (30 seconds) */
-const POLL_INTERVAL_MS = 30_000;
+/** Poll interval for trade indexing (5 minutes — backup/backfill only, primary is webhook) */
+const POLL_INTERVAL_MS = 5 * 60_000;
 
 /** Initial backfill: fetch more signatures on first run */
 const BACKFILL_SIGNATURES = 100;
 
 /**
- * TradeIndexer — indexes trade history from on-chain transactions.
+ * TradeIndexerPolling — backup/backfill trade indexer using on-chain polling.
+ *
+ * Primary indexing is now webhook-driven (see HeliusWebhookManager + webhook routes).
+ * This poller runs on startup for backfill, then every 5 minutes as a catchall.
  *
  * Two modes:
  * 1. Reactive: listens for crank.success events for immediate indexing
  * 2. Proactive: polls all active markets periodically to catch any missed trades
- *
- * On startup, performs a backfill of recent trades for all known markets.
  */
-export class TradeIndexer {
+export class TradeIndexerPolling {
   /** Track last indexed signature per slab to avoid re-processing */
   private lastSignature = new Map<string, string>();
   private _running = false;
@@ -53,7 +54,7 @@ export class TradeIndexer {
     // Start periodic polling (proactive mode)
     this.pollTimer = setInterval(() => this.pollAllMarkets(), POLL_INTERVAL_MS);
 
-    console.log("[TradeIndexer] Started — reactive + polling mode (30s interval)");
+    console.log("[TradeIndexerPolling] Started — backup mode (5m interval)");
   }
 
   stop(): void {

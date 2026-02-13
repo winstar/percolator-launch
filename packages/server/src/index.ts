@@ -13,7 +13,10 @@ import { setupWebSocket } from "./routes/ws.js";
 import { PriceEngine } from "./services/PriceEngine.js";
 import { LiquidationService } from "./services/liquidation.js";
 import { InsuranceLPService } from "./services/InsuranceLPService.js";
-import { TradeIndexer } from "./services/TradeIndexer.js";
+import { TradeIndexerPolling } from "./services/TradeIndexer.js";
+import { HeliusWebhookManager } from "./services/HeliusWebhookManager.js";
+import { webhookRoutes } from "./routes/webhook.js";
+import { tradeRoutes } from "./routes/trades.js";
 import { insuranceRoutes } from "./routes/insurance.js";
 import { oracleRouterRoutes } from "./routes/oracle-router.js";
 import { readRateLimit, writeRateLimit } from "./middleware/rate-limit.js";
@@ -25,7 +28,8 @@ const crankService = new CrankService(oracleService);
 const liquidationService = new LiquidationService(oracleService);
 const lifecycleManager = new MarketLifecycleManager(crankService, oracleService);
 const insuranceService = new InsuranceLPService(crankService);
-const tradeIndexer = new TradeIndexer();
+const tradeIndexer = new TradeIndexerPolling();
+const webhookManager = new HeliusWebhookManager();
 
 // Hono app
 const app = new Hono();
@@ -52,6 +56,8 @@ app.route("/", priceRoutes({ oracleService, priceEngine }));
 app.route("/", crankRoutes({ crankService }));
 app.route("/", insuranceRoutes({ insuranceService }));
 app.route("/", oracleRouterRoutes());
+app.route("/", webhookRoutes());
+app.route("/", tradeRoutes());
 
 // Root
 app.get("/", (c) => c.json({ name: "@percolator/server", version: "0.1.0" }));
@@ -90,9 +96,16 @@ if (config.crankKeypair) {
     insuranceService.start();
     console.log("🛡️  Insurance LP service started");
 
-    // Start trade indexer
+    // Start trade indexer (polling backup)
     tradeIndexer.start();
-    console.log("📊 Trade indexer started");
+    console.log("📊 Trade indexer started (polling backup)");
+
+    // Register Helius webhook for primary trade indexing
+    webhookManager.start().then(() => {
+      console.log("🪝 Helius webhook manager started");
+    }).catch((err) => {
+      console.error("Failed to start webhook manager:", err);
+    });
   }).catch((err) => {
     console.error("Failed to start crank service:", err);
   });
@@ -102,6 +115,13 @@ if (config.crankKeypair) {
   // Still start trade indexer in polling-only mode (no crank events, but polls markets)
   tradeIndexer.start();
   console.log("📊 Trade indexer started (polling-only mode, no crank keypair)");
+
+  // Register Helius webhook even without crank keypair
+  webhookManager.start().then(() => {
+    console.log("🪝 Helius webhook manager started");
+  }).catch((err) => {
+    console.error("Failed to start webhook manager:", err);
+  });
 }
 
 // Graceful shutdown
@@ -113,6 +133,7 @@ async function shutdown(signal: string) {
     liquidationService.stop();
     insuranceService.stop();
     tradeIndexer.stop();
+    webhookManager.stop();
     if (server && typeof (server as any).close === "function") {
       (server as any).close();
     }

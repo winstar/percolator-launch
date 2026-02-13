@@ -90,7 +90,38 @@ export async function getRecentTrades(slabAddress: string, limit = 50): Promise<
     .from("trades")
     .select("*")
     .eq("slab_address", slabAddress)
-    .order("timestamp", { ascending: false })
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return (data ?? []) as TradeRow[];
+}
+
+export async function get24hVolume(slabAddress: string): Promise<{ volume: string; tradeCount: number }> {
+  const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  const { data, error } = await getSupabase()
+    .from("trades")
+    .select("size")
+    .eq("slab_address", slabAddress)
+    .gte("created_at", since);
+  if (error) throw error;
+  let total = 0n;
+  for (const row of data ?? []) {
+    // size is stored as string for BigInt precision
+    try {
+      const abs = BigInt(row.size) < 0n ? -BigInt(row.size) : BigInt(row.size);
+      total += abs;
+    } catch {
+      total += BigInt(Math.abs(Number(row.size)));
+    }
+  }
+  return { volume: total.toString(), tradeCount: (data ?? []).length };
+}
+
+export async function getGlobalRecentTrades(limit = 50): Promise<TradeRow[]> {
+  const { data, error } = await getSupabase()
+    .from("trades")
+    .select("*")
+    .order("created_at", { ascending: false })
     .limit(limit);
   if (error) throw error;
   return (data ?? []) as TradeRow[];
