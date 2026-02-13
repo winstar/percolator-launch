@@ -116,7 +116,10 @@ export const TradeForm: FC<{ slabAddress: string }> = ({ slabAddress }) => {
   const setMarginPercent = useCallback(
     (pct: number) => {
       if (capital <= 0n) return;
-      const amount = (capital * BigInt(pct)) / 100n;
+      let amount = (capital * BigInt(pct)) / 100n;
+      // Prevent truncation to 0 for small balances — use at least 1 native unit
+      // when the percentage of a non-zero capital would otherwise round to zero
+      if (amount === 0n && pct > 0) amount = 1n;
       setMarginInput(formatPerc(amount, decimals));
     },
     [capital, decimals]
