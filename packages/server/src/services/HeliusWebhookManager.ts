@@ -1,6 +1,14 @@
 import { config } from "../config.js";
 
-const HELIUS_WEBHOOKS_URL = `https://api.helius.dev/v0/webhooks`;
+/**
+ * Helius migrated from api.helius.dev to api-{network}.helius-rpc.com.
+ * We build the URL dynamically based on the RPC URL (devnet vs mainnet).
+ */
+function getHeliusWebhooksUrl(): string {
+  const isDevnet = config.rpcUrl.includes("devnet");
+  const host = isDevnet ? "api-devnet.helius-rpc.com" : "api-mainnet.helius-rpc.com";
+  return `https://${host}/v0/webhooks`;
+}
 
 /**
  * Manages Helius webhook registration on server startup.
@@ -68,7 +76,7 @@ export class HeliusWebhookManager {
   async listWebhooks(): Promise<any[] | null> {
     if (!config.heliusApiKey) return null;
     try {
-      const res = await fetch(`${HELIUS_WEBHOOKS_URL}?api-key=${config.heliusApiKey}`, {
+      const res = await fetch(`${getHeliusWebhooksUrl()}?api-key=${config.heliusApiKey}`, {
         method: "GET",
         headers: { "Content-Type": "application/json" },
       });
@@ -93,7 +101,7 @@ export class HeliusWebhookManager {
   }
 
   private async findExistingWebhook(): Promise<any | null> {
-    const url = `${HELIUS_WEBHOOKS_URL}?api-key=${config.heliusApiKey}`;
+    const url = `${getHeliusWebhooksUrl()}?api-key=${config.heliusApiKey}`;
     console.log(`[HeliusWebhookManager] Fetching ${url.replace(config.heliusApiKey, "***")}`);
     let res: Response;
     try {
@@ -122,7 +130,7 @@ export class HeliusWebhookManager {
   }
 
   private async createWebhook(): Promise<string> {
-    const res = await fetch(`${HELIUS_WEBHOOKS_URL}?api-key=${config.heliusApiKey}`, {
+    const res = await fetch(`${getHeliusWebhooksUrl()}?api-key=${config.heliusApiKey}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(this.webhookPayload),
@@ -138,7 +146,7 @@ export class HeliusWebhookManager {
   }
 
   private async updateWebhook(webhookId: string): Promise<void> {
-    const res = await fetch(`${HELIUS_WEBHOOKS_URL}/${webhookId}?api-key=${config.heliusApiKey}`, {
+    const res = await fetch(`${getHeliusWebhooksUrl()}/${webhookId}?api-key=${config.heliusApiKey}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(this.webhookPayload),
