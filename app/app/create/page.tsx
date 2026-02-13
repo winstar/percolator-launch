@@ -57,7 +57,7 @@ function CreatePageInner() {
               className="mt-2 text-[11px] text-[var(--text-dim)]"
               style={{ fontFamily: "var(--font-mono)" }}
             >
-              small: ~0.5 SOL &middot; medium: ~2 SOL &middot; large: ~7 SOL
+              small: ~0.44 SOL &middot; medium: ~1.8 SOL &middot; large: ~7 SOL
             </div>
           </div>
         </ScrollReveal>
