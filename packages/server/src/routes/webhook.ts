@@ -30,13 +30,15 @@ export function webhookRoutes(): Hono {
       return c.json({ error: "Invalid JSON" }, 400);
     }
 
-    // Process in background to return 200 quickly
-    const processing = processTransactions(transactions);
-
-    // Don't await — return immediately so Helius doesn't retry
-    processing.catch((err) => {
-      console.error("[Webhook] Background processing error:", err instanceof Error ? err.message : err);
-    });
+    // Process synchronously — Helius has a 15s timeout, and we need to confirm
+    // processing before returning 200. If we return early, Helius may retry
+    // and we'd get duplicates (insertTrade handles 23505 but still wastes work).
+    try {
+      await processTransactions(transactions);
+    } catch (err) {
+      console.error("[Webhook] Processing error:", err instanceof Error ? err.message : err);
+      // Still return 200 to prevent Helius retries — we logged the error
+    }
 
     return c.json({ received: transactions.length }, 200);
   });
@@ -93,11 +95,6 @@ function extractTradesFromEnhancedTx(tx: any): TradeData[] {
   if (!signature) return trades;
 
   const instructions = tx.instructions ?? [];
-  const accountKeys = tx.accountData ?? [];
-
-  // Build token transfer map for price/fee extraction
-  const tokenTransfers: any[] = tx.tokenTransfers ?? [];
-  const nativeTransfers: any[] = tx.nativeTransfers ?? [];
 
   for (const ix of instructions) {
     const programId = ix.programId ?? "";
@@ -124,20 +121,22 @@ function extractTradesFromEnhancedTx(tx: any): TradeData[] {
       sizeValue = readU128LE(sizeBytes);
     }
 
-    // Accounts: first is trader (signer), find slab from accounts list
+    // Account layout (from core/abi/accounts.ts):
+    // TradeNoCpi: [0]=user(signer), [1]=lp(signer), [2]=slab(writable), [3]=clock, [4]=oracle
+    // TradeCpi:   [0]=user(signer), [1]=lpOwner,    [2]=slab(writable), [3]=clock, [4]=oracle, ...
     const accounts: string[] = ix.accounts ?? [];
     const trader = accounts[0] ?? "";
-    if (!trader) continue;
-
-    // Slab is typically the 2nd or 3rd account — find it by checking known market accounts
-    // For now, use the inner instructions or just pick a reasonable account
-    // The slab account is usually accounts[1] in the trade instruction
-    const slabAddress = accounts.length > 1 ? accounts[1] : "";
-    if (!slabAddress) continue;
+    const slabAddress = accounts.length > 2 ? accounts[2] : "";
+    if (!trader || !slabAddress) continue;
 
     // Extract price from token transfers associated with this tx
-    const price = extractPriceFromTransfers(tokenTransfers, trader);
-    const fee = extractFeeFromNativeTransfers(nativeTransfers, trader);
+    // Validate pubkey formats
+    const base58Regex = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
+    if (!base58Regex.test(trader) || !base58Regex.test(slabAddress)) continue;
+
+    // Extract price from program logs, fee from balance changes
+    const price = extractPriceFromLogs(tx);
+    const fee = extractFeeFromTransfers(tx, trader);
 
     trades.push({
       slab_address: slabAddress,
@@ -150,7 +149,7 @@ function extractTradesFromEnhancedTx(tx: any): TradeData[] {
     });
   }
 
-  // Also check inner instructions
+  // Also check inner instructions (for TradeCpi routed through matcher)
   const innerInstructions = tx.innerInstructions ?? [];
   for (const inner of innerInstructions) {
     const innerIxs = inner.instructions ?? [];
@@ -177,13 +176,14 @@ function extractTradesFromEnhancedTx(tx: any): TradeData[] {
         sizeValue = readU128LE(sizeBytes);
       }
 
+      // Same account layout: [0]=user, [2]=slab
       const accounts: string[] = ix.accounts ?? [];
       const trader = accounts[0] ?? "";
-      const slabAddress = accounts.length > 1 ? accounts[1] : "";
+      const slabAddress = accounts.length > 2 ? accounts[2] : "";
       if (!trader || !slabAddress) continue;
 
-      const price = extractPriceFromTransfers(tokenTransfers, trader);
-      const fee = extractFeeFromNativeTransfers(nativeTransfers, trader);
+      const price = extractPriceFromLogs(tx);
+      const fee = extractFeeFromTransfers(tx, trader);
 
       // Avoid duplicates within same tx
       if (trades.some((t) => t.tx_signature === signature && t.trader === trader && t.side === side)) continue;
@@ -204,17 +204,19 @@ function extractTradesFromEnhancedTx(tx: any): TradeData[] {
 }
 
 /**
- * Extract approximate price from Helius token transfers.
- * Looks for token transfer amounts involving the trader to estimate execution price.
+ * Extract execution price from program logs in the enhanced tx.
+ * The on-chain program emits: "Program log: {v1}, {v2}, {v3}, {v4}, {v5}"
+ * where one value is price_e6 (range $0.001 to $1M → 1,000 to 1,000,000,000,000).
  */
-function extractPriceFromTransfers(tokenTransfers: any[], trader: string): number {
-  // Find transfers where trader is sender or receiver
-  for (const transfer of tokenTransfers) {
-    if (transfer.fromUserAccount === trader || transfer.toUserAccount === trader) {
-      const amount = Number(transfer.tokenAmount ?? 0);
-      // If we find a USDC-like transfer (6 decimals), use it as price indicator
-      if (amount > 0 && transfer.mint) {
-        return amount;
+function extractPriceFromLogs(tx: any): number {
+  const logs: string[] = tx.logMessages ?? [];
+  for (const log of logs) {
+    const match = log.match(/^Program log: (\d+), (\d+), (\d+), (\d+), (\d+)$/);
+    if (!match) continue;
+    const values = [match[1], match[2], match[3], match[4], match[5]].map(Number);
+    for (const v of values) {
+      if (v >= 1_000 && v <= 1_000_000_000_000) {
+        return v / 1_000_000;
       }
     }
   }
@@ -222,21 +224,23 @@ function extractPriceFromTransfers(tokenTransfers: any[], trader: string): numbe
 }
 
 /**
- * Extract fee from native (SOL) transfers — look for small outbound transfers from trader.
+ * Extract fee from token/native transfers.
+ * For coin-margined perps, look at SOL balance changes for the trader.
  */
-function extractFeeFromNativeTransfers(nativeTransfers: any[], trader: string): number {
-  let totalFee = 0;
-  for (const transfer of nativeTransfers) {
-    if (transfer.fromUserAccount === trader) {
-      const amount = Number(transfer.amount ?? 0);
-      // Protocol fees are typically small SOL amounts
-      if (amount > 0 && amount < 1_000_000_000) {
-        // Convert lamports to SOL
-        totalFee += amount / 1e9;
+function extractFeeFromTransfers(tx: any, trader: string): number {
+  // Check accountData for balance changes (Helius enhanced provides this)
+  const accountData: any[] = tx.accountData ?? [];
+  for (const acc of accountData) {
+    if (acc.account === trader && acc.nativeBalanceChange != null) {
+      const change = Math.abs(Number(acc.nativeBalanceChange));
+      // Transaction fee is typically 5000-10000 lamports, protocol fees are larger
+      // Skip tiny tx fees, look for protocol-level fees
+      if (change > 10_000 && change < 1_000_000_000) {
+        return change / 1e9;
       }
     }
   }
-  return totalFee;
+  return 0;
 }
 
 /** Decode base58 string to Uint8Array */

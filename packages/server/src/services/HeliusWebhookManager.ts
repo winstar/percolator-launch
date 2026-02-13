@@ -45,12 +45,16 @@ export class HeliusWebhookManager {
 
   private get webhookPayload() {
     const webhookURL = `${config.webhookUrl}/webhook/trades`;
+    // Detect network from RPC URL
+    const isDevnet = config.rpcUrl.includes("devnet");
     return {
       webhookURL,
       transactionTypes: ["ANY"],
       accountAddresses: config.allProgramIds,
-      webhookType: "enhanced",
+      webhookType: "enhanced" as const,
       authHeader: config.webhookSecret || undefined,
+      // Helius requires network field — defaults to mainnet-beta if omitted
+      ...(isDevnet ? { network: "devnet" } : {}),
     };
   }
 

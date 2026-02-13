@@ -96,7 +96,7 @@ export async function getRecentTrades(slabAddress: string, limit = 50): Promise<
   return (data ?? []) as TradeRow[];
 }
 
-export async function get24hVolume(slabAddress: string): Promise<number> {
+export async function get24hVolume(slabAddress: string): Promise<{ volume: string; tradeCount: number }> {
   const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
   const { data, error } = await getSupabase()
     .from("trades")
@@ -104,11 +104,17 @@ export async function get24hVolume(slabAddress: string): Promise<number> {
     .eq("slab_address", slabAddress)
     .gte("created_at", since);
   if (error) throw error;
-  let total = 0;
+  let total = 0n;
   for (const row of data ?? []) {
-    total += Math.abs(Number(row.size));
+    // size is stored as string for BigInt precision
+    try {
+      const abs = BigInt(row.size) < 0n ? -BigInt(row.size) : BigInt(row.size);
+      total += abs;
+    } catch {
+      total += BigInt(Math.abs(Number(row.size)));
+    }
   }
-  return total;
+  return { volume: total.toString(), tradeCount: (data ?? []).length };
 }
 
 export async function getGlobalRecentTrades(limit = 50): Promise<TradeRow[]> {
