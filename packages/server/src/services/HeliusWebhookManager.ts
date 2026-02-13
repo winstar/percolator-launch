@@ -102,7 +102,9 @@ export class HeliusWebhookManager {
         headers: { "Content-Type": "application/json" },
       });
     } catch (fetchErr) {
-      console.error(`[HeliusWebhookManager] Fetch to api.helius.dev failed:`, fetchErr instanceof Error ? fetchErr.message : fetchErr);
+      const msg = fetchErr instanceof Error ? fetchErr.message : String(fetchErr);
+      const cause = fetchErr instanceof Error && (fetchErr as any).cause ? (fetchErr as any).cause : undefined;
+      console.error(`[HeliusWebhookManager] Fetch to api.helius.dev failed: ${msg}`, cause ? `cause: ${cause.message ?? JSON.stringify(cause)}` : "");
       return null;
     }
 
