@@ -21,7 +21,7 @@ export function parseHumanAmount(input: string, decimals: number): bigint {
   }
   
   const frac = fracPart.padEnd(decimals, "0");
-  const result = BigInt(whole) * BigInt(10 ** decimals) + BigInt(frac);
+  const result = BigInt(whole) * (10n ** BigInt(decimals)) + BigInt(frac);
   return negative ? -result : result;
 }
 
@@ -34,7 +34,7 @@ export function formatHumanAmount(raw: bigint, decimals: number): string {
 
   const negative = raw < 0n;
   const abs = negative ? -raw : raw;
-  const divisor = BigInt(10 ** decimals);
+  const divisor = 10n ** BigInt(decimals);
   const whole = abs / divisor;
   const remainder = abs % divisor;
 

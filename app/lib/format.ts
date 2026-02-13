@@ -1,7 +1,7 @@
 export function formatTokenAmount(raw: bigint, decimals: number = 6): string {
   const negative = raw < 0n;
   const abs = negative ? -raw : raw;
-  const divisor = BigInt(10 ** decimals);
+  const divisor = 10n ** BigInt(decimals);
   const whole = abs / divisor;
   const frac = abs % divisor;
   const fracStr = frac.toString().padStart(decimals, "0").replace(/0+$/, "");
@@ -39,7 +39,7 @@ export function formatSlotAge(currentSlot: bigint, targetSlot: bigint): string {
 export function formatI128Amount(raw: bigint, decimals: number = 6): string {
   const negative = raw < 0n;
   const abs = negative ? -raw : raw;
-  const divisor = BigInt(10 ** decimals);
+  const divisor = 10n ** BigInt(decimals);
   const whole = abs / divisor;
   const formatted = whole.toString();
   return negative ? `-${formatted}` : formatted;
@@ -49,7 +49,7 @@ export function formatI128Amount(raw: bigint, decimals: number = 6): string {
 export function formatPnl(raw: bigint, decimals: number = 6): string {
   const negative = raw < 0n;
   const abs = negative ? -raw : raw;
-  const divisor = BigInt(10 ** decimals);
+  const divisor = 10n ** BigInt(decimals);
   const whole = abs / divisor;
   const frac = abs % divisor;
   const fracStr = frac.toString().padStart(decimals, "0").replace(/0+$/, "");
