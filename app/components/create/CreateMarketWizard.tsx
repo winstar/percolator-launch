@@ -143,6 +143,8 @@ const QuickLaunchPanel: FC<{
 
   const handleQuickCreate = () => {
     if (!quickLaunch.config || !publicKey) return;
+    // Guard: trading fee must be less than initial margin
+    if (effectiveTradingFee >= effectiveMargin) return;
     const c = quickLaunch.config;
     const pool = quickLaunch.poolInfo;
     const tier = SLAB_TIERS[quickSlabTier];
@@ -553,7 +555,8 @@ export const CreateMarketWizard: FC<{ initialMint?: string }> = ({ initialMint }
 
   const maintenanceMarginBps = Math.floor(initialMarginBps / 2);
   const maxLeverage = Math.floor(10000 / initialMarginBps);
-  const step2Valid = tradingFeeBps >= 1 && tradingFeeBps <= 100 && initialMarginBps >= 100 && initialMarginBps <= 5000;
+  const feeExceedsMargin = tradingFeeBps >= initialMarginBps;
+  const step2Valid = tradingFeeBps >= 1 && tradingFeeBps <= 100 && initialMarginBps >= 100 && initialMarginBps <= 5000 && !feeExceedsMargin;
 
   const lpValid = lpCollateral !== "" && !isNaN(Number(lpCollateral)) && Number(lpCollateral) > 0;
   const insValid = insuranceAmount !== "" && !isNaN(Number(insuranceAmount)) && Number(insuranceAmount) > 0;
@@ -877,6 +880,12 @@ export const CreateMarketWizard: FC<{ initialMint?: string }> = ({ initialMint }
                 <FieldHint>{initialMarginBps} bps = {maxLeverage}x max leverage.</FieldHint>
                 <input type="range" min={100} max={5000} step={100} value={initialMarginBps} onChange={(e) => setInitialMarginBps(Number(e.target.value))} className="mt-2 w-full" />
               </div>
+              {feeExceedsMargin && (
+                <div className="border border-[var(--short)]/30 bg-[var(--short)]/5 p-3">
+                  <p className="text-[11px] text-[var(--short)] font-medium">⚠ Trading fee ({tradingFeeBps} bps) must be less than initial margin ({initialMarginBps} bps)</p>
+                  <p className="text-[10px] text-[var(--text-muted)] mt-1">When the fee exceeds the margin, a single trade would consume the entire margin. Lower the trading fee or increase the initial margin.</p>
+                </div>
+              )}
               <div className="grid grid-cols-2 gap-px overflow-hidden border border-[var(--border)] bg-[var(--border)]">
                 <div className="bg-[var(--panel-bg)] p-3">
                   <p className="text-[9px] font-medium uppercase tracking-[0.15em] text-[var(--text-dim)]">Maintenance Margin</p>
