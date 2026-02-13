@@ -144,9 +144,9 @@ export default function PortfolioPage() {
               </Link>
             </div>
           ) : (
-            <div className="overflow-hidden border border-[var(--border)] hud-corners">
+            <div className="overflow-x-auto border border-[var(--border)] hud-corners">
               {/* Header */}
-              <div className="grid grid-cols-[2fr_0.7fr_1fr_1fr_1fr_1fr] gap-3 border-b border-[var(--border)] bg-[var(--bg-surface)] px-4 py-2.5 text-[10px] font-medium uppercase tracking-[0.15em] text-[var(--text-dim)]">
+              <div className="grid min-w-[600px] grid-cols-[2fr_0.7fr_1fr_1fr_1fr_1fr] gap-3 border-b border-[var(--border)] bg-[var(--bg-surface)] px-4 py-2.5 text-[10px] font-medium uppercase tracking-[0.15em] text-[var(--text-dim)]">
                 <div>Market</div>
                 <div className="text-center">Side</div>
                 <div className="text-right">Size</div>
@@ -165,7 +165,7 @@ export default function PortfolioPage() {
                     key={`${pos.slabAddress}-${i}`}
                     href={`/trade/${pos.slabAddress}`}
                     className={[
-                      "grid grid-cols-[2fr_0.7fr_1fr_1fr_1fr_1fr] gap-3 items-center px-4 py-3 transition-all duration-200 hover:bg-[var(--accent)]/[0.04] hover:border-l-2 hover:border-l-[var(--accent)]/30",
+                      "grid min-w-[600px] grid-cols-[2fr_0.7fr_1fr_1fr_1fr_1fr] gap-3 items-center px-4 py-3 transition-all duration-200 hover:bg-[var(--accent)]/[0.04] hover:border-l-2 hover:border-l-[var(--accent)]/30",
                       i > 0 ? "border-t border-[var(--border)]" : "",
                     ].join(" ")}
                   >
@@ -186,10 +186,10 @@ export default function PortfolioPage() {
                         {side.toUpperCase()}
                       </span>
                     </div>
-                    <div className="text-right text-sm text-white" style={{ fontFamily: "var(--font-jetbrains-mono)" }}>{formatTokenAmount(sizeAbs)}</div>
-                    <div className="text-right text-sm text-[var(--text-secondary)]" style={{ fontFamily: "var(--font-jetbrains-mono)" }}>{formatPriceE6(pos.account.entryPrice)}</div>
-                    <div className="text-right text-sm text-[var(--text-secondary)]" style={{ fontFamily: "var(--font-jetbrains-mono)" }}>{formatTokenAmount(pos.account.capital)}</div>
-                    <div className={`text-right text-sm font-medium ${pnlPositive ? "text-[var(--long)]" : "text-[var(--short)]"}`} style={{ fontFamily: "var(--font-jetbrains-mono)" }}>
+                    <div className="text-right text-sm text-white truncate" style={{ fontFamily: "var(--font-jetbrains-mono)" }}>{formatTokenAmount(sizeAbs)}</div>
+                    <div className="text-right text-sm text-[var(--text-secondary)] truncate" style={{ fontFamily: "var(--font-jetbrains-mono)" }}>{formatPriceE6(pos.account.entryPrice)}</div>
+                    <div className="text-right text-sm text-[var(--text-secondary)] truncate" style={{ fontFamily: "var(--font-jetbrains-mono)" }}>{formatTokenAmount(pos.account.capital)}</div>
+                    <div className={`text-right text-sm font-medium truncate ${pnlPositive ? "text-[var(--long)]" : "text-[var(--short)]"}`} style={{ fontFamily: "var(--font-jetbrains-mono)" }}>
                       {formatPnl(pos.account.pnl)}
                     </div>
                   </Link>
