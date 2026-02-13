@@ -33,11 +33,16 @@ vi.mock("@/lib/config", () => ({
   getBackendUrl: vi.fn(() => "http://localhost:3001"),
 }));
 
+const mockVaultAuth = new PublicKey("DjVE6JNiYqPL2QXyCUUh8rNjHrbz9hXHNYt99MQ59qw1");
+const mockOraclePda = new PublicKey("8DjWTsU1o8RHTKpRsqGFyYqFMknb8g7z2mjLfVYUyYyF");
+
 vi.mock("@percolator/core", async () => {
   const actual = await vi.importActual("@percolator/core");
   return {
     ...actual,
     getAta: vi.fn(),
+    deriveVaultAuthority: vi.fn(() => [mockVaultAuth, 255]),
+    derivePythPushOraclePDA: vi.fn(() => [mockOraclePda, 255]),
   };
 });
 
@@ -89,7 +94,7 @@ describe("useWithdraw", () => {
         },
         authorityPriceE6: 1000000n,
       },
-      programId: mockProgramId.toBase58(),
+      programId: mockProgramId,
     };
 
     (useConnection as any).mockReturnValue({ connection: mockConnection });

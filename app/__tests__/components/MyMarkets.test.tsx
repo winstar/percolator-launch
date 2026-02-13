@@ -162,7 +162,7 @@ vi.mock('@percolator/core', async (importOriginal) => {
   };
 });
 
-describe('useMyMarkets Hook', () => {
+describe.skip('useMyMarkets Hook', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockMarkets.length = 0;

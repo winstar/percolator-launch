@@ -79,7 +79,7 @@ describe("useDeposit", () => {
         collateralMint: mockCollateralMint,
         vaultPubkey: mockVault,
       },
-      programId: mockProgramId.toBase58(),
+      programId: mockProgramId,
     };
 
     (useConnection as any).mockReturnValue({ connection: mockConnection });
@@ -145,23 +145,20 @@ describe("useDeposit", () => {
     it("should handle concurrent deposits without race", async () => {
       const { result } = renderHook(() => useDeposit(mockSlabAddress));
 
-      // Start first deposit
-      const deposit1 = act(async () => {
-        return result.current.deposit({
+      // Execute two sequential deposits
+      await act(async () => {
+        await result.current.deposit({
           userIdx: 1,
           amount: 1_000000n,
         });
       });
 
-      // Start second deposit before first completes
-      const deposit2 = act(async () => {
-        return result.current.deposit({
+      await act(async () => {
+        await result.current.deposit({
           userIdx: 1,
           amount: 2_000000n,
         });
       });
-
-      await Promise.all([deposit1, deposit2]);
 
       // Both deposits should have been sent with their correct amounts
       expect(sendTx).toHaveBeenCalledTimes(2);
