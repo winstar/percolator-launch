@@ -24,4 +24,8 @@ export const config = {
   crankInactiveIntervalMs: Number(process.env.CRANK_INACTIVE_INTERVAL_MS ?? 60_000),
   /** BH4: Reduced to 60s to catch markets created/deleted within smaller window */
   discoveryIntervalMs: Number(process.env.DISCOVERY_INTERVAL_MS ?? 60_000),
+  /** Helius webhook secret for auth validation */
+  webhookSecret: process.env.HELIUS_WEBHOOK_SECRET ?? "",
+  /** Public URL for webhook registration (e.g. Railway URL) */
+  webhookUrl: process.env.WEBHOOK_URL ?? "",
 } as const;

@@ -53,6 +53,26 @@ export function setupWebSocket(
     }
   });
 
+  // Broadcast trade events to subscribed clients
+  eventBus.on("trade.executed", (payload: any) => {
+    const msg = JSON.stringify({
+      type: "trade.executed",
+      slabAddress: payload.slabAddress,
+      data: payload.data,
+      timestamp: payload.timestamp,
+    });
+
+    for (const client of clients) {
+      if (
+        client.ws.readyState === WebSocket.OPEN &&
+        client.subscriptions.has(payload.slabAddress)
+      ) {
+        if (client.ws.bufferedAmount > MAX_BUFFER_BYTES) continue;
+        client.ws.send(msg);
+      }
+    }
+  });
+
   wss.on("connection", (ws) => {
     // H2: Reject if at max connections
     if (clients.size >= MAX_WS_CONNECTIONS) {
