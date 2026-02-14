@@ -29,10 +29,8 @@ export interface MarketStatsRow {
   insurance_fund: number | null;
   total_accounts: number | null;
   funding_rate: number | null;
-  funding_rate_bps_per_slot: number | null;
-  funding_index_qpb_e6: string | null;
-  net_lp_position: string | null;
-  last_funding_slot: number | null;
+  // funding_rate_bps_per_slot, funding_index_qpb_e6, net_lp_position, last_funding_slot
+  // NOT in DB yet (migration 006 not deployed)
   // Hidden features (migration 007)
   total_open_interest: number | null;
   net_lp_pos: string | null;

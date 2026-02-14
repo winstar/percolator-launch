@@ -150,10 +150,8 @@ export class StatsCollector {
               insurance_fund: Number(engine.insuranceFund.balance),
               total_accounts: engine.numUsedAccounts,
               funding_rate: Number(engine.fundingRateBpsPerSlotLast),
-              funding_rate_bps_per_slot: Number(engine.fundingRateBpsPerSlotLast),
-              funding_index_qpb_e6: engine.fundingIndexQpbE6.toString(),
-              net_lp_position: engine.netLpPos.toString(),
-              last_funding_slot: Number(engine.lastFundingSlot),
+              // NOTE: funding_rate_bps_per_slot, funding_index_qpb_e6, net_lp_position, last_funding_slot
+              // are NOT in the database yet (migration 006 not deployed). Do NOT include them in upsert.
               volume_24h: volume24h,
               // Hidden features (migration 007)
               total_open_interest: Number(engine.totalOpenInterest),
@@ -184,26 +182,8 @@ export class StatsCollector {
               }
             }
 
-            // Log funding history on every crank (when last_funding_slot advances)
-            const lastLoggedSlot = this.lastFundingLogSlot.get(slabAddress) ?? 0;
-            const currentFundingSlot = Number(engine.lastFundingSlot);
-            if (currentFundingSlot > lastLoggedSlot) {
-              try {
-                await insertFundingHistory({
-                  market_slab: slabAddress,
-                  slot: currentFundingSlot,
-                  timestamp: new Date().toISOString(),
-                  rate_bps_per_slot: Number(engine.fundingRateBpsPerSlotLast),
-                  net_lp_pos: engine.netLpPos.toString(),
-                  price_e6: Number(priceE6),
-                  funding_index_qpb_e6: engine.fundingIndexQpbE6.toString(),
-                });
-                this.lastFundingLogSlot.set(slabAddress, currentFundingSlot);
-              } catch (fundingErr) {
-                // Non-fatal — funding history logging shouldn't break stats collection
-                console.warn(`[StatsCollector] Funding history log failed for ${slabAddress}:`, fundingErr instanceof Error ? fundingErr.message : fundingErr);
-              }
-            }
+            // TODO: Log funding history when funding_history table is created (migration 006)
+            // Currently disabled — table doesn't exist yet
 
             updated++;
           } catch (err) {
