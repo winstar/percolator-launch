@@ -139,7 +139,7 @@ export class StatsCollector {
               console.warn(`[StatsCollector] 24h volume calculation failed for ${slabAddress}:`, volErr instanceof Error ? volErr.message : volErr);
             }
 
-            // Upsert market stats with all funding rate fields
+            // Upsert market stats with all funding rate fields + hidden features
             await upsertMarketStats({
               slab_address: slabAddress,
               last_price: priceUsd,
@@ -155,6 +155,14 @@ export class StatsCollector {
               net_lp_position: engine.netLpPos.toString(),
               last_funding_slot: Number(engine.lastFundingSlot),
               volume_24h: volume24h,
+              // Hidden features (migration 007)
+              total_open_interest: Number(engine.totalOpenInterest),
+              net_lp_pos: engine.netLpPos.toString(),
+              lp_sum_abs: Number(engine.lpSumAbs),
+              lp_max_abs: Number(engine.lpMaxAbs),
+              insurance_balance: Number(engine.insuranceFund.balance),
+              insurance_fee_revenue: Number(engine.insuranceFund.feeRevenue),
+              // warmup_period_slots: TODO - need to parse RiskParams from slab data
               updated_at: new Date().toISOString(),
             });
 
