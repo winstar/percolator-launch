@@ -41,25 +41,24 @@ export function useTrade(slabAddress: string) {
         const lpAccount = accounts.find((a) => a.idx === params.lpIdx);
         if (!lpAccount) throw new Error(`LP at index ${params.lpIdx} not found`);
 
-        // Validate matcher context account exists on-chain before trading
-        // If it doesn't exist, the program CPI will fail with a confusing error
-        const matcherCtxKey = lpAccount.account.matcherContext;
-        if (matcherCtxKey.equals(PublicKey.default)) {
-          throw new Error("This market has no vAMM liquidity provider. Trading is not available.");
-        }
-        try {
-          if (cancelled) return;
-          const ctxInfo = await connection.getAccountInfo(matcherCtxKey, { signal: abortController.signal } as any);
-          if (!ctxInfo) {
-            throw new Error(
-              "Matcher context account not found on-chain. The market's vAMM may need to be re-initialized. Try creating a new market."
-            );
-          }
-        } catch (e) {
-          if (e instanceof Error && e.message.includes("Matcher context")) throw e;
-          if (e instanceof Error && e.name === "AbortError") return; // Cancelled
-          // RPC error — let the transaction attempt and fail with actual error
-        }
+        // NOTE: Matcher context validation disabled - all current markets have default matcher context
+        // which is valid for non-vAMM LPs. If matcher context issues arise, the program will
+        // return a proper error instead of blocking all trades upfront.
+        // Original validation from commit 919f006 (Feb 10) was too strict.
+        
+        // const matcherCtxKey = lpAccount.account.matcherContext;
+        // if (!matcherCtxKey.equals(PublicKey.default)) {
+        //   try {
+        //     if (cancelled) return;
+        //     const ctxInfo = await connection.getAccountInfo(matcherCtxKey, { signal: abortController.signal } as any);
+        //     if (!ctxInfo) {
+        //       throw new Error("Matcher context account not found on-chain. Try creating a new market.");
+        //     }
+        //   } catch (e) {
+        //     if (e instanceof Error && e.message.includes("Matcher context")) throw e;
+        //     if (e instanceof Error && e.name === "AbortError") return;
+        //   }
+        // }
 
         const programId = slabProgramId;
         const slabPk = new PublicKey(slabAddress);

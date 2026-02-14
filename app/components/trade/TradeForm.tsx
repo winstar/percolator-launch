@@ -195,15 +195,17 @@ export const TradeForm: FC<{ slabAddress: string }> = ({ slabAddress }) => {
     );
   }
 
-  if (!hasValidLP) {
-    return (
-      <div className="relative rounded-none bg-[var(--bg)]/80 border border-[var(--border)]/50 p-4 text-center">
-        <p className="text-[var(--text-secondary)] text-xs">
-          No liquidity provider found for this market. Trading is not available until an LP initializes a vAMM.
-        </p>
-      </div>
-    );
-  }
+  // NOTE: LP validation disabled - matcher context check was too strict
+  // All current markets have LPs with default matcher context which is valid
+  // if (!hasValidLP) {
+  //   return (
+  //     <div className="relative rounded-none bg-[var(--bg)]/80 border border-[var(--border)]/50 p-4 text-center">
+  //       <p className="text-[var(--text-secondary)] text-xs">
+  //         No liquidity provider found for this market. Trading is not available until an LP initializes a vAMM.
+  //       </p>
+  //     </div>
+  //   );
+  // }
 
   if (lpUnderfunded) {
     return (
