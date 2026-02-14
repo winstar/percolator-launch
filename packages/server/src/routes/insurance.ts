@@ -1,47 +1,129 @@
-import { Hono } from "hono";
-import { validateSlab } from "../middleware/validateSlab.js";
-import type { InsuranceLPService } from "../services/InsuranceLPService.js";
+/**
+ * Insurance Fund API Routes
+ * 
+ * GET /api/insurance/:slab
+ * - Returns insurance fund metrics
+ * 
+ * POST /api/insurance/:slab/topup
+ * - Returns unsigned transaction for topup (TODO)
+ */
 
-interface InsuranceDeps {
-  insuranceService: InsuranceLPService;
-}
+import { Router, Request, Response } from 'express';
+import {
+  getMarketStats,
+  getInsuranceFundHealth,
+  getInsuranceHistory,
+  get24hFeeGrowth,
+} from '../db/queries.js';
 
-export function insuranceRoutes(deps: InsuranceDeps): Hono {
-  const app = new Hono();
+const router = Router();
 
-  // GET /api/markets/:slab/insurance
-  app.get("/api/markets/:slab/insurance", validateSlab, async (c) => {
-    const slab = c.req.param("slab");
-    const stats = deps.insuranceService.getStats(slab);
+/**
+ * GET /api/insurance/:slab
+ * 
+ * Returns insurance fund dashboard data
+ */
+router.get('/:slab', async (req: Request, res: Response) => {
+  try {
+    const { slab } = req.params;
 
-    if (!stats) {
-      return c.json({ error: "No insurance data for this market" }, 404);
+    if (!slab) {
+      res.status(400).json({ error: 'Missing slab parameter' });
+      return;
     }
 
-    const depositors = await deps.insuranceService.getDepositorCount(slab);
+    // Get current insurance fund health
+    const health = await getInsuranceFundHealth(slab);
+    if (!health) {
+      res.status(404).json({ error: 'Market not found' });
+      return;
+    }
 
-    return c.json({
-      balance: stats.balance,
-      lpSupply: stats.lpSupply,
-      redemptionRate: stats.redemptionRate,
-      apy7d: stats.apy7d,
-      apy30d: stats.apy30d,
-      depositors,
+    // Get 24h fee growth
+    const feeGrowth24h = await get24hFeeGrowth(slab);
+
+    // Get historical data (last 24 hours)
+    const history = await getInsuranceHistory(slab, 24);
+
+    // Calculate 24h accumulation rate (if we have historical data)
+    let accumulationRatePerHour = null;
+    if (feeGrowth24h && Number(feeGrowth24h) > 0) {
+      accumulationRatePerHour = (Number(feeGrowth24h) / 24).toFixed(2);
+    }
+
+    // Response
+    res.json({
+      slab,
+      current: {
+        balance: health.insurance_balance,
+        feeRevenue: health.insurance_fee_revenue,
+        totalOpenInterest: health.total_open_interest,
+        healthRatio: health.health_ratio,
+      },
+      metrics: {
+        feeGrowth24h: feeGrowth24h || '0',
+        accumulationRatePerHour,
+      },
+      history: history.map((h) => ({
+        slot: h.slot.toString(),
+        timestamp: h.timestamp,
+        balance: h.balance,
+        feeRevenue: h.fee_revenue,
+      })),
     });
-  });
 
-  // GET /api/markets/:slab/insurance/events
-  app.get("/api/markets/:slab/insurance/events", validateSlab, async (c) => {
-    const slab = c.req.param("slab");
-    const limit = Math.min(Math.max(1, Number(c.req.query("limit") ?? 50)), 200);
+  } catch (error) {
+    console.error('[Insurance API] Error:', error);
+    res.status(500).json({
+      error: 'Internal server error',
+      message: error instanceof Error ? error.message : 'Unknown error',
+    });
+  }
+});
 
-    try {
-      const events = await deps.insuranceService.getEvents(slab, limit);
-      return c.json({ events });
-    } catch (err) {
-      return c.json({ error: err instanceof Error ? err.message : "Unknown error" }, 500);
+/**
+ * POST /api/insurance/:slab/topup
+ * 
+ * Build unsigned transaction for insurance fund topup
+ * (Placeholder - requires program instruction encoding)
+ */
+router.post('/:slab/topup', async (req: Request, res: Response) => {
+  try {
+    const { slab } = req.params;
+    const { amount } = req.body;
+
+    if (!slab || !amount) {
+      res.status(400).json({ error: 'Missing slab or amount' });
+      return;
     }
-  });
 
-  return app;
-}
+    // Validate amount is a positive number
+    const amountNum = Number(amount);
+    if (isNaN(amountNum) || amountNum <= 0) {
+      res.status(400).json({ error: 'Invalid amount (must be positive number)' });
+      return;
+    }
+
+    // TODO: Implement transaction building
+    // This requires:
+    // 1. Access to percolator program's encodeTopUpInsurance function
+    // 2. Building the transaction with proper accounts
+    // 3. Returning unsigned transaction for client to sign
+
+    res.status(501).json({
+      error: 'Not implemented',
+      message: 'Transaction building requires program instruction encoder',
+      slab,
+      amount,
+    });
+
+  } catch (error) {
+    console.error('[Insurance API] Topup error:', error);
+    res.status(500).json({
+      error: 'Internal server error',
+      message: error instanceof Error ? error.message : 'Unknown error',
+    });
+  }
+});
+
+export default router;

@@ -18,7 +18,12 @@ import {
   type MarketConfig,
 } from "@percolator/core";
 import { getConnection } from "../utils/solana.js";
-import { upsertMarketStats, insertOraclePrice, get24hVolume } from "../db/queries.js";
+import { 
+  upsertMarketStats, 
+  insertOraclePrice, 
+  get24hVolume,
+  insertFundingHistory,
+} from "../db/queries.js";
 import type { CrankService } from "./crank.js";
 import type { OracleService } from "./oracle.js";
 
@@ -33,6 +38,7 @@ export class StatsCollector {
   private _running = false;
   private _collecting = false;
   private lastOracleLogTime = new Map<string, number>();
+  private lastFundingLogSlot = new Map<string, number>();
 
   constructor(
     private readonly crankService: CrankService,
@@ -133,7 +139,7 @@ export class StatsCollector {
               console.warn(`[StatsCollector] 24h volume calculation failed for ${slabAddress}:`, volErr instanceof Error ? volErr.message : volErr);
             }
 
-            // Upsert market stats
+            // Upsert market stats with all funding rate fields
             await upsertMarketStats({
               slab_address: slabAddress,
               last_price: priceUsd,
@@ -144,6 +150,10 @@ export class StatsCollector {
               insurance_fund: Number(engine.insuranceFund.balance),
               total_accounts: engine.numUsedAccounts,
               funding_rate: Number(engine.fundingRateBpsPerSlotLast),
+              funding_rate_bps_per_slot: Number(engine.fundingRateBpsPerSlotLast),
+              funding_index_qpb_e6: engine.fundingIndexQpbE6.toString(),
+              net_lp_position: engine.netLpPos.toString(),
+              last_funding_slot: Number(engine.lastFundingSlot),
               volume_24h: volume24h,
               updated_at: new Date().toISOString(),
             });
@@ -163,6 +173,27 @@ export class StatsCollector {
                   // Non-fatal — oracle logging shouldn't break stats collection
                   console.warn(`[StatsCollector] Oracle price log failed for ${slabAddress}:`, oracleErr instanceof Error ? oracleErr.message : oracleErr);
                 }
+              }
+            }
+
+            // Log funding history on every crank (when last_funding_slot advances)
+            const lastLoggedSlot = this.lastFundingLogSlot.get(slabAddress) ?? 0;
+            const currentFundingSlot = Number(engine.lastFundingSlot);
+            if (currentFundingSlot > lastLoggedSlot) {
+              try {
+                await insertFundingHistory({
+                  market_slab: slabAddress,
+                  slot: currentFundingSlot,
+                  timestamp: new Date().toISOString(),
+                  rate_bps_per_slot: Number(engine.fundingRateBpsPerSlotLast),
+                  net_lp_pos: engine.netLpPos.toString(),
+                  price_e6: Number(priceE6),
+                  funding_index_qpb_e6: engine.fundingIndexQpbE6.toString(),
+                });
+                this.lastFundingLogSlot.set(slabAddress, currentFundingSlot);
+              } catch (fundingErr) {
+                // Non-fatal — funding history logging shouldn't break stats collection
+                console.warn(`[StatsCollector] Funding history log failed for ${slabAddress}:`, fundingErr instanceof Error ? fundingErr.message : fundingErr);
               }
             }
 
