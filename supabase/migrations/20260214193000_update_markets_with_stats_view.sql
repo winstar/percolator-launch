@@ -1,7 +1,9 @@
 -- Migration 008: Update markets_with_stats view to include hidden features columns
 -- This fixes "Cannot read properties of undefined (reading 'totalOi')" errors
 
-CREATE OR REPLACE VIEW markets_with_stats AS
+DROP VIEW IF EXISTS markets_with_stats;
+
+CREATE VIEW markets_with_stats AS
 SELECT
   m.*,
   s.last_price,
