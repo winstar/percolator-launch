@@ -265,64 +265,97 @@ export type Database = {
       }
       market_stats: {
         Row: {
+          c_tot: number | null
           funding_rate: number | null
           index_price: number | null
           insurance_balance: number | null
           insurance_fee_revenue: number | null
           insurance_fund: number | null
+          last_crank_slot: number | null
           last_price: number | null
+          lifetime_force_closes: number | null
+          lifetime_liquidations: number | null
+          liquidation_buffer_bps: number | null
+          liquidation_fee_bps: number | null
+          liquidation_fee_cap: string | null
           lp_max_abs: number | null
           lp_sum_abs: number | null
+          maintenance_fee_per_slot: string | null
           mark_price: number | null
+          max_crank_staleness_slots: number | null
           net_lp_pos: number | null
           open_interest_long: number | null
           open_interest_short: number | null
+          pnl_pos_tot: number | null
           slab_address: string
           total_accounts: number | null
           total_open_interest: number | null
           updated_at: string | null
+          vault_balance: number | null
           volume_24h: number | null
           volume_total: number | null
           warmup_period_slots: number | null
         }
         Insert: {
+          c_tot?: number | null
           funding_rate?: number | null
           index_price?: number | null
           insurance_balance?: number | null
           insurance_fee_revenue?: number | null
           insurance_fund?: number | null
+          last_crank_slot?: number | null
           last_price?: number | null
+          lifetime_force_closes?: number | null
+          lifetime_liquidations?: number | null
+          liquidation_buffer_bps?: number | null
+          liquidation_fee_bps?: number | null
+          liquidation_fee_cap?: string | null
           lp_max_abs?: number | null
           lp_sum_abs?: number | null
+          maintenance_fee_per_slot?: string | null
           mark_price?: number | null
+          max_crank_staleness_slots?: number | null
           net_lp_pos?: number | null
           open_interest_long?: number | null
           open_interest_short?: number | null
+          pnl_pos_tot?: number | null
           slab_address: string
           total_accounts?: number | null
           total_open_interest?: number | null
           updated_at?: string | null
+          vault_balance?: number | null
           volume_24h?: number | null
           volume_total?: number | null
           warmup_period_slots?: number | null
         }
         Update: {
+          c_tot?: number | null
           funding_rate?: number | null
           index_price?: number | null
           insurance_balance?: number | null
           insurance_fee_revenue?: number | null
           insurance_fund?: number | null
+          last_crank_slot?: number | null
           last_price?: number | null
+          lifetime_force_closes?: number | null
+          lifetime_liquidations?: number | null
+          liquidation_buffer_bps?: number | null
+          liquidation_fee_bps?: number | null
+          liquidation_fee_cap?: string | null
           lp_max_abs?: number | null
           lp_sum_abs?: number | null
+          maintenance_fee_per_slot?: string | null
           mark_price?: number | null
+          max_crank_staleness_slots?: number | null
           net_lp_pos?: number | null
           open_interest_long?: number | null
           open_interest_short?: number | null
+          pnl_pos_tot?: number | null
           slab_address?: string
           total_accounts?: number | null
           total_open_interest?: number | null
           updated_at?: string | null
+          vault_balance?: number | null
           volume_24h?: number | null
           volume_total?: number | null
           warmup_period_slots?: number | null
@@ -582,6 +615,7 @@ export type Database = {
       }
       markets_with_stats: {
         Row: {
+          c_tot: number | null
           created_at: string | null
           decimals: number | null
           deployer: string | null
@@ -592,12 +626,20 @@ export type Database = {
           insurance_balance: number | null
           insurance_fee_revenue: number | null
           insurance_fund: number | null
+          last_crank_slot: number | null
           last_price: number | null
+          lifetime_force_closes: number | null
+          lifetime_liquidations: number | null
+          liquidation_buffer_bps: number | null
+          liquidation_fee_bps: number | null
+          liquidation_fee_cap: string | null
           lp_collateral: number | null
           lp_max_abs: number | null
           lp_sum_abs: number | null
+          maintenance_fee_per_slot: string | null
           mark_price: number | null
           matcher_context: string | null
+          max_crank_staleness_slots: number | null
           max_leverage: number | null
           mint_address: string | null
           name: string | null
@@ -605,6 +647,7 @@ export type Database = {
           open_interest_long: number | null
           open_interest_short: number | null
           oracle_authority: string | null
+          pnl_pos_tot: number | null
           slab_address: string | null
           stats_updated_at: string | null
           status: string | null
@@ -613,6 +656,7 @@ export type Database = {
           total_open_interest: number | null
           trading_fee_bps: number | null
           updated_at: string | null
+          vault_balance: number | null
           volume_24h: number | null
           volume_total: number | null
           warmup_period_slots: number | null

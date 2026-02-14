@@ -29,8 +29,6 @@ export interface MarketStatsRow {
   insurance_fund: number | null;
   total_accounts: number | null;
   funding_rate: number | null;
-  // funding_rate_bps_per_slot, funding_index_qpb_e6, net_lp_position, last_funding_slot
-  // NOT in DB yet (migration 006 not deployed)
   // Hidden features (migration 007)
   total_open_interest: number | null;
   net_lp_pos: string | null;
@@ -39,6 +37,18 @@ export interface MarketStatsRow {
   insurance_balance: number | null;
   insurance_fee_revenue: number | null;
   warmup_period_slots: number | null;
+  // Complete RiskEngine fields (migration 010)
+  vault_balance: number | null;
+  lifetime_liquidations: number | null;
+  lifetime_force_closes: number | null;
+  c_tot: number | null;
+  pnl_pos_tot: number | null;
+  last_crank_slot: number | null;
+  max_crank_staleness_slots: number | null;
+  maintenance_fee_per_slot: string | null;
+  liquidation_fee_bps: number | null;
+  liquidation_fee_cap: string | null;
+  liquidation_buffer_bps: number | null;
   updated_at: string | null;
 }
 

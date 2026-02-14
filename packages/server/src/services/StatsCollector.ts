@@ -13,9 +13,11 @@ import { PublicKey } from "@solana/web3.js";
 import {
   parseEngine,
   parseConfig,
+  parseParams,
   parseAllAccounts,
   type EngineState,
   type MarketConfig,
+  type RiskParams,
 } from "@percolator/core";
 import { getConnection } from "../utils/solana.js";
 import { 
@@ -99,12 +101,14 @@ export class StatsCollector {
 
             const data = new Uint8Array(accountInfo.data);
 
-            // Parse engine state
+            // Parse engine state and risk params
             let engine: EngineState;
             let marketConfig: MarketConfig;
+            let params: RiskParams;
             try {
               engine = parseEngine(data);
               marketConfig = parseConfig(data);
+              params = parseParams(data);
             } catch (parseErr) {
               // Slab too small or invalid — skip
               return;
@@ -143,7 +147,7 @@ export class StatsCollector {
               console.warn(`[StatsCollector] 24h volume calculation failed for ${slabAddress}:`, volErr instanceof Error ? volErr.message : volErr);
             }
 
-            // Upsert market stats with all funding rate fields + hidden features
+            // Upsert market stats with ALL RiskEngine fields (migration 010)
             await upsertMarketStats({
               slab_address: slabAddress,
               last_price: priceUsd,
@@ -154,8 +158,6 @@ export class StatsCollector {
               insurance_fund: Number(engine.insuranceFund.balance),
               total_accounts: engine.numUsedAccounts,
               funding_rate: Number(engine.fundingRateBpsPerSlotLast),
-              // NOTE: funding_rate_bps_per_slot, funding_index_qpb_e6, net_lp_position, last_funding_slot
-              // are NOT in the database yet (migration 006 not deployed). Do NOT include them in upsert.
               volume_24h: volume24h,
               // Hidden features (migration 007)
               total_open_interest: Number(engine.totalOpenInterest),
@@ -164,7 +166,20 @@ export class StatsCollector {
               lp_max_abs: Number(engine.lpMaxAbs),
               insurance_balance: Number(engine.insuranceFund.balance),
               insurance_fee_revenue: Number(engine.insuranceFund.feeRevenue),
-              // warmup_period_slots: TODO - need to parse RiskParams from slab data
+              warmup_period_slots: Number(params.warmupPeriodSlots),
+              // Complete RiskEngine state fields (migration 010)
+              vault_balance: Number(engine.vault),
+              lifetime_liquidations: Number(engine.lifetimeLiquidations),
+              lifetime_force_closes: Number(engine.lifetimeForceCloses),
+              c_tot: Number(engine.cTot),
+              pnl_pos_tot: Number(engine.pnlPosTot),
+              last_crank_slot: Number(engine.lastCrankSlot),
+              max_crank_staleness_slots: Number(engine.maxCrankStalenessSlots),
+              // RiskParams fields (migration 010)
+              maintenance_fee_per_slot: params.maintenanceFeePerSlot.toString(),
+              liquidation_fee_bps: Number(params.liquidationFeeBps),
+              liquidation_fee_cap: params.liquidationFeeCap.toString(),
+              liquidation_buffer_bps: Number(params.liquidationBufferBps),
               updated_at: new Date().toISOString(),
             });
 
