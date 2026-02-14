@@ -85,30 +85,30 @@ export const InsuranceDashboard: FC<{ slabAddress: string }> = ({
 
   // Calculate health status
   const healthStatus = useMemo(() => {
-    if (!insuranceData) return { color: "text-[var(--text-muted)]", icon: "⚪", label: "Unknown" };
+    if (!insuranceData) return { color: "text-[var(--text-muted)]", dotColor: "bg-[var(--text-muted)]", label: "Unknown" };
 
     const ratio = insuranceData.coverageRatio;
 
     if (ratio >= 5) {
       return {
         color: "text-[var(--long)]",
-        icon: "🟢",
+        dotColor: "bg-[var(--long)]",
         label: "Healthy",
         borderColor: "border-[var(--long)]",
         bgColor: "bg-[var(--long)]/5",
       };
     } else if (ratio >= 2) {
       return {
-        color: "text-[var(--warning)]",
-        icon: "🟡",
+        color: "text-amber-400",
+        dotColor: "bg-amber-400",
         label: "Moderate",
-        borderColor: "border-[var(--warning)]",
-        bgColor: "bg-[var(--warning)]/5",
+        borderColor: "border-amber-400",
+        bgColor: "bg-amber-400/5",
       };
     } else {
       return {
         color: "text-[var(--short)]",
-        icon: "🔴",
+        dotColor: "bg-[var(--short)]",
         label: "Low",
         borderColor: "border-[var(--short)]",
         bgColor: "bg-[var(--short)]/5",
@@ -151,8 +151,7 @@ export const InsuranceDashboard: FC<{ slabAddress: string }> = ({
         {/* Header */}
         <div className="mb-2 flex items-center justify-between">
           <div className="flex items-center gap-1">
-            <span className="text-lg">🛡️</span>
-            <span className="text-[10px] font-medium uppercase tracking-[0.15em] text-[var(--text-dim)]">
+            <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-[var(--text-dim)]">
               Insurance Fund
             </span>
             <InfoIcon tooltip="Safety net that protects LPs from bankruptcy during extreme market events." />
@@ -204,7 +203,7 @@ export const InsuranceDashboard: FC<{ slabAddress: string }> = ({
         >
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <span className="text-lg">{healthStatus.icon}</span>
+              <span className={`inline-block w-2 h-2 rounded-full ${healthStatus.dotColor}`} />
               <div>
                 <div className="text-[11px] font-medium text-[var(--text)]">
                   Health: <span className={healthStatus.color}>{healthStatus.label}</span>
@@ -235,7 +234,7 @@ export const InsuranceDashboard: FC<{ slabAddress: string }> = ({
                   return (
                     <div
                       key={idx}
-                      className="flex-1 rounded-t-sm bg-[var(--long)]/30 transition-all hover:bg-[var(--long)]/50"
+                      className="flex-1 rounded-none bg-[var(--long)]/30 transition-all hover:bg-[var(--long)]/50"
                       style={{ height: `${height}%` }}
                       title={`$${point.balance.toLocaleString()}`}
                     />

@@ -177,8 +177,7 @@ export const OpenInterestCard: FC<{ slabAddress: string }> = ({
       {/* Header */}
       <div className="mb-2 flex items-center justify-between">
         <div className="flex items-center gap-1">
-          <span className="text-lg">📊</span>
-          <span className="text-[10px] font-medium uppercase tracking-[0.15em] text-[var(--text-dim)]">
+          <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-[var(--text-dim)]">
             Open Interest
           </span>
           <InfoIcon tooltip="Total notional value of all open positions in the market." />
@@ -315,11 +314,11 @@ export const OpenInterestCard: FC<{ slabAddress: string }> = ({
                   >
                     {/* Stacked bars */}
                     <div
-                      className="absolute bottom-0 w-full rounded-t-sm bg-[var(--long)]/40 transition-all hover:bg-[var(--long)]/60"
+                      className="absolute bottom-0 w-full rounded-none bg-[var(--long)]/40 transition-all hover:bg-[var(--long)]/60"
                       style={{ height: `${longHeight}%` }}
                     />
                     <div
-                      className="absolute w-full rounded-t-sm bg-[var(--short)]/40 transition-all hover:bg-[var(--short)]/60"
+                      className="absolute w-full rounded-none bg-[var(--short)]/40 transition-all hover:bg-[var(--short)]/60"
                       style={{
                         bottom: `${longHeight}%`,
                         height: `${shortHeight}%`,
