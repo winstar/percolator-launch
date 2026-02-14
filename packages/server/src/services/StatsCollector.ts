@@ -24,6 +24,7 @@ import {
   get24hVolume,
   insertFundingHistory,
 } from "../db/queries.js";
+import { getSupabase } from "../db/client.js";
 import type { CrankService } from "./crank.js";
 import type { OracleService } from "./oracle.js";
 
@@ -39,6 +40,9 @@ export class StatsCollector {
   private _collecting = false;
   private lastOracleLogTime = new Map<string, number>();
   private lastFundingLogSlot = new Map<string, number>();
+  private lastOiHistoryTime = new Map<string, number>();
+  private lastInsHistoryTime = new Map<string, number>();
+  private lastFundingHistoryTime = new Map<string, number>();
 
   constructor(
     private readonly crankService: CrankService,
@@ -182,8 +186,61 @@ export class StatsCollector {
               }
             }
 
-            // TODO: Log funding history when funding_history table is created (migration 006)
-            // Currently disabled — table doesn't exist yet
+            // Log OI history (rate-limited per market)
+            const OI_HISTORY_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+            const lastOiLog = this.lastOiHistoryTime.get(slabAddress) ?? 0;
+            if (Date.now() - lastOiLog >= OI_HISTORY_INTERVAL_MS) {
+              try {
+                await getSupabase().from('oi_history').insert({
+                  market_slab: slabAddress,
+                  slot: Number(engine.lastCrankSlot),
+                  total_oi: Number(engine.totalOpenInterest),
+                  net_lp_pos: Number(engine.netLpPos),
+                  lp_sum_abs: Number(engine.lpSumAbs),
+                  lp_max_abs: Number(engine.lpMaxAbs),
+                });
+                this.lastOiHistoryTime.set(slabAddress, Date.now());
+              } catch (e) {
+                // Non-fatal
+                console.warn(`[StatsCollector] OI history log failed for ${slabAddress}:`, e instanceof Error ? e.message : e);
+              }
+            }
+
+            // Log insurance history (rate-limited per market)
+            const INS_HISTORY_INTERVAL_MS = 5 * 60 * 1000;
+            const lastInsLog = this.lastInsHistoryTime.get(slabAddress) ?? 0;
+            if (Date.now() - lastInsLog >= INS_HISTORY_INTERVAL_MS) {
+              try {
+                await getSupabase().from('insurance_history').insert({
+                  market_slab: slabAddress,
+                  slot: Number(engine.lastCrankSlot),
+                  balance: Number(engine.insuranceFund.balance),
+                  fee_revenue: Number(engine.insuranceFund.feeRevenue),
+                });
+                this.lastInsHistoryTime.set(slabAddress, Date.now());
+              } catch (e) {
+                console.warn(`[StatsCollector] Insurance history log failed for ${slabAddress}:`, e instanceof Error ? e.message : e);
+              }
+            }
+
+            // Log funding history (rate-limited per market)
+            const FUNDING_HISTORY_INTERVAL_MS = 5 * 60 * 1000;
+            const lastFundLog = this.lastFundingHistoryTime.get(slabAddress) ?? 0;
+            if (Date.now() - lastFundLog >= FUNDING_HISTORY_INTERVAL_MS) {
+              try {
+                await getSupabase().from('funding_history').insert({
+                  market_slab: slabAddress,
+                  slot: Number(engine.lastCrankSlot),
+                  rate_bps_per_slot: Number(engine.fundingRateBpsPerSlotLast),
+                  net_lp_pos: Number(engine.netLpPos),
+                  price_e6: Number(priceE6),
+                  funding_index_qpb_e6: engine.fundingIndexQpbE6.toString(),
+                });
+                this.lastFundingHistoryTime.set(slabAddress, Date.now());
+              } catch (e) {
+                console.warn(`[StatsCollector] Funding history log failed for ${slabAddress}:`, e instanceof Error ? e.message : e);
+              }
+            }
 
             updated++;
           } catch (err) {

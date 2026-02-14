@@ -12,6 +12,31 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "14.1"
   }
+  graphql_public: {
+    Tables: {
+      [_ in never]: never
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      graphql: {
+        Args: {
+          extensions?: Json
+          operationName?: string
+          query?: string
+          variables?: Json
+        }
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
   public: {
     Tables: {
       bug_reports: {
@@ -76,6 +101,61 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: []
+      }
+      funding_history: {
+        Row: {
+          funding_index_qpb_e6: string
+          id: number
+          market_slab: string
+          net_lp_pos: number
+          price_e6: number
+          rate_bps_per_slot: number
+          slot: number
+          timestamp: string
+        }
+        Insert: {
+          funding_index_qpb_e6?: string
+          id?: number
+          market_slab: string
+          net_lp_pos?: number
+          price_e6?: number
+          rate_bps_per_slot?: number
+          slot: number
+          timestamp?: string
+        }
+        Update: {
+          funding_index_qpb_e6?: string
+          id?: number
+          market_slab?: string
+          net_lp_pos?: number
+          price_e6?: number
+          rate_bps_per_slot?: number
+          slot?: number
+          timestamp?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "funding_history_market_slab_fkey"
+            columns: ["market_slab"]
+            isOneToOne: false
+            referencedRelation: "insurance_fund_health"
+            referencedColumns: ["slab_address"]
+          },
+          {
+            foreignKeyName: "funding_history_market_slab_fkey"
+            columns: ["market_slab"]
+            isOneToOne: false
+            referencedRelation: "market_stats"
+            referencedColumns: ["slab_address"]
+          },
+          {
+            foreignKeyName: "funding_history_market_slab_fkey"
+            columns: ["market_slab"]
+            isOneToOne: false
+            referencedRelation: "oi_imbalance"
+            referencedColumns: ["slab_address"]
+          },
+        ]
       }
       insurance_history: {
         Row: {
@@ -509,14 +589,19 @@ export type Database = {
           id: string | null
           index_price: number | null
           initial_price_e6: number | null
+          insurance_balance: number | null
+          insurance_fee_revenue: number | null
           insurance_fund: number | null
           last_price: number | null
           lp_collateral: number | null
+          lp_max_abs: number | null
+          lp_sum_abs: number | null
           mark_price: number | null
           matcher_context: string | null
           max_leverage: number | null
           mint_address: string | null
           name: string | null
+          net_lp_pos: number | null
           open_interest_long: number | null
           open_interest_short: number | null
           oracle_authority: string | null
@@ -525,10 +610,12 @@ export type Database = {
           status: string | null
           symbol: string | null
           total_accounts: number | null
+          total_open_interest: number | null
           trading_fee_bps: number | null
           updated_at: string | null
           volume_24h: number | null
           volume_total: number | null
+          warmup_period_slots: number | null
         }
         Relationships: []
       }
@@ -717,6 +804,9 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
   public: {
     Enums: {},
   },
