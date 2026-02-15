@@ -130,8 +130,7 @@ async function sendAndConfirm(
   tx.partialSign(...signers);
   try {
     const sig = await connection.sendRawTransaction(tx.serialize(), {
-      skipPreflight: false,
-      preflightCommitment: "confirmed",
+      skipPreflight: true,
     });
     await connection.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight }, "confirmed");
     return sig;
