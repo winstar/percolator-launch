@@ -183,9 +183,50 @@ const QuickLaunchPanel: FC<{
     create(params);
   };
 
+  const handleQuickRetry = () => {
+    if (!quickLaunch.config || !publicKey || !state.slabAddress) return;
+    if (effectiveTradingFee >= effectiveMargin) return;
+    const c = quickLaunch.config;
+    const pool = quickLaunch.poolInfo;
+    const tier = SLAB_TIERS[quickSlabTier];
+
+    let oracleFeed: string;
+    let priceE6: number;
+
+    if (pool) {
+      const poolPk = new PublicKey(pool.poolAddress);
+      oracleFeed = Array.from(poolPk.toBytes()).map((b) => b.toString(16).padStart(2, "0")).join("");
+      priceE6 = Math.round(pool.priceUsd * 1_000_000);
+    } else {
+      oracleFeed = "0".repeat(64);
+      const parsed = parseFloat(manualPrice);
+      priceE6 = isNaN(parsed) ? 1_000_000 : Math.round(parsed * 1_000_000);
+    }
+
+    const params: CreateMarketParams = {
+      mint: new PublicKey(c.mint),
+      initialPriceE6: BigInt(priceE6 > 0 ? priceE6 : 1_000_000),
+      lpCollateral: parseHumanAmount(effectiveLpCollateral, c.decimals),
+      insuranceAmount: parseHumanAmount(insuranceAmount, c.decimals),
+      oracleFeed,
+      invert: false,
+      tradingFeeBps: effectiveTradingFee,
+      initialMarginBps: effectiveMargin,
+      maxAccounts: tier.maxAccounts,
+      slabDataSize: tier.dataSize,
+      symbol: c.symbol ?? "UNKNOWN",
+      name: c.name ?? "Unknown Token",
+      decimals: c.decimals ?? 6,
+      ...(enableVamm && {
+        vammParams: { spreadBps: vammSpreadBps, impactKBps: vammImpactKBps, maxTotalBps: vammMaxTotalBps, liquidityE6: vammLiquidityE6 },
+      }),
+    };
+    create(params, state.step);
+  };
+
   /* ── Creation progress ── */
   if (state.loading || state.step > 0 || state.error) {
-    return <CreationProgress state={state} onReset={reset} />;
+    return <CreationProgress state={state} onReset={reset} onRetry={handleQuickRetry} />;
   }
 
   return (
@@ -386,9 +427,16 @@ const QuickLaunchPanel: FC<{
             <p className="text-[10px] text-[var(--text-dim)]">Checking wallet balance...</p>
           )}
 
+          {/* Fee exceeds margin warning */}
+          {effectiveTradingFee >= effectiveMargin && (
+            <div className="border border-[var(--short)]/20 bg-[var(--short)]/[0.04] p-3">
+              <p className="text-[11px] text-[var(--short)]">Trading fee ({effectiveTradingFee} bps) must be less than initial margin ({effectiveMargin} bps). Lower the fee or increase the margin.</p>
+            </div>
+          )}
+
           {/* Launch button */}
-          <button onClick={handleQuickCreate} disabled={!publicKey || !quickLaunch.config || !hasTokens} className={btnPrimary}>
-            {!publicKey ? "Connect Wallet to Launch" : !hasTokens ? "No Tokens — Mint First" : "Launch Market"}
+          <button onClick={handleQuickCreate} disabled={!publicKey || !quickLaunch.config || !hasTokens || effectiveTradingFee >= effectiveMargin} className={btnPrimary}>
+            {!publicKey ? "Connect Wallet to Launch" : !hasTokens ? "No Tokens — Mint First" : effectiveTradingFee >= effectiveMargin ? "Fee Must Be Less Than Margin" : "Launch Market"}
           </button>
         </>
       )}
