@@ -1,14 +1,22 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Transaction, TransactionInstruction, PublicKey, Keypair, Connection } from "@solana/web3.js";
+import { Transaction, TransactionInstruction, PublicKey, Keypair, Connection, SystemProgram, LAMPORTS_PER_SOL } from "@solana/web3.js";
+import { useWallet, useConnection } from "@solana/wallet-adapter-react";
+import dynamic from "next/dynamic";
 import { ScenarioSelector } from "@/components/simulation/ScenarioSelector";
 import { SimulationControls } from "@/components/simulation/SimulationControls";
 import { LiveEventFeed } from "@/components/simulation/LiveEventFeed";
 import { SimulationMetrics } from "@/components/simulation/SimulationMetrics";
 import { BotLeaderboard } from "@/components/simulation/BotLeaderboard";
 
-const RPC_URL = process.env.NEXT_PUBLIC_RPC_URL || "https://api.devnet.solana.com";
+const WalletMultiButton = dynamic(
+  () => import("@solana/wallet-adapter-react-ui").then((m) => m.WalletMultiButton),
+  { ssr: false }
+);
+
+const FUND_AMOUNT_SOL = 0.5;
+const FUND_AMOUNT_LAMPORTS = FUND_AMOUNT_SOL * LAMPORTS_PER_SOL;
 
 interface SimulationState {
   running: boolean;
@@ -35,13 +43,11 @@ interface InstructionGroupData {
   signers: string[];
 }
 
-type LaunchPhase = "idle" | "airdrop" | "creating" | "funding" | "starting" | "running" | "ended";
-
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+type LaunchPhase = "idle" | "funding-wallet" | "creating" | "funding" | "starting" | "running" | "ended";
 
 export default function SimulationPage() {
-  const connectionRef = useRef(new Connection(RPC_URL, "confirmed"));
-  const connection = connectionRef.current;
+  const { publicKey, connected, sendTransaction } = useWallet();
+  const { connection } = useConnection();
 
   const [disposableKeypair, setDisposableKeypair] = useState<Keypair | null>(null);
   const [phase, setPhase] = useState<LaunchPhase>("idle");
@@ -110,19 +116,6 @@ export default function SimulationPage() {
     return () => clearInterval(interval);
   }, [phase]);
 
-  const requestAirdropWithRetry = async (pubkey: PublicKey, lamports: number, retries = 3): Promise<void> => {
-    for (let i = 0; i < retries; i++) {
-      try {
-        const sig = await connection.requestAirdrop(pubkey, lamports);
-        await connection.confirmTransaction(sig, "confirmed");
-        return;
-      } catch (err) {
-        if (i === retries - 1) throw err;
-        await sleep(2000);
-      }
-    }
-  };
-
   const sendInstructionGroups = async (groups: InstructionGroupData[], signer: Keypair): Promise<boolean> => {
     for (let i = 0; i < groups.length; i++) {
       const group = groups[i];
@@ -174,6 +167,7 @@ export default function SimulationPage() {
   };
 
   const handleLaunch = async () => {
+    if (!publicKey || !sendTransaction) return;
     setError(null);
 
     try {
@@ -181,10 +175,19 @@ export default function SimulationPage() {
       const kp = Keypair.generate();
       setDisposableKeypair(kp);
 
-      // Airdrop
-      setPhase("airdrop");
-      setTxProgress({ current: 0, total: 0, label: "Airdropping 2 SOL..." });
-      await requestAirdropWithRetry(kp.publicKey, 2e9);
+      // Fund disposable wallet from user's wallet (ONE approval)
+      setPhase("funding-wallet");
+      setTxProgress({ current: 0, total: 0, label: `Funding simulation wallet (${FUND_AMOUNT_SOL} SOL)...` });
+
+      const fundTx = new Transaction().add(
+        SystemProgram.transfer({
+          fromPubkey: publicKey,
+          toPubkey: kp.publicKey,
+          lamports: FUND_AMOUNT_LAMPORTS,
+        })
+      );
+      const fundSig = await sendTransaction(fundTx, connection);
+      await connection.confirmTransaction(fundSig, "confirmed");
 
       // Create market
       setPhase("creating");
@@ -346,10 +349,10 @@ export default function SimulationPage() {
     return `${seconds}s`;
   };
 
-  const isLaunching = phase === "airdrop" || phase === "creating" || phase === "funding" || phase === "starting";
+  const isLaunching = phase === "funding-wallet" || phase === "creating" || phase === "funding" || phase === "starting";
 
   const phaseLabel: Record<string, string> = {
-    airdrop: "Airdropping SOL...",
+    "funding-wallet": `Sending ${FUND_AMOUNT_SOL} SOL...`,
     creating: "Creating market...",
     funding: "Funding market...",
     starting: "Starting simulation...",
@@ -369,7 +372,7 @@ export default function SimulationPage() {
               Self-Service Demo
             </h1>
             <p className="mt-0.5 text-[10px] text-[var(--text-secondary)]">
-              One-click simulation — no wallet needed
+              One-click simulation — connect wallet, approve once, everything else is automatic
             </p>
           </div>
         </div>
@@ -411,14 +414,34 @@ export default function SimulationPage() {
             </div>
           )}
 
-          {/* Launch Button */}
+          {/* Wallet + Launch */}
           {phase === "idle" && (
-            <button
-              onClick={handleLaunch}
-              className="w-full border border-[var(--accent)]/50 bg-[var(--accent)]/[0.08] py-4 text-[13px] font-bold uppercase tracking-[0.2em] text-[var(--accent)] transition-all hover:border-[var(--accent)] hover:bg-[var(--accent)]/[0.15]"
-            >
-              Launch Simulation
-            </button>
+            <div className="space-y-3">
+              {!connected ? (
+                <div className="flex items-center justify-between border border-[var(--border)]/30 bg-[var(--bg)]/80 p-4">
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-[var(--text-dim)]">Connect Wallet</p>
+                    <p className="text-[9px] text-[var(--text-dim)] mt-0.5">You will approve one transfer of {FUND_AMOUNT_SOL} SOL. Everything else is automatic.</p>
+                  </div>
+                  <WalletMultiButton />
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 border border-[var(--accent)]/20 bg-[var(--accent)]/[0.03] p-3">
+                  <div className="h-2 w-2" style={{ backgroundColor: "var(--long)" }} />
+                  <span className="text-[11px] font-mono text-[var(--text)]">
+                    {publicKey?.toBase58().slice(0, 8)}...{publicKey?.toBase58().slice(-8)}
+                  </span>
+                  <span className="text-[9px] text-[var(--text-dim)] ml-auto">Cost: ~{FUND_AMOUNT_SOL} SOL (devnet)</span>
+                </div>
+              )}
+              <button
+                onClick={handleLaunch}
+                disabled={!connected}
+                className="w-full border border-[var(--accent)]/50 bg-[var(--accent)]/[0.08] py-4 text-[13px] font-bold uppercase tracking-[0.2em] text-[var(--accent)] transition-all hover:border-[var(--accent)] hover:bg-[var(--accent)]/[0.15] disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                Launch Simulation
+              </button>
+            </div>
           )}
 
           {/* Progress */}
@@ -446,8 +469,8 @@ export default function SimulationPage() {
               )}
               <div className="flex items-center gap-4 text-[9px] text-[var(--text-dim)]">
                 <span className="flex items-center gap-1.5">
-                  <div className="h-1.5 w-1.5" style={{ backgroundColor: phase === "airdrop" ? "var(--accent)" : phaseOrder("airdrop") ? "var(--long)" : "var(--text-dim)" }} />
-                  Airdrop
+                  <div className="h-1.5 w-1.5" style={{ backgroundColor: phase === "funding-wallet" ? "var(--accent)" : phaseOrder("funding-wallet") ? "var(--long)" : "var(--text-dim)" }} />
+                  Fund
                 </span>
                 <span className="flex items-center gap-1.5">
                   <div className="h-1.5 w-1.5" style={{ backgroundColor: phase === "creating" ? "var(--accent)" : phaseOrder("creating") ? "var(--long)" : "var(--text-dim)" }} />
@@ -455,7 +478,7 @@ export default function SimulationPage() {
                 </span>
                 <span className="flex items-center gap-1.5">
                   <div className="h-1.5 w-1.5" style={{ backgroundColor: phase === "funding" ? "var(--accent)" : phaseOrder("funding") ? "var(--long)" : "var(--text-dim)" }} />
-                  Fund
+                  Tokens
                 </span>
                 <span className="flex items-center gap-1.5">
                   <div className="h-1.5 w-1.5" style={{ backgroundColor: phase === "starting" ? "var(--accent)" : phaseOrder("starting") ? "var(--long)" : "var(--text-dim)" }} />
@@ -463,7 +486,7 @@ export default function SimulationPage() {
                 </span>
               </div>
               <p className="text-[9px] text-[var(--text-dim)]">
-                Everything is automatic. A disposable wallet handles all transactions.
+                One approval done. Everything else is automatic.
               </p>
             </div>
           )}
@@ -629,7 +652,7 @@ export default function SimulationPage() {
   );
 
   function phaseOrder(check: LaunchPhase): boolean {
-    const order: LaunchPhase[] = ["airdrop", "creating", "funding", "starting"];
+    const order: LaunchPhase[] = ["funding-wallet", "creating", "funding", "starting"];
     const currentIdx = order.indexOf(phase);
     const checkIdx = order.indexOf(check);
     return checkIdx < currentIdx;
