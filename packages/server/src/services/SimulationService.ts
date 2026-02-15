@@ -738,7 +738,11 @@ export class SimulationService {
   // --------------------------------------------------------------------------
 
   private async initBots(slab: PublicKey): Promise<void> {
-    if (!this.state || !this.oracleKeypair) return;
+    console.log(`🤖 initBots called | slab=${slab.toBase58()} | state=${!!this.state} | oracle=${!!this.oracleKeypair}`);
+    if (!this.state || !this.oracleKeypair) {
+      console.error("❌ initBots early exit: no state or oracleKeypair");
+      return;
+    }
 
     // Ensure oracle keypair has enough SOL for bot init tx fees
     // Each bot needs ~0.01 SOL for InitUser + DepositCollateral fees
@@ -781,6 +785,7 @@ export class SimulationService {
     const vault = this.cachedConfig.vaultPubkey;
     const mint = this.cachedConfig.collateralMint;
     const payer = this.oracleKeypair;
+    console.log(`🤖 Bot init: vault=${vault.toBase58().slice(0,8)}... mint=${mint.toBase58().slice(0,8)}... payer=${payer.publicKey.toBase58().slice(0,8)}...`);
 
     // Ensure oracle keypair has an ATA with enough tokens for all bot deposits
     // Total needed: 50M + 30M + 5M + 200M + 4x100K fees = 285.4M tokens
