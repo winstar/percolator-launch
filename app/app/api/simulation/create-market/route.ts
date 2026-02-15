@@ -11,6 +11,7 @@ import {
 } from '@solana/web3.js';
 import {
   createAssociatedTokenAccountInstruction,
+  createMintToInstruction,
   getAssociatedTokenAddress,
   createInitializeMint2Instruction,
   getMintLen,
@@ -278,11 +279,22 @@ export async function POST(request: NextRequest) {
       data: Buffer.from(vammData),
     }));
 
+    // Mint tokens for LP fee payment (payer is mint authority)
+    const LP_FEE = 1_000_000; // matches newAccountFee in InitMarket
+    tx3.add(
+      createMintToInstruction(
+        mintKeypair.publicKey,
+        payerAta,
+        payerPk, // mint authority
+        BigInt(LP_FEE),
+      )
+    );
+
     // InitLP
     const initLpData = encodeInitLP({
       matcherProgram: matcherProgramId,
       matcherContext: matcherCtxKeypair.publicKey,
-      feePayment: '0',
+      feePayment: LP_FEE.toString(),
     });
     const initLpKeys = buildAccountMetas(ACCOUNTS_INIT_LP, [
       payerPk, slabKeypair.publicKey, payerAta, vaultAta, WELL_KNOWN.tokenProgram,
