@@ -5,6 +5,7 @@ import {
   Transaction,
   ComputeBudgetProgram,
 } from "@solana/web3.js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import {
   encodePushOraclePrice,
   encodeKeeperCrank,
@@ -231,9 +232,23 @@ export class SimulationService {
   private cachedAccounts: { idx: number; account: Account }[] = [];
   private lpIdx = 0;
 
+  // Supabase persistence
+  private supabase: SupabaseClient | null = null;
+  private sessionId: string | null = null;
+  private supabaseUpdateTimer: ReturnType<typeof setInterval> | null = null;
+  private highPriceE6 = 0;
+  private lowPriceE6 = Number.MAX_SAFE_INTEGER;
+
   constructor() {
     this.connection = new Connection(config.rpcUrl, "confirmed");
     this.programId = new PublicKey(config.programId);
+
+    // Initialize Supabase if configured
+    const sbUrl = config.supabaseUrl;
+    const sbKey = config.supabaseServiceRoleKey || config.supabaseKey;
+    if (sbUrl && sbKey) {
+      this.supabase = createClient(sbUrl, sbKey);
+    }
   }
 
   // --------------------------------------------------------------------------
@@ -245,6 +260,10 @@ export class SimulationService {
     oracleSecret: string;
     startPriceE6?: number;
     intervalMs?: number;
+    tokenSymbol?: string;
+    tokenName?: string;
+    mintAddress?: string;
+    creatorWallet?: string;
   }): Promise<{ ok: boolean; error?: string }> {
     if (this.state?.running) {
       return { ok: false, error: "Simulation already running" };
@@ -288,7 +307,44 @@ export class SimulationService {
     this.scenarioBasePrice = startPrice;
     this.priceHistory = [];
 
+    this.highPriceE6 = Number(startPriceE6);
+    this.lowPriceE6 = Number(startPriceE6);
+
     console.log(`🎮 Simulation starting | slab=${params.slabAddress} | price=$${startPrice.toFixed(2)}`);
+
+    // Persist session to Supabase
+    if (this.supabase) {
+      try {
+        const { data, error } = await this.supabase.from("simulation_sessions").insert({
+          status: "running",
+          slab_address: params.slabAddress,
+          mint_address: params.mintAddress ?? null,
+          token_symbol: params.tokenSymbol ?? null,
+          token_name: params.tokenName ?? null,
+          creator_wallet: params.creatorWallet ?? null,
+          model: "random-walk",
+          start_price_e6: Number(startPriceE6),
+          current_price_e6: Number(startPriceE6),
+          high_price_e6: Number(startPriceE6),
+          low_price_e6: Number(startPriceE6),
+          started_at: new Date().toISOString(),
+        }).select("id").single();
+
+        if (error) {
+          console.error("Supabase insert error:", error.message);
+        } else if (data) {
+          this.sessionId = data.id;
+          console.log(`📊 Supabase session created: ${this.sessionId}`);
+        }
+      } catch (err) {
+        console.error("Supabase insert failed:", err);
+      }
+
+      // Periodic Supabase update every 30s
+      this.supabaseUpdateTimer = setInterval(() => {
+        void this.updateSupabaseProgress();
+      }, 30_000);
+    }
 
     // Initial slab read
     await this.refreshSlabState(slabPk);
@@ -316,13 +372,68 @@ export class SimulationService {
 
     if (this.oracleTimer) clearInterval(this.oracleTimer);
     if (this.statsTimer) clearInterval(this.statsTimer);
+    if (this.supabaseUpdateTimer) clearInterval(this.supabaseUpdateTimer);
     for (const t of this.botTimers) clearTimeout(t);
     this.botTimers = [];
     this.oracleTimer = null;
     this.statsTimer = null;
+    this.supabaseUpdateTimer = null;
 
     const stats = { ...this.state.stats };
+    const endPriceE6 = Number(this.state.currentPriceE6);
     this.state.running = false;
+
+    // Persist final results to Supabase
+    if (this.supabase && this.sessionId) {
+      try {
+        const durationSeconds = Math.floor((Date.now() - stats.startTime) / 1000);
+        const botStats: BotStats[] = this.state.bots.map((b) => {
+          const onChain = b.accountIdx !== null
+            ? this.cachedAccounts.find((a) => a.idx === b.accountIdx)?.account
+            : undefined;
+          return {
+            name: b.name, type: b.type, accountIdx: b.accountIdx,
+            initialized: b.initialized, funded: b.funded, trades: b.trades,
+            positionSize: onChain?.positionSize?.toString() ?? "0",
+            entryPrice: onChain?.entryPrice?.toString() ?? "0",
+            capital: onChain?.capital?.toString() ?? "0",
+            pnl: onChain?.pnl?.toString() ?? "0",
+            warmupStartSlot: onChain?.warmupStartedAtSlot?.toString() ?? "0",
+          };
+        });
+
+        const { error } = await this.supabase.from("simulation_sessions").update({
+          status: "completed",
+          end_price_e6: endPriceE6,
+          high_price_e6: this.highPriceE6,
+          low_price_e6: this.lowPriceE6,
+          current_price_e6: endPriceE6,
+          total_trades: stats.tradesCount,
+          total_liquidations: stats.liquidationsCount,
+          total_volume_e6: Math.round(stats.volume * 1_000_000),
+          force_closes: stats.forceCloseCount,
+          peak_oi_e6: Number(stats.openInterest),
+          final_funding_rate_e6: Number(stats.fundingRate),
+          final_insurance_balance_e6: Number(stats.insuranceBalance),
+          final_insurance_revenue_e6: Number(stats.insuranceFeeRevenue),
+          final_vault_balance_e6: Number(stats.vaultBalance),
+          duration_seconds: durationSeconds,
+          bot_count: this.state.bots.length,
+          bots_data: botStats,
+          updates_count: stats.oraclePushes,
+          ended_at: new Date().toISOString(),
+        }).eq("id", this.sessionId);
+
+        if (error) {
+          console.error("Supabase stop update error:", error.message);
+        } else {
+          console.log(`📊 Supabase session completed: ${this.sessionId}`);
+        }
+      } catch (err) {
+        console.error("Supabase stop update failed:", err);
+      }
+      this.sessionId = null;
+    }
 
     console.log(`🛑 Simulation stopped | trades=${stats.tradesCount} | liquidations=${stats.liquidationsCount} | pushes=${stats.oraclePushes}`);
     return { ok: true, stats };
@@ -380,6 +491,23 @@ export class SimulationService {
   // --------------------------------------------------------------------------
   // Stats
   // --------------------------------------------------------------------------
+
+  private async updateSupabaseProgress(): Promise<void> {
+    if (!this.supabase || !this.sessionId || !this.state) return;
+    try {
+      const { error } = await this.supabase.from("simulation_sessions").update({
+        current_price_e6: Number(this.state.currentPriceE6),
+        high_price_e6: this.highPriceE6,
+        low_price_e6: this.lowPriceE6,
+        updates_count: this.state.stats.oraclePushes,
+        total_trades: this.state.stats.tradesCount,
+        total_liquidations: this.state.stats.liquidationsCount,
+      }).eq("id", this.sessionId);
+      if (error) console.error("Supabase progress update error:", error.message);
+    } catch (err) {
+      console.error("Supabase progress update failed:", err);
+    }
+  }
 
   private freshStats(): SimStats {
     return {
@@ -557,6 +685,11 @@ export class SimulationService {
       this.state.currentPrice = finalPrice;
       this.state.stats.oraclePushes++;
       this.state.stats.cranks++;
+
+      // Track high/low
+      const priceNum = Number(priceE6);
+      if (priceNum > this.highPriceE6) this.highPriceE6 = priceNum;
+      if (priceNum < this.lowPriceE6) this.lowPriceE6 = priceNum;
 
       // Price history
       const point: PricePoint = {

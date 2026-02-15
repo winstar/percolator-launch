@@ -79,15 +79,18 @@ ORDER BY started_at DESC;
 ALTER TABLE simulation_sessions ENABLE ROW LEVEL SECURITY;
 
 -- Allow public read access (simulations are public)
-CREATE POLICY IF NOT EXISTS "Public read simulation_sessions"
-  ON simulation_sessions FOR SELECT
-  USING (true);
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Public read simulation_sessions') THEN
+    CREATE POLICY "Public read simulation_sessions" ON simulation_sessions FOR SELECT USING (true);
+  END IF;
+END $$;
 
 -- Allow insert/update from service role only (Railway backend writes)
-CREATE POLICY IF NOT EXISTS "Service write simulation_sessions"
-  ON simulation_sessions FOR ALL
-  USING (true)
-  WITH CHECK (true);
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Service write simulation_sessions') THEN
+    CREATE POLICY "Service write simulation_sessions" ON simulation_sessions FOR ALL USING (true) WITH CHECK (true);
+  END IF;
+END $$;
 
 COMMENT ON VIEW simulation_gallery IS 'Public view of all completed simulations with computed stats for browsing';
 COMMENT ON COLUMN simulation_sessions.bots_data IS 'JSON array of bot results: [{name, type, pnl, trades, position}]';

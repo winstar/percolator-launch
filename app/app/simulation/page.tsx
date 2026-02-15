@@ -887,7 +887,16 @@ export default function SimulationPage() {
       const oracleSecret = Buffer.from(oracleKp.secretKey).toString("base64");
       const startRes = await railwayFetch("/api/simulation/start", {
         method: "POST",
-        body: JSON.stringify({ slabAddress: slabKp.publicKey.toBase58(), oracleSecret, startPriceE6: Number(INITIAL_PRICE_E6), intervalMs: 5000 / speed }),
+        body: JSON.stringify({
+          slabAddress: slabKp.publicKey.toBase58(),
+          oracleSecret,
+          startPriceE6: Number(INITIAL_PRICE_E6),
+          intervalMs: 5000 / speed,
+          tokenSymbol: tokenPreview?.symbol,
+          tokenName: tokenPreview?.name,
+          mintAddress: mintAddress ?? undefined,
+          creatorWallet: publicKey?.toBase58(),
+        }),
       });
       if (!startRes.ok) {
         const err = await startRes.json();

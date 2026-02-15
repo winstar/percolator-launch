@@ -17,6 +17,7 @@ export const config = {
   crankKeypair: process.env.CRANK_KEYPAIR ?? "",
   supabaseUrl: process.env.SUPABASE_URL ?? "",
   supabaseKey: process.env.SUPABASE_KEY ?? "",
+  supabaseServiceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY ?? "",
   heliusApiKey: process.env.HELIUS_API_KEY ?? "",
   fallbackRpcUrl: process.env.FALLBACK_RPC_URL ?? "https://api.devnet.solana.com",
   port: Number(process.env.PORT ?? 3001),

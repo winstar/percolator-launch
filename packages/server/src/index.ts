@@ -79,6 +79,10 @@ app.post("/api/simulation/start", async (c) => {
     oracleSecret: string;
     startPriceE6?: number;
     intervalMs?: number;
+    tokenSymbol?: string;
+    tokenName?: string;
+    mintAddress?: string;
+    creatorWallet?: string;
   };
   const result = await simulationService.start(body);
   return c.json(result, result.ok ? 200 : 400);
