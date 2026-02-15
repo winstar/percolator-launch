@@ -94,6 +94,155 @@ interface PricePoint {
   price: number;
 }
 
+interface SessionStats {
+  startTime: number;
+  endTime: number;
+  highPrice: number;
+  lowPrice: number;
+  startPrice: number;
+  endPrice: number;
+  dataPoints: number;
+  scenario: string | null;
+}
+
+/* ─── Shareable Image Generator ─── */
+function generateShareImage(
+  stats: SessionStats,
+  priceData: PricePoint[],
+  tokenSymbol: string,
+  tokenName: string,
+): string {
+  const W = 1200, H = 630;
+  const canvas = document.createElement("canvas");
+  canvas.width = W; canvas.height = H;
+  const ctx = canvas.getContext("2d")!;
+
+  // Background
+  ctx.fillStyle = "#0a0a0f";
+  ctx.fillRect(0, 0, W, H);
+
+  // Border
+  ctx.strokeStyle = "#1a1a2e";
+  ctx.lineWidth = 2;
+  ctx.strokeRect(1, 1, W - 2, H - 2);
+
+  // Accent line top
+  ctx.fillStyle = "#00e5ff";
+  ctx.fillRect(0, 0, W, 3);
+
+  // Header
+  ctx.fillStyle = "#00e5ff";
+  ctx.font = "bold 11px monospace";
+  ctx.letterSpacing = "3px";
+  ctx.fillText("// PERCOLATOR SIMULATION", 40, 45);
+  ctx.letterSpacing = "0px";
+
+  ctx.fillStyle = "#e0e0e0";
+  ctx.font = "bold 36px monospace";
+  ctx.fillText(`${tokenSymbol}/USD`, 40, 90);
+
+  ctx.fillStyle = "#888";
+  ctx.font = "14px monospace";
+  ctx.fillText(tokenName, 40, 115);
+
+  // Price chart
+  if (priceData.length > 1) {
+    const chartX = 40, chartY = 140, chartW = W - 80, chartH = 280;
+    const prices = priceData.map(d => d.price);
+    const min = Math.min(...prices);
+    const max = Math.max(...prices);
+    const range = max - min || 1;
+
+    // Grid lines
+    ctx.strokeStyle = "#1a1a2e";
+    ctx.lineWidth = 0.5;
+    for (let i = 0; i <= 4; i++) {
+      const y = chartY + (i / 4) * chartH;
+      ctx.beginPath(); ctx.moveTo(chartX, y); ctx.lineTo(chartX + chartW, y); ctx.stroke();
+      ctx.fillStyle = "#555";
+      ctx.font = "10px monospace";
+      const label = (max - (i / 4) * range).toFixed(4);
+      ctx.fillText(`$${label}`, chartX + chartW + 5, y + 4);
+    }
+
+    // Price line
+    const isUp = prices[prices.length - 1] >= prices[0];
+    ctx.strokeStyle = isUp ? "#00e676" : "#ff1744";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    priceData.forEach((d, i) => {
+      const x = chartX + (i / (priceData.length - 1)) * chartW;
+      const y = chartY + chartH - ((d.price - min) / range) * chartH;
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+
+    // Gradient fill under line
+    const gradient = ctx.createLinearGradient(0, chartY, 0, chartY + chartH);
+    gradient.addColorStop(0, isUp ? "rgba(0,230,118,0.15)" : "rgba(255,23,68,0.15)");
+    gradient.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.fillStyle = gradient;
+    ctx.beginPath();
+    priceData.forEach((d, i) => {
+      const x = chartX + (i / (priceData.length - 1)) * chartW;
+      const y = chartY + chartH - ((d.price - min) / range) * chartH;
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    });
+    ctx.lineTo(chartX + chartW, chartY + chartH);
+    ctx.lineTo(chartX, chartY + chartH);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  // Stats row
+  const statsY = 460;
+  const pctChange = ((stats.endPrice - stats.startPrice) / stats.startPrice * 100);
+  const duration = Math.floor((stats.endTime - stats.startTime) / 1000);
+  const durStr = duration > 60 ? `${Math.floor(duration / 60)}m ${duration % 60}s` : `${duration}s`;
+
+  const statItems = [
+    { label: "CHANGE", value: `${pctChange >= 0 ? "+" : ""}${pctChange.toFixed(2)}%`, color: pctChange >= 0 ? "#00e676" : "#ff1744" },
+    { label: "HIGH", value: `$${stats.highPrice.toFixed(4)}`, color: "#00e676" },
+    { label: "LOW", value: `$${stats.lowPrice.toFixed(4)}`, color: "#ff1744" },
+    { label: "DURATION", value: durStr, color: "#e0e0e0" },
+    { label: "DATA POINTS", value: stats.dataPoints.toString(), color: "#e0e0e0" },
+    { label: "SCENARIO", value: stats.scenario || "none", color: "#00e5ff" },
+  ];
+
+  const colW = (W - 80) / statItems.length;
+  statItems.forEach((s, i) => {
+    const x = 40 + i * colW;
+    ctx.fillStyle = "#555";
+    ctx.font = "bold 9px monospace";
+    ctx.fillText(s.label, x, statsY);
+    ctx.fillStyle = s.color;
+    ctx.font = "bold 18px monospace";
+    ctx.fillText(s.value, x, statsY + 24);
+  });
+
+  // Footer
+  ctx.fillStyle = "#1a1a2e";
+  ctx.fillRect(0, H - 60, W, 60);
+  ctx.fillStyle = "#00e5ff";
+  ctx.font = "bold 11px monospace";
+  ctx.fillText("PERCOLATOR", 40, H - 30);
+  ctx.fillStyle = "#555";
+  ctx.font = "11px monospace";
+  ctx.fillText("Permissionless Perpetual Futures on Solana", 180, H - 30);
+  ctx.fillStyle = "#333";
+  ctx.font = "10px monospace";
+  ctx.fillText("percolator-launch.vercel.app", W - 260, H - 30);
+
+  // Pyth badge
+  ctx.fillStyle = "#6B3FA0";
+  ctx.fillRect(40, H - 100, 120, 22);
+  ctx.fillStyle = "#fff";
+  ctx.font = "bold 10px monospace";
+  ctx.fillText("POWERED BY PYTH", 48, H - 84);
+
+  return canvas.toDataURL("image/png");
+}
+
 type Phase = "deposit" | "building" | "running" | "ended";
 
 /* ─── Helpers ─── */
@@ -161,6 +310,8 @@ export default function SimulationPage() {
   const [sending, setSending] = useState(false);
   const [state, setState] = useState<SimState>({ running: false, slabAddress: null, price: 1_000_000, scenario: null, model: "random-walk", uptime: 0 });
   const [priceHistory, setPriceHistory] = useState<PricePoint[]>([]);
+  const [sessionStats, setSessionStats] = useState<SessionStats | null>(null);
+  const [shareImage, setShareImage] = useState<string | null>(null);
   const [speed, setSpeed] = useState(1);
   const [loading, setLoading] = useState(false);
   const buildingRef = useRef(false);
@@ -208,11 +359,27 @@ export default function SimulationPage() {
           const data = await res.json();
           const newPrice = data.price ?? state.price;
           setState(prev => ({ ...prev, running: data.running, price: newPrice, scenario: data.scenario ?? prev.scenario, model: data.model ?? prev.model, uptime: data.uptime ?? prev.uptime }));
+          const priceUsd = newPrice / 1e6;
           setPriceHistory(prev => {
-            const next = [...prev, { time: Date.now(), price: newPrice / 1e6 }];
-            return next.slice(-120); // keep last 120 data points (~6 min at 3s interval)
+            const next = [...prev, { time: Date.now(), price: priceUsd }];
+            return next.slice(-600); // keep last 600 data points (~30 min at 3s interval)
           });
-          if (!data.running) setPhase("ended");
+          setSessionStats(prev => prev ? {
+            ...prev,
+            highPrice: Math.max(prev.highPrice, priceUsd),
+            lowPrice: Math.min(prev.lowPrice, priceUsd),
+            endPrice: priceUsd,
+            dataPoints: prev.dataPoints + 1,
+            scenario: data.scenario ?? prev.scenario,
+          } : prev);
+          if (!data.running) {
+            const finalStats = sessionStats ? { ...sessionStats, endTime: Date.now(), endPrice: priceUsd } : null;
+            if (finalStats) {
+              setSessionStats(finalStats);
+              try { setShareImage(generateShareImage(finalStats, priceHistory, tokenPreview?.symbol || "SIM", tokenPreview?.name || "Simulation")); } catch { /* ignore */ }
+            }
+            setPhase("ended");
+          }
         }
       } catch { /* ignore */ }
     }, 3000);
@@ -382,7 +549,10 @@ export default function SimulationPage() {
       }
 
       setState({ running: true, slabAddress: slabKp.publicKey.toBase58(), price: Number(INITIAL_PRICE_E6), scenario: null, model: "random-walk", uptime: 0 });
-      setPriceHistory([{ time: Date.now(), price: Number(INITIAL_PRICE_E6) / 1e6 }]);
+      const startPrice = Number(INITIAL_PRICE_E6) / 1e6;
+      setPriceHistory([{ time: Date.now(), price: startPrice }]);
+      setSessionStats({ startTime: Date.now(), endTime: 0, highPrice: startPrice, lowPrice: startPrice, startPrice, endPrice: startPrice, dataPoints: 1, scenario: null });
+      setShareImage(null);
       setPhase("running");
     } catch (err: unknown) {
       console.error("Build error:", err);
@@ -397,6 +567,15 @@ export default function SimulationPage() {
     setLoading(true);
     try {
       await fetch("/api/simulation/stop", { method: "POST" });
+      const finalStats: SessionStats = sessionStats ? { ...sessionStats, endTime: Date.now() } : {
+        startTime: Date.now(), endTime: Date.now(), highPrice: 1, lowPrice: 1, startPrice: 1, endPrice: 1, dataPoints: 0, scenario: null,
+      };
+      setSessionStats(finalStats);
+      // Generate shareable image
+      try {
+        const img = generateShareImage(finalStats, priceHistory, tokenPreview?.symbol || "SIM", tokenPreview?.name || "Simulation");
+        setShareImage(img);
+      } catch (e) { console.error("Share image error:", e); }
       setState({ running: false, slabAddress: null, price: 1_000_000, scenario: null, model: "random-walk", uptime: 0 });
       setPhase("ended");
     } catch (err) { console.error("Stop error:", err); }
@@ -411,6 +590,8 @@ export default function SimulationPage() {
     setStep("");
     setStepNum(0);
     setPriceHistory([]);
+    setSessionStats(null);
+    setShareImage(null);
     buildingRef.current = false;
     fetchTokenPreview();
   };
@@ -607,21 +788,81 @@ export default function SimulationPage() {
 
   /* ─── Ended Screen ─── */
   if (phase === "ended") {
+    const downloadImage = () => {
+      if (!shareImage) return;
+      const a = document.createElement("a");
+      a.href = shareImage;
+      a.download = `percolator-${tokenPreview?.symbol || "sim"}-${Date.now()}.png`;
+      a.click();
+    };
+
+    const shareToTwitter = () => {
+      const pct = sessionStats ? ((sessionStats.endPrice - sessionStats.startPrice) / sessionStats.startPrice * 100).toFixed(2) : "0";
+      const text = encodeURIComponent(`Just ran a ${tokenPreview?.symbol}/USD perp simulation on @peraborator\n\n${Number(pct) >= 0 ? "+" : ""}${pct}% price movement\nHigh: $${sessionStats?.highPrice.toFixed(4)} | Low: $${sessionStats?.lowPrice.toFixed(4)}\n\nPermissionless perpetual futures on Solana\npercolator-launch.vercel.app/simulation`);
+      window.open(`https://twitter.com/intent/tweet?text=${text}`, "_blank");
+    };
+
     return (
-      <div className="min-h-screen bg-[var(--bg)] flex items-center justify-center">
-        <div className="max-w-md w-full px-4">
-          <div className="border border-[var(--border)] bg-[var(--bg)]/80 p-5 space-y-4">
-            <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-[var(--text-dim)]">Simulation Complete</p>
-            {tokenPreview && <p className="text-[14px] font-bold text-[var(--text)]">{tokenPreview.symbol} -- {tokenPreview.name}</p>}
-            {slabAddress && <p className="text-[10px] font-mono text-[var(--text-secondary)]">Market: {slabAddress.slice(0, 12)}...{slabAddress.slice(-12)}</p>}
-            {priceHistory.length > 1 && (
-              <div>
-                <p className="text-[9px] text-[var(--text-dim)] mb-1">Price History</p>
-                <MiniChart data={priceHistory} height={60} />
-              </div>
-            )}
-            <button onClick={handleRestart} className="w-full border border-[var(--accent)]/50 bg-[var(--accent)]/[0.08] py-3 text-[11px] font-bold uppercase tracking-[0.15em] text-[var(--accent)] hover:bg-[var(--accent)]/[0.15] transition-all">Launch New Simulation</button>
+      <div className="min-h-screen bg-[var(--bg)]">
+        <div className="border-b border-[var(--border)]/30 bg-[var(--bg)]/95 px-4 py-3">
+          <div className="mx-auto max-w-2xl">
+            <p className="mb-0.5 text-[9px] font-medium uppercase tracking-[0.2em] text-[var(--accent)]/70">// SIMULATION COMPLETE</p>
+            <h1 className="text-lg font-bold text-[var(--text)]" style={{ fontFamily: "var(--font-display)" }}>Results</h1>
           </div>
+        </div>
+
+        <div className="mx-auto max-w-2xl px-4 py-6 space-y-4">
+          {/* Shareable Image Preview */}
+          {shareImage && (
+            <div className="space-y-3">
+              <img src={shareImage} alt="Simulation results" className="w-full border border-[var(--border)]" />
+              <div className="flex gap-2">
+                <button onClick={downloadImage} className="flex-1 border border-[var(--accent)]/50 bg-[var(--accent)]/[0.08] py-2.5 text-[10px] font-bold uppercase tracking-[0.15em] text-[var(--accent)] hover:bg-[var(--accent)]/[0.15] transition-all">Download Image</button>
+                <button onClick={shareToTwitter} className="flex-1 border border-[var(--border)] bg-[var(--bg)] py-2.5 text-[10px] font-bold uppercase tracking-[0.15em] text-[var(--text-secondary)] hover:text-[var(--text)] transition-all">Share on X</button>
+              </div>
+            </div>
+          )}
+
+          {/* Stats Summary */}
+          {sessionStats && (
+            <div className="border border-[var(--border)] bg-[var(--bg)]/80 p-4">
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <p className="text-[8px] uppercase tracking-[0.15em] text-[var(--text-dim)]">Start Price</p>
+                  <p className="text-[14px] font-bold font-mono text-[var(--text)]">${sessionStats.startPrice.toFixed(4)}</p>
+                </div>
+                <div>
+                  <p className="text-[8px] uppercase tracking-[0.15em] text-[var(--text-dim)]">End Price</p>
+                  <p className="text-[14px] font-bold font-mono text-[var(--text)]">${sessionStats.endPrice.toFixed(4)}</p>
+                </div>
+                <div>
+                  <p className="text-[8px] uppercase tracking-[0.15em] text-[var(--text-dim)]">Change</p>
+                  {(() => {
+                    const pct = ((sessionStats.endPrice - sessionStats.startPrice) / sessionStats.startPrice * 100);
+                    return <p className="text-[14px] font-bold font-mono" style={{ color: pct >= 0 ? "var(--long)" : "var(--short)" }}>{pct >= 0 ? "+" : ""}{pct.toFixed(2)}%</p>;
+                  })()}
+                </div>
+                <div>
+                  <p className="text-[8px] uppercase tracking-[0.15em] text-[var(--text-dim)]">High</p>
+                  <p className="text-[12px] font-mono" style={{ color: "var(--long)" }}>${sessionStats.highPrice.toFixed(4)}</p>
+                </div>
+                <div>
+                  <p className="text-[8px] uppercase tracking-[0.15em] text-[var(--text-dim)]">Low</p>
+                  <p className="text-[12px] font-mono" style={{ color: "var(--short)" }}>${sessionStats.lowPrice.toFixed(4)}</p>
+                </div>
+                <div>
+                  <p className="text-[8px] uppercase tracking-[0.15em] text-[var(--text-dim)]">Data Points</p>
+                  <p className="text-[12px] font-mono text-[var(--text)]">{sessionStats.dataPoints}</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {slabAddress && (
+            <p className="text-[9px] font-mono text-[var(--text-dim)] text-center">Market: {slabAddress}</p>
+          )}
+
+          <button onClick={handleRestart} className="w-full border border-[var(--accent)]/50 bg-[var(--accent)]/[0.08] py-3.5 text-[12px] font-bold uppercase tracking-[0.2em] text-[var(--accent)] hover:bg-[var(--accent)]/[0.15] transition-all">Launch New Simulation</button>
         </div>
       </div>
     );
