@@ -174,7 +174,17 @@ $$ LANGUAGE plpgsql;
 COMMENT ON FUNCTION cleanup_old_history IS 'Delete history records older than specified days (default 30)';
 
 -- ============================================================================
--- 6. Grants (Adjust based on your RLS policies)
+-- 6. RLS policies for new tables
+-- ============================================================================
+
+ALTER TABLE insurance_history ENABLE ROW LEVEL SECURITY;
+ALTER TABLE oi_history ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Public read insurance_history" ON insurance_history FOR SELECT USING (true);
+CREATE POLICY "Public read oi_history" ON oi_history FOR SELECT USING (true);
+
+-- ============================================================================
+-- 7. Grants (Adjust based on your RLS policies)
 -- ============================================================================
 
 -- Grant read access to authenticated users (adjust as needed)

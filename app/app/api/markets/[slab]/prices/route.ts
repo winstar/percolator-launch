@@ -41,10 +41,6 @@ export async function POST(
 ) {
   if (!requireAuth(req)) return UNAUTHORIZED;
   const { slab } = await params;
-  const apiKey = req.headers.get("x-api-key");
-  if (apiKey !== process.env.INDEXER_API_KEY) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
 
   const body = await req.json();
   const supabase = getServiceClient();

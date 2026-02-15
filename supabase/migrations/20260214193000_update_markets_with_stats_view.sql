@@ -16,7 +16,7 @@ SELECT
   s.insurance_fund,
   s.total_accounts,
   s.funding_rate,
-  -- New columns from migration 007 (hidden features)
+  -- Columns from migration 007 (hidden features)
   s.total_open_interest,
   s.net_lp_pos,
   s.lp_sum_abs,
@@ -24,8 +24,20 @@ SELECT
   s.insurance_balance,
   s.insurance_fee_revenue,
   s.warmup_period_slots,
+  -- Columns from migration 010 (complete risk engine)
+  s.vault_balance,
+  s.lifetime_liquidations,
+  s.lifetime_force_closes,
+  s.c_tot,
+  s.pnl_pos_tot,
+  s.last_crank_slot,
+  s.max_crank_staleness_slots,
+  s.maintenance_fee_per_slot,
+  s.liquidation_fee_bps,
+  s.liquidation_fee_cap,
+  s.liquidation_buffer_bps,
   s.updated_at as stats_updated_at
 FROM markets m
 LEFT JOIN market_stats s ON m.slab_address = s.slab_address;
 
-COMMENT ON VIEW markets_with_stats IS 'Combined view of markets with their latest stats including hidden transparency features';
+COMMENT ON VIEW markets_with_stats IS 'Combined view of markets with their latest stats including hidden transparency features and complete risk engine fields';
