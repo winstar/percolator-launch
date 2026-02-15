@@ -95,13 +95,23 @@ function nowSecs(): number {
   return Math.floor(Date.now() / 1000);
 }
 
-function extractError(err: unknown): string {
+async function extractError(err: unknown): Promise<string> {
   if (err instanceof SendTransactionError) {
-    const logs = (err as SendTransactionError & { logs?: string[] }).logs;
-    if (logs) {
-      const fails = logs.filter((l: string) => l.includes("failed") || l.includes("Error"));
-      if (fails.length) return `${err.message} | ${fails.join("; ")}`;
+    try {
+      // getLogs() resolves the logs promise
+      const logs = await (err as SendTransactionError & { getLogs: (c?: unknown) => Promise<string[]> }).getLogs(undefined);
+      if (logs?.length) {
+        const fails = logs.filter((l: string) => l.includes("failed") || l.includes("Error"));
+        if (fails.length) return `${err.message} | ${fails.join("; ")}`;
+        return `${err.message} | ${logs.slice(-5).join("; ")}`;
+      }
+    } catch {
+      // getLogs might fail without connection, try raw access
+      const raw = (err as unknown as Record<string, unknown>);
+      const anyLogs = raw.transactionLogs || raw.logs;
+      if (Array.isArray(anyLogs)) return `${err.message} | ${(anyLogs as string[]).slice(-5).join("; ")}`;
     }
+    return err.message;
   }
   if (err instanceof Error) return err.message;
   return String(err);
@@ -110,19 +120,25 @@ function extractError(err: unknown): string {
 async function sendAndConfirm(
   connection: ReturnType<typeof useConnection>["connection"],
   tx: Transaction,
-  signers: Keypair[]
+  signers: Keypair[],
+  label = "transaction"
 ): Promise<string> {
   const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash("confirmed");
   tx.recentBlockhash = blockhash;
   tx.lastValidBlockHeight = lastValidBlockHeight;
   tx.feePayer = signers[0].publicKey;
   tx.partialSign(...signers);
-  const sig = await connection.sendRawTransaction(tx.serialize(), {
-    skipPreflight: false,
-    preflightCommitment: "confirmed",
-  });
-  await connection.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight }, "confirmed");
-  return sig;
+  try {
+    const sig = await connection.sendRawTransaction(tx.serialize(), {
+      skipPreflight: false,
+      preflightCommitment: "confirmed",
+    });
+    await connection.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight }, "confirmed");
+    return sig;
+  } catch (err) {
+    const msg = await extractError(err);
+    throw new Error(`[${label}] ${msg}`);
+  }
 }
 
 /* ─── Component ─── */
@@ -241,7 +257,7 @@ export default function SimulationPage() {
             liquidationFeeCap: "100000000000", liquidationBufferBps: "50", minLiquidationAbs: "1000000",
           }),
         }));
-        await sendAndConfirm(connection, tx, [payer, mintKp, slabKp]);
+        await sendAndConfirm(connection, tx, [payer, mintKp, slabKp], "Create mint+slab+market");
       }
       setStepNum(2);
       setSlabAddress(slabKp.publicKey.toBase58());
@@ -266,7 +282,7 @@ export default function SimulationPage() {
           }),
         }));
         tx.add(buildIx({ programId: PROGRAM_ID, keys: buildAccountMetas(ACCOUNTS_KEEPER_CRANK, [payer.publicKey, slabKp.publicKey, WELL_KNOWN.clock, slabKp.publicKey]), data: encodeKeeperCrank({ callerIdx: 65535, allowPanic: false }) }));
-        await sendAndConfirm(connection, tx, [payer]);
+        await sendAndConfirm(connection, tx, [payer], "Oracle+config+crank");
       }
       setStepNum(3);
 
@@ -295,7 +311,7 @@ export default function SimulationPage() {
             maxFillAbs: 1_000_000_000_000n, maxInventoryAbs: 0n,
           }),
         }));
-        await sendAndConfirm(connection, tx, [payer, matcherCtxKp]);
+        await sendAndConfirm(connection, tx, [payer, matcherCtxKp], "LP+vAMM setup");
       }
       setStepNum(4);
 
@@ -308,7 +324,7 @@ export default function SimulationPage() {
         tx.add(buildIx({ programId: PROGRAM_ID, keys: buildAccountMetas(ACCOUNTS_KEEPER_CRANK, [payer.publicKey, slabKp.publicKey, WELL_KNOWN.clock, slabKp.publicKey]), data: encodeKeeperCrank({ callerIdx: 65535, allowPanic: false }) }));
         tx.add(buildIx({ programId: PROGRAM_ID, keys: buildAccountMetas(ACCOUNTS_SET_ORACLE_AUTHORITY, [payer.publicKey, slabKp.publicKey]), data: encodeSetOracleAuthority({ newAuthority: oracleKp.publicKey }) }));
         tx.add(buildIx({ programId: PROGRAM_ID, keys: buildAccountMetas(ACCOUNTS_PUSH_ORACLE_PRICE, [oracleKp.publicKey, slabKp.publicKey]), data: encodePushOraclePrice({ priceE6: INITIAL_PRICE_E6.toString(), timestamp: (t + 1).toString() }) }));
-        await sendAndConfirm(connection, tx, [payer, oracleKp]);
+        await sendAndConfirm(connection, tx, [payer, oracleKp], "Delegate oracle");
       }
       setStepNum(5);
 
@@ -318,7 +334,7 @@ export default function SimulationPage() {
       {
         const tx1 = new Transaction();
         tx1.add(createMintToInstruction(mintKp.publicKey, payerAta, payer.publicKey, MINT_AMOUNT));
-        await sendAndConfirm(connection, tx1, [payer]);
+        await sendAndConfirm(connection, tx1, [payer], "Mint tokens");
       }
       {
         const tx2 = new Transaction();
@@ -329,7 +345,7 @@ export default function SimulationPage() {
         const t = nowSecs();
         tx2.add(buildIx({ programId: PROGRAM_ID, keys: buildAccountMetas(ACCOUNTS_PUSH_ORACLE_PRICE, [oracleKp.publicKey, slabKp.publicKey]), data: encodePushOraclePrice({ priceE6: INITIAL_PRICE_E6.toString(), timestamp: t.toString() }) }));
         tx2.add(buildIx({ programId: PROGRAM_ID, keys: buildAccountMetas(ACCOUNTS_KEEPER_CRANK, [payer.publicKey, slabKp.publicKey, WELL_KNOWN.clock, slabKp.publicKey]), data: encodeKeeperCrank({ callerIdx: 65535, allowPanic: false }) }));
-        await sendAndConfirm(connection, tx2, [payer, oracleKp]);
+        await sendAndConfirm(connection, tx2, [payer, oracleKp], "Deposit+insurance+crank");
       }
       setStepNum(6);
 
@@ -352,7 +368,7 @@ export default function SimulationPage() {
       setPhase("running");
     } catch (err: unknown) {
       console.error("Launch error:", err);
-      setError(extractError(err));
+      setError(await extractError(err));
       setPhase("idle");
     }
   };
