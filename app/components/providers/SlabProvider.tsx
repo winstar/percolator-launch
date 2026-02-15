@@ -125,9 +125,14 @@ export const SlabProvider: FC<{ children: ReactNode; slabAddress: string }> = ({
         const info = await connection.getAccountInfo(slabPk);
         if (info) {
           parseSlab(new Uint8Array(info.data), info.owner);
+        } else {
+          // Slab account doesn't exist on-chain
+          setState((s) => ({ ...s, loading: false, error: "Market not found on-chain. It may have been closed or the address is invalid." }));
         }
-      } catch {
-        // RPC failure — will retry on next poll
+      } catch (e) {
+        console.error("[SlabProvider] RPC poll error:", e);
+        // Set error on first load so page doesn't show loading forever
+        setState((s) => s.engine ? s : { ...s, loading: false, error: `RPC error: ${e instanceof Error ? e.message : "connection failed"}` });
       }
     }
 
