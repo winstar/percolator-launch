@@ -35,16 +35,16 @@ export class ErrorBoundary extends Component<Props, State> {
     if (this.state.hasError) {
       if (this.props.fallback) return this.props.fallback;
       return (
-        <div className="rounded-[4px] border border-[#FF4466]/20 bg-[#FF4466]/5 p-6 text-center">
-          <p className="text-sm font-medium text-[#FF4466]">
+        <div className="rounded-none border border-[var(--short)]/20 bg-[var(--short)]/5 p-6 text-center">
+          <p className="text-sm font-medium text-[var(--short)]">
             something broke{this.props.label ? ` in ${this.props.label}` : ""}.
           </p>
-          <p className="mt-1 text-xs text-[#71717a]">
+          <p className="mt-1 text-xs text-[var(--text-dim)]">
             {this.state.error?.message ?? "Unknown error"}
           </p>
           <button
             onClick={() => this.setState({ hasError: false, error: null })}
-            className="mt-3 rounded-md bg-white/5 px-3 py-1.5 text-xs text-[#fafafa] hover:bg-white/10 transition-colors"
+            className="mt-3 rounded-none border border-[var(--border)] px-3 py-1.5 text-xs text-[var(--text)] hover:bg-[var(--bg-elevated)] transition-colors"
           >
             try again
           </button>

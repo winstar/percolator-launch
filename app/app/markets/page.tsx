@@ -500,8 +500,8 @@ function MarketsPageInner() {
                       <div className="text-right text-sm text-[var(--text-secondary)] truncate" style={{ fontFamily: "var(--font-jetbrains-mono)" }}>
                         {volumeDisplay ?? "\u2014"}
                       </div>
-                      <div className="text-right text-sm text-[var(--text)] truncate" style={{ fontFamily: "var(--font-jetbrains-mono)" }}>{insuranceDisplay}</div>
-                      <div className="text-right text-sm text-[var(--text-secondary)]">{m.maxLeverage}x</div>
+                      <div className="text-right text-sm text-[var(--text)] truncate hidden sm:block" style={{ fontFamily: "var(--font-jetbrains-mono)" }}>{insuranceDisplay}</div>
+                      <div className="text-right text-sm text-[var(--text-secondary)] hidden sm:block">{m.maxLeverage}x</div>
                       <div className="text-right"><HealthBadge level={health.level} /></div>
                     </Link>
                   );

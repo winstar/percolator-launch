@@ -53,13 +53,20 @@ import { UsdToggleProvider } from "@/components/providers/UsdToggleProvider";
 import { ErrorBoundary } from "@/components/ui/ErrorBoundary";
 import { railwayUrl } from "@/lib/railway";
 
-/* ── Lazy-loaded trade page components (all read from SlabProvider context) ── */
+/* ── On-chain trade page components (all read from SlabProvider context) ── */
 import { EngineHealthCard } from "@/components/trade/EngineHealthCard";
 import { MarketStatsCard } from "@/components/trade/MarketStatsCard";
 import { CrankHealthCard } from "@/components/trade/CrankHealthCard";
 import { SystemCapitalCard } from "@/components/trade/SystemCapitalCard";
 import { LiquidationAnalytics } from "@/components/trade/LiquidationAnalytics";
+import { FundingRateCard } from "@/components/trade/FundingRateCard";
+import { FundingRateChart } from "@/components/trade/FundingRateChart";
 import { TradingChart } from "@/components/trade/TradingChart";
+import { OpenInterestCard } from "@/components/market/OpenInterestCard";
+import { InsuranceDashboard } from "@/components/market/InsuranceDashboard";
+import { BotLeaderboard } from "@/components/simulation/BotLeaderboard";
+import { LiveLiquidationFeed } from "@/components/simulation/LiveLiquidationFeed";
+import { AccountsCard } from "@/components/trade/AccountsCard";
 
 const WalletMultiButton = dynamic(
   () => import("@solana/wallet-adapter-react-ui").then((m) => m.WalletMultiButton),
@@ -120,6 +127,10 @@ interface SessionStats {
   liquidations: number;
   fundingRate: number;
   openInterest: number;
+  peakOpenInterest: number;
+  insuranceBalance: number;
+  insuranceHealth: number;
+  forceCloses: number;
 }
 
 /* ─── Shareable Image Generator ─── */
@@ -236,10 +247,12 @@ function generateShareImage(
 
   // Second stats row
   const statsY2 = 475;
+  const fmtCompact = (n: number) => n > 1e6 ? `$${(n / 1e6).toFixed(1)}M` : n > 1e3 ? `$${(n / 1e3).toFixed(1)}K` : `$${n.toFixed(0)}`;
   const statItems2 = [
     { label: "FUNDING RATE", value: `${stats.fundingRate >= 0 ? "+" : ""}${(stats.fundingRate * 100).toFixed(4)}%`, color: stats.fundingRate >= 0 ? "#00e676" : "#ff1744" },
-    { label: "OPEN INTEREST", value: stats.openInterest > 1e6 ? `$${(stats.openInterest / 1e6).toFixed(1)}M` : stats.openInterest > 1e3 ? `$${(stats.openInterest / 1e3).toFixed(1)}K` : `$${stats.openInterest.toFixed(0)}`, color: "#00e5ff" },
-    { label: "DATA POINTS", value: stats.dataPoints.toString(), color: "#e0e0e0" },
+    { label: "PEAK OI", value: fmtCompact(stats.peakOpenInterest), color: "#00e5ff" },
+    { label: "INSURANCE", value: fmtCompact(stats.insuranceBalance), color: stats.insuranceHealth > 5 ? "#00e676" : stats.insuranceHealth > 1 ? "#e0e0e0" : "#ff1744" },
+    { label: "FORCE CLOSES", value: stats.forceCloses.toString(), color: stats.forceCloses > 0 ? "#ff1744" : "#e0e0e0" },
     { label: "SCENARIO", value: stats.scenario || "none", color: "#00e5ff" },
   ];
 
@@ -488,9 +501,14 @@ function RunningDashboardInner({
               <h3 className="text-[10px] font-bold uppercase tracking-[0.15em] text-[var(--text-dim)] mb-3">Scenarios</h3>
               <ScenarioSelector activeScenario={state.scenario} onScenarioSelect={onScenarioSelect} disabled={loading} />
             </div>
+
+            {/* Bot Leaderboard — from Railway */}
+            <ErrorBoundary label="BotLeaderboard">
+              <BotLeaderboard isSimulationRunning={state.running} />
+            </ErrorBoundary>
           </div>
 
-          {/* Right Content — REAL on-chain components */}
+          {/* Right Content — ALL on-chain risk engine components */}
           <div className="space-y-3">
             {/* Row 1: Market Stats + Engine Health */}
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
@@ -502,19 +520,59 @@ function RunningDashboardInner({
               </ErrorBoundary>
             </div>
 
-            {/* Row 2: Risk analytics */}
-            <div className="grid grid-cols-1 xl:grid-cols-3 gap-3">
+            {/* Row 2: Funding Rates — current + historical chart */}
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
+              <ErrorBoundary label="FundingRateCard">
+                <FundingRateCard slabAddress={slabAddress} />
+              </ErrorBoundary>
+              <ErrorBoundary label="FundingRateChart">
+                <FundingRateChart slabAddress={slabAddress} />
+              </ErrorBoundary>
+            </div>
+
+            {/* Row 3: Open Interest + Insurance Fund */}
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
+              <ErrorBoundary label="OpenInterestCard">
+                <OpenInterestCard slabAddress={slabAddress} />
+              </ErrorBoundary>
+              <ErrorBoundary label="InsuranceDashboard">
+                <InsuranceDashboard slabAddress={slabAddress} />
+              </ErrorBoundary>
+            </div>
+
+            {/* Row 4: Liquidation Feed + Crank Health */}
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
+              <ErrorBoundary label="LiveLiquidationFeed">
+                <LiveLiquidationFeed />
+              </ErrorBoundary>
               <ErrorBoundary label="CrankHealthCard">
                 <CrankHealthCard />
+              </ErrorBoundary>
+            </div>
+
+            {/* Row 5: System Capital (vault, c_tot, pnl_pos_tot, LP aggregates) + Liquidation Analytics */}
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
+              <ErrorBoundary label="SystemCapitalCard">
+                <SystemCapitalCard />
               </ErrorBoundary>
               <ErrorBoundary label="LiquidationAnalytics">
                 <LiquidationAnalytics />
               </ErrorBoundary>
-              <ErrorBoundary label="SystemCapitalCard">
-                <SystemCapitalCard />
-              </ErrorBoundary>
             </div>
+
+            {/* Row 6: All Accounts (positions, warmup status, PnL) */}
+            <ErrorBoundary label="AccountsCard">
+              <AccountsCard />
+            </ErrorBoundary>
           </div>
+        </div>
+      </div>
+
+      {/* Pyth attribution */}
+      <div className="mx-auto max-w-7xl px-3 pb-2">
+        <div className="flex items-center gap-2 border border-[var(--border)]/20 bg-[var(--bg)]/80 px-3 py-1.5">
+          <div className="h-2 w-2" style={{ backgroundColor: "#6B3FA0" }} />
+          <span className="text-[9px] uppercase tracking-[0.15em] text-[var(--text-dim)]">Oracle prices powered by Pyth Network</span>
         </div>
       </div>
 
@@ -524,7 +582,10 @@ function RunningDashboardInner({
           <p className="text-[9px] uppercase tracking-[0.15em] text-[var(--text-dim)]">
             {state.running ? `${tokenPreview?.symbol}/USD | ${state.model} | ${state.scenario || "no scenario"} | ${speed}x` : "Simulation paused"}
           </p>
-          <p className="text-[9px] font-mono text-[var(--text-secondary)]">{slabAddress.slice(0, 8)}...{slabAddress.slice(-8)}</p>
+          <div className="flex items-center gap-3">
+            <span className="text-[9px] uppercase tracking-[0.15em] text-[var(--text-dim)]">on-chain data</span>
+            <p className="text-[9px] font-mono text-[var(--text-secondary)]">{slabAddress.slice(0, 8)}...{slabAddress.slice(-8)}</p>
+          </div>
         </div>
       </div>
     </div>
@@ -626,6 +687,10 @@ export default function SimulationPage() {
             liquidations: data.liquidations ?? prev.liquidations,
             fundingRate: data.fundingRate ?? prev.fundingRate,
             openInterest: data.openInterest ?? prev.openInterest,
+            peakOpenInterest: Math.max(prev.peakOpenInterest, data.openInterest ?? prev.openInterest),
+            insuranceBalance: data.insuranceBalance ?? prev.insuranceBalance,
+            insuranceHealth: data.insuranceHealth ?? prev.insuranceHealth,
+            forceCloses: data.forceCloses ?? prev.forceCloses,
           } : prev);
           if (!data.running) {
             const finalStats = sessionStats ? { ...sessionStats, endTime: Date.now(), endPrice: priceUsd } : null;
@@ -832,7 +897,7 @@ export default function SimulationPage() {
       setState({ running: true, slabAddress: slabKp.publicKey.toBase58(), price: Number(INITIAL_PRICE_E6), scenario: null, model: "random-walk", uptime: 0 });
       const startPrice = Number(INITIAL_PRICE_E6) / 1e6;
       setPriceHistory([{ time: Date.now(), price: startPrice }]);
-      setSessionStats({ startTime: Date.now(), endTime: 0, highPrice: startPrice, lowPrice: startPrice, startPrice, endPrice: startPrice, dataPoints: 1, scenario: null, totalTrades: 0, liquidations: 0, fundingRate: 0, openInterest: 0 });
+      setSessionStats({ startTime: Date.now(), endTime: 0, highPrice: startPrice, lowPrice: startPrice, startPrice, endPrice: startPrice, dataPoints: 1, scenario: null, totalTrades: 0, liquidations: 0, fundingRate: 0, openInterest: 0, peakOpenInterest: 0, insuranceBalance: 0, insuranceHealth: 0, forceCloses: 0 });
       setShareImage(null);
       setPhase("running");
     } catch (err: unknown) {
@@ -866,7 +931,7 @@ export default function SimulationPage() {
         fundingRate: finalRailwayStats.fundingRate ?? sessionStats.fundingRate,
         openInterest: finalRailwayStats.openInterest ?? sessionStats.openInterest,
       } : {
-        startTime: Date.now(), endTime: Date.now(), highPrice: 1, lowPrice: 1, startPrice: 1, endPrice: 1, dataPoints: 0, scenario: null, totalTrades: 0, liquidations: 0, fundingRate: 0, openInterest: 0,
+        startTime: Date.now(), endTime: Date.now(), highPrice: 1, lowPrice: 1, startPrice: 1, endPrice: 1, dataPoints: 0, scenario: null, totalTrades: 0, liquidations: 0, fundingRate: 0, openInterest: 0, peakOpenInterest: 0, insuranceBalance: 0, insuranceHealth: 0, forceCloses: 0,
       };
       setSessionStats(finalStats);
       try {
