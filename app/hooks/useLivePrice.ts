@@ -71,6 +71,7 @@ export function useLivePrice(): PriceState {
     try {
       const url = `https://api.jup.ag/price/v2?ids=${mint}`;
       const resp = await fetch(url, { signal: AbortSignal.timeout(5000) });
+      if (!resp.ok) return; // Jupiter may require auth (401) — skip gracefully
       const json = (await resp.json()) as Record<string, unknown>;
       const data = json.data as Record<string, { price?: string }> | undefined;
       if (!data || !data[mint]) return;
@@ -179,7 +180,7 @@ export function useLivePrice(): PriceState {
 
     // Also fetch 24h stats via REST
     fetch(`${WS_URL.replace("ws://", "http://").replace("wss://", "https://")}/prices/${slabAddr}`)
-      .then((r) => r.json())
+      .then((r) => { if (!r.ok) throw new Error("not found"); return r.json(); })
       .then((json: { stats?: { change24h?: number; high24h?: string; low24h?: string } }) => {
         if (json.stats && mountedRef.current) {
           setState((prev) => ({
