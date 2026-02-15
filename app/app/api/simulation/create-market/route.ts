@@ -7,7 +7,6 @@ import {
   SystemProgram,
   Transaction,
   TransactionInstruction,
-  Connection,
 } from '@solana/web3.js';
 import {
   createAssociatedTokenAccountInstruction,
@@ -64,8 +63,6 @@ export async function POST(request: NextRequest) {
     }
 
     const cfg = getConfig();
-    const connection = new Connection(cfg.rpcUrl, 'confirmed');
-
     // Use small tier for simulation
     const tier = SLAB_TIERS.small;
     const programsByTier = (cfg as Record<string, unknown>).programsBySlabTier as Record<string, string> | undefined;
@@ -87,12 +84,11 @@ export async function POST(request: NextRequest) {
     const vaultAta = await getAssociatedTokenAddress(mintKeypair.publicKey, vaultPda, true);
     const [lpPda] = deriveLpPda(programId, slabKeypair.publicKey, 0);
 
-    // Calculate costs (parallel RPC calls for speed)
-    const [mintRent, slabRent, matcherCtxRent] = await Promise.all([
-      connection.getMinimumBalanceForRentExemption(getMintLen([])),
-      connection.getMinimumBalanceForRentExemption(tier.dataSize),
-      connection.getMinimumBalanceForRentExemption(MATCHER_CTX_SIZE),
-    ]);
+    // Hardcoded rent values (devnet, avoids 3 slow RPC calls)
+    // Formula: (size + 128) * 6960 lamports
+    const mintRent = 1_461_600;       // 82 bytes (SPL mint)
+    const slabRent = 438_034_560;     // 62,808 bytes (small tier)
+    const matcherCtxRent = 3_118_080; // 320 bytes (matcher context)
     const estimatedCostSol = (mintRent + slabRent + matcherCtxRent + 50_000_000) / 1e9;
 
     const initialPriceE6 = 1_000_000; // $1.00 initial price
