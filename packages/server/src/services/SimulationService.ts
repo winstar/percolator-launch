@@ -740,6 +740,37 @@ export class SimulationService {
   private async initBots(slab: PublicKey): Promise<void> {
     if (!this.state || !this.oracleKeypair) return;
 
+    // Ensure oracle keypair has enough SOL for bot init tx fees
+    // Each bot needs ~0.01 SOL for InitUser + DepositCollateral fees
+    // Plus ATA creation, minting, etc. Request 2 SOL to be safe.
+    try {
+      const balance = await this.connection.getBalance(this.oracleKeypair.publicKey);
+      const MIN_SOL = 1_000_000_000; // 1 SOL minimum
+      if (balance < MIN_SOL) {
+        console.log(`🪂 Oracle keypair low on SOL (${(balance / 1e9).toFixed(3)} SOL), requesting airdrop...`);
+        // Use devnet public RPC for airdrops (Helius doesn't support requestAirdrop)
+        const devnetConn = new Connection("https://api.devnet.solana.com", "confirmed");
+        const airdropSig = await devnetConn.requestAirdrop(this.oracleKeypair.publicKey, 2_000_000_000);
+        await devnetConn.confirmTransaction(airdropSig, "confirmed");
+        console.log(`✅ Airdropped 2 SOL to oracle keypair (sig=${airdropSig.slice(0, 16)}...)`);
+        await new Promise((r) => setTimeout(r, 2000)); // wait for propagation
+      } else {
+        console.log(`💰 Oracle keypair has ${(balance / 1e9).toFixed(3)} SOL — sufficient for bot init`);
+      }
+    } catch (err) {
+      console.error("Airdrop failed (devnet rate limit?), continuing anyway:", err);
+      // If airdrop fails, try a second time with smaller amount
+      try {
+        const devnetConn = new Connection("https://api.devnet.solana.com", "confirmed");
+        const sig = await devnetConn.requestAirdrop(this.oracleKeypair.publicKey, 500_000_000);
+        await devnetConn.confirmTransaction(sig, "confirmed");
+        console.log(`✅ Retry airdrop 0.5 SOL succeeded`);
+        await new Promise((r) => setTimeout(r, 2000));
+      } catch {
+        console.error("Retry airdrop also failed — bots may fail to init");
+      }
+    }
+
     // Read slab
     await this.refreshSlabState(slab);
     if (!this.cachedConfig) {
@@ -833,6 +864,17 @@ export class SimulationService {
     tx.feePayer = payer.publicKey;
 
     try {
+      // Simulate first to catch errors before sending
+      try {
+        const simResult = await this.connection.simulateTransaction(tx);
+        if (simResult.value.err) {
+          console.error(`${bot.name} InitUser simulation failed:`, JSON.stringify(simResult.value.err), simResult.value.logs?.slice(-5));
+          return;
+        }
+      } catch (simErr) {
+        console.warn(`${bot.name} InitUser simulation check failed, sending anyway:`, simErr);
+      }
+
       const sig = await this.connection.sendTransaction(tx, [payer], { skipPreflight: true });
       bot.initialized = true;
       console.log(`✅ ${bot.name} InitUser sent (sig=${sig.slice(0, 16)}...)`);
