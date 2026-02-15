@@ -33,7 +33,7 @@ interface TokenPreview {
 type SetupStep = "connect" | "preview" | "creating" | "funding" | "running" | "ended";
 
 export default function SimulationPage() {
-  const { publicKey, connected, sendTransaction } = useWallet();
+  const { publicKey, connected, signTransaction } = useWallet();
   const { connection } = useConnection();
 
   const [setupStep, setSetupStep] = useState<SetupStep>("connect");
@@ -116,14 +116,19 @@ export default function SimulationPage() {
   };
 
   const sendSerializedTransactions = async (serializedTxs: string[], labels: string[]): Promise<boolean> => {
-    if (!sendTransaction) return false;
+    if (!signTransaction || !publicKey) return false;
 
     for (let i = 0; i < serializedTxs.length; i++) {
       setTxProgress({ current: i + 1, total: serializedTxs.length, label: labels[i] || `Transaction ${i + 1}` });
 
       try {
         const tx = Transaction.from(Buffer.from(serializedTxs[i], "base64"));
-        const sig = await sendTransaction(tx, connection);
+        // Sign with wallet (preserves existing partial signatures from server keypairs)
+        const signed = await signTransaction(tx);
+        const sig = await connection.sendRawTransaction(signed.serialize(), {
+          skipPreflight: false,
+          preflightCommitment: "confirmed",
+        });
         await connection.confirmTransaction(sig, "confirmed");
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
