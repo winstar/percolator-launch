@@ -615,7 +615,10 @@ export default function SimulationPage() {
   const [shareImage, setShareImage] = useState<string | null>(null);
   const [speed, setSpeed] = useState(1);
   const [loading, setLoading] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const buildingRef = useRef(false);
+
+  useEffect(() => { setMounted(true); }, []);
 
   /* ─── Fetch random token ─── */
   const fetchTokenPreview = useCallback(async () => {
@@ -1043,7 +1046,7 @@ export default function SimulationPage() {
           {/* Quick Send via Wallet */}
           <div className="border border-[var(--accent)]/30 bg-[var(--accent)]/[0.03] p-5 space-y-3">
             <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-[var(--text-dim)]">Quick Start</p>
-            {!connected ? (
+            {!mounted || !connected ? (
               <div className="flex items-center justify-between">
                 <p className="text-[10px] text-[var(--text-secondary)]">Connect wallet to send {MIN_SOL} devnet SOL in one click</p>
                 <WalletMultiButton />

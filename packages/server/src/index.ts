@@ -109,6 +109,11 @@ app.get("/api/simulation/history", (c) => {
   return c.json(history);
 });
 
+app.get("/api/simulation/bots", (c) => {
+  const state = simulationService.getState();
+  return c.json(state.bots ?? []);
+});
+
 // Root
 app.get("/", (c) => c.json({ name: "@percolator/server", version: "0.1.0" }));
 
