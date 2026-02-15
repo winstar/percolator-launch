@@ -227,9 +227,19 @@ export default function SimulationPage() {
       const fundTx = new Transaction({ blockhash, lastValidBlockHeight, feePayer: publicKey }).add(
         SystemProgram.transfer({ fromPubkey: publicKey, toPubkey: payer.publicKey, lamports: FUND_AMOUNT_LAMPORTS })
       );
-      const fundSig = await sendTransaction(fundTx, connection, { skipPreflight: true });
+      let fundSig: string;
+      try {
+        fundSig = await sendTransaction(fundTx, connection, { skipPreflight: true });
+      } catch (walletErr: unknown) {
+        const msg = walletErr instanceof Error ? walletErr.message : String(walletErr);
+        throw new Error(`[Wallet approval] ${msg}. Make sure Phantom is set to DEVNET and has SOL.`);
+      }
       setStepLabel("Confirming transfer...");
-      await connection.confirmTransaction({ signature: fundSig, blockhash, lastValidBlockHeight }, "confirmed");
+      try {
+        await connection.confirmTransaction({ signature: fundSig, blockhash, lastValidBlockHeight }, "confirmed");
+      } catch {
+        throw new Error(`[Confirm transfer] Transaction ${fundSig.slice(0, 12)}... failed to confirm. Devnet may be congested — try again.`);
+      }
       setStepNum(1);
 
       /* ─── Phase 2: Create market (4 tx groups) ─── */
