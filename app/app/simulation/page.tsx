@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   Transaction,
   PublicKey,
@@ -8,6 +8,7 @@ import {
   SystemProgram,
   LAMPORTS_PER_SOL,
   SendTransactionError,
+  Connection,
 } from "@solana/web3.js";
 import {
   createAssociatedTokenAccountInstruction,
@@ -17,8 +18,6 @@ import {
   getMintLen,
   TOKEN_PROGRAM_ID,
 } from "@solana/spl-token";
-import { useWallet, useConnection } from "@solana/wallet-adapter-react";
-import dynamic from "next/dynamic";
 import {
   encodeInitMarket,
   encodeInitLP,
@@ -51,28 +50,23 @@ import { LiveEventFeed } from "@/components/simulation/LiveEventFeed";
 import { SimulationMetrics } from "@/components/simulation/SimulationMetrics";
 import { BotLeaderboard } from "@/components/simulation/BotLeaderboard";
 
-const WalletMultiButton = dynamic(
-  () => import("@solana/wallet-adapter-react-ui").then((m) => m.WalletMultiButton),
-  { ssr: false }
-);
-
 /* ─── Constants ─── */
-const FUND_AMOUNT_SOL = 0.5;
-const FUND_AMOUNT_LAMPORTS = FUND_AMOUNT_SOL * LAMPORTS_PER_SOL;
 const PROGRAM_ID = new PublicKey("FxfD37s1AZTeWfFQps9Zpebi2dNQ9QSSDtfMKdbsfKrD");
 const MATCHER_PROGRAM_ID = new PublicKey("4HcGCsyjAqnFua5ccuXyt8KRRQzKFbGTJkVChpS7Yfzy");
+const MIN_SOL = 0.5;
+const MIN_LAMPORTS = MIN_SOL * LAMPORTS_PER_SOL;
 const MINT_AMOUNT = 10_000_000_000n;
 const LP_FEE = 1_000_000n;
-const INITIAL_PRICE_E6 = 1_000_000n; // $1.00
+const INITIAL_PRICE_E6 = 1_000_000n;
 const MATCHER_CTX_SIZE = 320;
-
-// Hardcoded rent (avoids RPC calls)
 const MINT_RENT = 1_461_600;
 const SLAB_RENT = 438_034_560;
 const MATCHER_CTX_RENT = 3_118_080;
 
+const RPC_URL = `https://devnet.helius-rpc.com/?api-key=${process.env.NEXT_PUBLIC_HELIUS_API_KEY ?? ""}`;
+
 /* ─── Types ─── */
-interface SimulationState {
+interface SimState {
   running: boolean;
   slabAddress: string | null;
   price: number;
@@ -88,7 +82,7 @@ interface TokenPreview {
   decimals: number;
 }
 
-type Phase = "idle" | "funding-wallet" | "creating" | "funding" | "starting" | "running" | "ended";
+type Phase = "deposit" | "building" | "running" | "ended";
 
 /* ─── Helpers ─── */
 function nowSecs(): number {
@@ -98,7 +92,6 @@ function nowSecs(): number {
 async function extractError(err: unknown): Promise<string> {
   if (err instanceof SendTransactionError) {
     try {
-      // getLogs() resolves the logs promise
       const logs = await (err as SendTransactionError & { getLogs: (c?: unknown) => Promise<string[]> }).getLogs(undefined);
       if (logs?.length) {
         const fails = logs.filter((l: string) => l.includes("failed") || l.includes("Error"));
@@ -106,7 +99,6 @@ async function extractError(err: unknown): Promise<string> {
         return `${err.message} | ${logs.slice(-5).join("; ")}`;
       }
     } catch {
-      // getLogs might fail without connection, try raw access
       const raw = (err as unknown as Record<string, unknown>);
       const anyLogs = raw.transactionLogs || raw.logs;
       if (Array.isArray(anyLogs)) return `${err.message} | ${(anyLogs as string[]).slice(-5).join("; ")}`;
@@ -118,21 +110,19 @@ async function extractError(err: unknown): Promise<string> {
 }
 
 async function sendAndConfirm(
-  connection: ReturnType<typeof useConnection>["connection"],
+  conn: Connection,
   tx: Transaction,
   signers: Keypair[],
-  label = "transaction"
+  label: string
 ): Promise<string> {
-  const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash("confirmed");
+  const { blockhash, lastValidBlockHeight } = await conn.getLatestBlockhash("confirmed");
   tx.recentBlockhash = blockhash;
   tx.lastValidBlockHeight = lastValidBlockHeight;
   tx.feePayer = signers[0].publicKey;
   tx.partialSign(...signers);
   try {
-    const sig = await connection.sendRawTransaction(tx.serialize(), {
-      skipPreflight: true,
-    });
-    await connection.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight }, "confirmed");
+    const sig = await conn.sendRawTransaction(tx.serialize(), { skipPreflight: true });
+    await conn.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight }, "confirmed");
     return sig;
   } catch (err) {
     const msg = await extractError(err);
@@ -142,28 +132,21 @@ async function sendAndConfirm(
 
 /* ─── Component ─── */
 export default function SimulationPage() {
-  const { publicKey, connected, sendTransaction } = useWallet();
-  const { connection } = useConnection();
+  const connection = useRef(new Connection(RPC_URL, "confirmed")).current;
 
-  const [phase, setPhase] = useState<Phase>("idle");
+  const [phase, setPhase] = useState<Phase>("deposit");
+  const [payer] = useState(() => Keypair.generate());
+  const [balance, setBalance] = useState(0);
   const [tokenPreview, setTokenPreview] = useState<TokenPreview | null>(null);
   const [slabAddress, setSlabAddress] = useState<string | null>(null);
   const [mintAddress, setMintAddress] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [stepLabel, setStepLabel] = useState("");
-  const [stepNum, setStepNum] = useState(0);
-  const [stepTotal, setStepTotal] = useState(0);
-
-  const [state, setState] = useState<SimulationState>({
-    running: false,
-    slabAddress: null,
-    price: 1_000_000,
-    scenario: null,
-    model: "random-walk",
-    uptime: 0,
-  });
+  const [step, setStep] = useState("");
+  const [copied, setCopied] = useState(false);
+  const [state, setState] = useState<SimState>({ running: false, slabAddress: null, price: 1_000_000, scenario: null, model: "random-walk", uptime: 0 });
   const [speed, setSpeed] = useState(1);
   const [loading, setLoading] = useState(false);
+  const buildingRef = useRef(false);
 
   /* ─── Fetch random token ─── */
   const fetchTokenPreview = useCallback(async () => {
@@ -180,32 +163,47 @@ export default function SimulationPage() {
 
   useEffect(() => { fetchTokenPreview(); }, [fetchTokenPreview]);
 
+  /* ─── Poll balance while waiting for deposit ─── */
+  useEffect(() => {
+    if (phase !== "deposit") return;
+    const interval = setInterval(async () => {
+      try {
+        const bal = await connection.getBalance(payer.publicKey);
+        setBalance(bal);
+        if (bal >= MIN_LAMPORTS && !buildingRef.current) {
+          buildingRef.current = true;
+          clearInterval(interval);
+          buildMarket();
+        }
+      } catch { /* ignore */ }
+    }, 2000);
+    return () => clearInterval(interval);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase, payer]);
+
   /* ─── Poll simulation state ─── */
   useEffect(() => {
     if (phase !== "running") return;
-    const fetchState = async () => {
+    const interval = setInterval(async () => {
       try {
         const res = await fetch("/api/simulation");
         if (res.ok) {
           const data = await res.json();
-          setState({ running: data.running, slabAddress: data.slabAddress, price: data.price, scenario: data.scenario, model: data.model, uptime: data.uptime });
+          setState(prev => ({ ...prev, running: data.running, price: data.price ?? prev.price, scenario: data.scenario ?? prev.scenario, model: data.model ?? prev.model, uptime: data.uptime ?? prev.uptime }));
           if (!data.running) setPhase("ended");
         }
-      } catch (err) { console.error("Poll error:", err); }
-    };
-    fetchState();
-    const iv = setInterval(fetchState, 2000);
-    return () => clearInterval(iv);
+      } catch { /* ignore */ }
+    }, 3000);
+    return () => clearInterval(interval);
   }, [phase]);
 
-  /* ─── LAUNCH ─── */
-  const handleLaunch = async () => {
-    if (!publicKey || !sendTransaction) return;
+  /* ─── Build market (all automatic after deposit detected) ─── */
+  const buildMarket = async () => {
+    setPhase("building");
     setError(null);
 
     try {
       const decimals = tokenPreview?.decimals ?? 6;
-      const payer = Keypair.generate();
       const oracleKp = Keypair.generate();
       const mintKp = Keypair.generate();
       const slabKp = Keypair.generate();
@@ -217,36 +215,8 @@ export default function SimulationPage() {
       const [lpPda] = deriveLpPda(PROGRAM_ID, slabKp.publicKey, 0);
       const payerAta = await getAssociatedTokenAddress(mintKp.publicKey, payer.publicKey);
 
-      /* ─── Phase 1: Fund disposable wallet (ONE wallet approval) ─── */
-      setPhase("funding-wallet");
-      setStepLabel("Approve SOL transfer...");
-      setStepNum(0);
-      setStepTotal(6);
-
-      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash("confirmed");
-      const fundTx = new Transaction({ blockhash, lastValidBlockHeight, feePayer: publicKey }).add(
-        SystemProgram.transfer({ fromPubkey: publicKey, toPubkey: payer.publicKey, lamports: FUND_AMOUNT_LAMPORTS })
-      );
-      let fundSig: string;
-      try {
-        fundSig = await sendTransaction(fundTx, connection, { skipPreflight: true });
-      } catch (walletErr: unknown) {
-        const msg = walletErr instanceof Error ? walletErr.message : String(walletErr);
-        throw new Error(`[Wallet approval] ${msg}. Make sure Phantom is set to DEVNET and has SOL.`);
-      }
-      setStepLabel("Confirming transfer...");
-      try {
-        await connection.confirmTransaction({ signature: fundSig, blockhash, lastValidBlockHeight }, "confirmed");
-      } catch {
-        throw new Error(`[Confirm transfer] Transaction ${fundSig.slice(0, 12)}... failed to confirm. Devnet may be congested — try again.`);
-      }
-      setStepNum(1);
-
-      /* ─── Phase 2: Create market (4 tx groups) ─── */
-      setPhase("creating");
-
-      // Group 1: mint + slab + vault + InitMarket
-      setStepLabel("Creating mint, slab & market...");
+      // Step 1: Create mint + slab + market
+      setStep("Creating mint, slab & market...");
       {
         const tx = new Transaction();
         tx.add(SystemProgram.createAccount({ fromPubkey: payer.publicKey, newAccountPubkey: mintKp.publicKey, lamports: MINT_RENT, space: getMintLen([]), programId: TOKEN_PROGRAM_ID }));
@@ -266,14 +236,13 @@ export default function SimulationPage() {
             liquidationFeeCap: "100000000000", liquidationBufferBps: "50", minLiquidationAbs: "1000000",
           }),
         }));
-        await sendAndConfirm(connection, tx, [payer, mintKp, slabKp], "Create mint+slab+market");
+        await sendAndConfirm(connection, tx, [payer, mintKp, slabKp], "Create market");
       }
-      setStepNum(2);
       setSlabAddress(slabKp.publicKey.toBase58());
       setMintAddress(mintKp.publicKey.toBase58());
 
-      // Group 2: Oracle + Config + Crank
-      setStepLabel("Setting up oracle & config...");
+      // Step 2: Oracle + Config + Crank
+      setStep("Setting up oracle & config...");
       {
         const tx = new Transaction();
         const t = nowSecs();
@@ -291,12 +260,11 @@ export default function SimulationPage() {
           }),
         }));
         tx.add(buildIx({ programId: PROGRAM_ID, keys: buildAccountMetas(ACCOUNTS_KEEPER_CRANK, [payer.publicKey, slabKp.publicKey, WELL_KNOWN.clock, slabKp.publicKey]), data: encodeKeeperCrank({ callerIdx: 65535, allowPanic: false }) }));
-        await sendAndConfirm(connection, tx, [payer], "Oracle+config+crank");
+        await sendAndConfirm(connection, tx, [payer], "Oracle+config");
       }
-      setStepNum(3);
 
-      // Group 3: LP Setup
-      setStepLabel("Initializing LP & vAMM...");
+      // Step 3: LP + vAMM
+      setStep("Initializing LP & vAMM...");
       {
         const tx = new Transaction();
         tx.add(createAssociatedTokenAccountInstruction(payer.publicKey, payerAta, payer.publicKey, mintKp.publicKey));
@@ -307,7 +275,6 @@ export default function SimulationPage() {
           keys: buildAccountMetas(ACCOUNTS_INIT_LP, [payer.publicKey, slabKp.publicKey, payerAta, vaultAta, WELL_KNOWN.tokenProgram]),
           data: encodeInitLP({ matcherProgram: MATCHER_PROGRAM_ID, matcherContext: matcherCtxKp.publicKey, feePayment: LP_FEE.toString() }),
         }));
-        // InitVamm — on-chain only reads 2 accounts (lp_pda, matcher_ctx)
         tx.add(buildIx({
           programId: MATCHER_PROGRAM_ID,
           keys: [
@@ -320,12 +287,11 @@ export default function SimulationPage() {
             maxFillAbs: 1_000_000_000_000n, maxInventoryAbs: 0n,
           }),
         }));
-        await sendAndConfirm(connection, tx, [payer, matcherCtxKp], "LP+vAMM setup");
+        await sendAndConfirm(connection, tx, [payer, matcherCtxKp], "LP+vAMM");
       }
-      setStepNum(4);
 
-      // Group 4: Delegate oracle + final crank
-      setStepLabel("Delegating oracle & finalizing...");
+      // Step 4: Delegate oracle + final crank
+      setStep("Finalizing oracle...");
       {
         const tx = new Transaction();
         const t = nowSecs();
@@ -333,13 +299,11 @@ export default function SimulationPage() {
         tx.add(buildIx({ programId: PROGRAM_ID, keys: buildAccountMetas(ACCOUNTS_KEEPER_CRANK, [payer.publicKey, slabKp.publicKey, WELL_KNOWN.clock, slabKp.publicKey]), data: encodeKeeperCrank({ callerIdx: 65535, allowPanic: false }) }));
         tx.add(buildIx({ programId: PROGRAM_ID, keys: buildAccountMetas(ACCOUNTS_SET_ORACLE_AUTHORITY, [payer.publicKey, slabKp.publicKey]), data: encodeSetOracleAuthority({ newAuthority: oracleKp.publicKey }) }));
         tx.add(buildIx({ programId: PROGRAM_ID, keys: buildAccountMetas(ACCOUNTS_PUSH_ORACLE_PRICE, [oracleKp.publicKey, slabKp.publicKey]), data: encodePushOraclePrice({ priceE6: INITIAL_PRICE_E6.toString(), timestamp: (t + 1).toString() }) }));
-        await sendAndConfirm(connection, tx, [payer, oracleKp], "Delegate oracle");
+        await sendAndConfirm(connection, tx, [payer, oracleKp], "Finalize oracle");
       }
-      setStepNum(5);
 
-      /* ─── Phase 3: Fund market ─── */
-      setPhase("funding");
-      setStepLabel("Minting & depositing collateral...");
+      // Step 5: Fund market
+      setStep("Minting tokens & funding...");
       {
         const tx1 = new Transaction();
         tx1.add(createMintToInstruction(mintKp.publicKey, payerAta, payer.publicKey, MINT_AMOUNT));
@@ -354,14 +318,11 @@ export default function SimulationPage() {
         const t = nowSecs();
         tx2.add(buildIx({ programId: PROGRAM_ID, keys: buildAccountMetas(ACCOUNTS_PUSH_ORACLE_PRICE, [oracleKp.publicKey, slabKp.publicKey]), data: encodePushOraclePrice({ priceE6: INITIAL_PRICE_E6.toString(), timestamp: t.toString() }) }));
         tx2.add(buildIx({ programId: PROGRAM_ID, keys: buildAccountMetas(ACCOUNTS_KEEPER_CRANK, [payer.publicKey, slabKp.publicKey, WELL_KNOWN.clock, slabKp.publicKey]), data: encodeKeeperCrank({ callerIdx: 65535, allowPanic: false }) }));
-        await sendAndConfirm(connection, tx2, [payer, oracleKp], "Deposit+insurance+crank");
+        await sendAndConfirm(connection, tx2, [payer, oracleKp], "Fund market");
       }
-      setStepNum(6);
 
-      /* ─── Phase 4: Start simulation ─── */
-      setPhase("starting");
-      setStepLabel("Starting simulation engine...");
-
+      // Step 6: Start simulation engine
+      setStep("Starting simulation...");
       const oracleSecret = Buffer.from(oracleKp.secretKey).toString("base64");
       const startRes = await fetch("/api/simulation/start", {
         method: "POST",
@@ -370,19 +331,20 @@ export default function SimulationPage() {
       });
       if (!startRes.ok) {
         const err = await startRes.json();
-        throw new Error(err.details || err.error || "Failed to start simulation");
+        throw new Error(err.details || err.error || "Failed to start");
       }
 
       setState({ running: true, slabAddress: slabKp.publicKey.toBase58(), price: Number(INITIAL_PRICE_E6), scenario: null, model: "random-walk", uptime: 0 });
       setPhase("running");
     } catch (err: unknown) {
-      console.error("Launch error:", err);
+      console.error("Build error:", err);
       setError(await extractError(err));
-      setPhase("idle");
+      setPhase("deposit");
+      buildingRef.current = false;
     }
   };
 
-  /* ─── Stop ─── */
+  /* ─── Controls ─── */
   const handleStop = async () => {
     setLoading(true);
     try {
@@ -394,150 +356,155 @@ export default function SimulationPage() {
   };
 
   const handleRestart = () => {
-    setPhase("idle");
+    setPhase("deposit");
     setSlabAddress(null);
     setMintAddress(null);
     setError(null);
-    setStepNum(0);
+    setStep("");
+    buildingRef.current = false;
     fetchTokenPreview();
   };
 
-  const handleScenarioSelect = async (scenarioId: string, params?: Record<string, number>) => {
+  const handleScenarioSelect = async (scenario: string) => {
     try {
-      const res = await fetch("/api/simulation/scenario", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ scenario: scenarioId, params }) });
-      if (res.ok) setState((s) => ({ ...s, scenario: scenarioId }));
+      await fetch("/api/simulation/scenario", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ scenario }),
+      });
+      setState(prev => ({ ...prev, scenario }));
     } catch (err) { console.error("Scenario error:", err); }
   };
 
-  const handlePriceOverride = async (priceE6: number) => {
+  const handlePriceOverride = async (price: number) => {
     try {
-      await fetch("/api/simulation/price", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ priceE6 }) });
-      setState((s) => ({ ...s, price: priceE6 }));
+      await fetch("/api/simulation/price", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ priceE6: price }),
+      });
     } catch (err) { console.error("Price override error:", err); }
   };
 
-  const formatUptime = (ms: number): string => {
+  const formatUptime = (ms: number) => {
     const s = Math.floor(ms / 1000);
     const m = Math.floor(s / 60);
-    const h = Math.floor(m / 60);
-    if (h > 0) return `${h}h ${m % 60}m`;
     if (m > 0) return `${m}m ${s % 60}s`;
     return `${s}s`;
   };
 
-  const isLaunching = phase === "funding-wallet" || phase === "creating" || phase === "funding" || phase === "starting";
-
-  const phaseOrder = (check: Phase): boolean => {
-    const order: Phase[] = ["funding-wallet", "creating", "funding", "starting"];
-    return order.indexOf(check) < order.indexOf(phase);
+  const copyAddress = () => {
+    navigator.clipboard.writeText(payer.publicKey.toBase58());
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   };
 
-  /* ─── Setup Flow ─── */
-  if (phase !== "running") {
+  /* ─── Deposit Screen ─── */
+  if (phase === "deposit") {
     return (
       <div className="min-h-screen bg-[var(--bg)]">
         <div className="border-b border-[var(--border)]/30 bg-[var(--bg)]/95 px-4 py-3">
-          <div className="mx-auto max-w-2xl">
+          <div className="mx-auto max-w-lg">
             <p className="mb-0.5 text-[9px] font-medium uppercase tracking-[0.2em] text-[var(--accent)]/70">// SIMULATION</p>
             <h1 className="text-lg font-bold text-[var(--text)]" style={{ fontFamily: "var(--font-display)" }}>Self-Service Demo</h1>
-            <p className="mt-0.5 text-[10px] text-[var(--text-secondary)]">One-click simulation -- connect wallet, approve once, everything else is automatic</p>
+            <p className="mt-0.5 text-[10px] text-[var(--text-secondary)]">Send devnet SOL to start -- market creation is fully automatic</p>
           </div>
         </div>
 
-        <div className="mx-auto max-w-2xl px-4 py-6 space-y-4">
+        <div className="mx-auto max-w-lg px-4 py-6 space-y-4">
           {/* Token Preview */}
           {tokenPreview && (
             <div className="border border-[var(--accent)]/20 bg-[var(--accent)]/[0.03] p-4">
-              <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-[var(--text-dim)] mb-2">Your Token</p>
               <div className="flex items-center justify-between">
                 <div>
+                  <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-[var(--text-dim)] mb-1">Your Token</p>
                   <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-[var(--accent)]">{tokenPreview.symbol}</p>
                   <p className="text-[14px] font-bold text-[var(--text)] mt-0.5">{tokenPreview.name}</p>
                   <p className="text-[10px] text-[var(--text-dim)] mt-0.5">{tokenPreview.description}</p>
                 </div>
-                <button onClick={fetchTokenPreview} disabled={isLaunching} className="border border-[var(--border)] bg-[var(--bg)] px-3 py-1.5 text-[9px] font-bold uppercase tracking-[0.1em] text-[var(--text-secondary)] hover:border-[var(--accent)]/30 hover:text-[var(--text)] transition-colors disabled:opacity-40">Reroll</button>
+                <button onClick={fetchTokenPreview} className="border border-[var(--border)] bg-[var(--bg)] px-3 py-1.5 text-[9px] font-bold uppercase tracking-[0.1em] text-[var(--text-secondary)] hover:border-[var(--accent)]/30 hover:text-[var(--text)] transition-colors">Reroll</button>
               </div>
             </div>
           )}
+
+          {/* Deposit Address */}
+          <div className="border border-[var(--border)] bg-[var(--bg)]/80 p-5 space-y-3">
+            <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-[var(--text-dim)]">1. Send {MIN_SOL} SOL (devnet)</p>
+            <div className="flex items-center gap-2">
+              <code className="flex-1 bg-[var(--bg-elevated)] border border-[var(--border)]/50 px-3 py-2.5 text-[11px] font-mono text-[var(--text)] break-all select-all">{payer.publicKey.toBase58()}</code>
+              <button onClick={copyAddress} className="border border-[var(--border)] bg-[var(--bg)] px-3 py-2.5 text-[9px] font-bold uppercase tracking-[0.1em] text-[var(--text-secondary)] hover:text-[var(--text)] transition-colors whitespace-nowrap">
+                {copied ? "Copied" : "Copy"}
+              </button>
+            </div>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="h-2 w-2" style={{ backgroundColor: balance >= MIN_LAMPORTS ? "var(--long)" : "var(--text-dim)" }} />
+                <span className="text-[10px] text-[var(--text-secondary)]">
+                  {balance > 0 ? `${(balance / LAMPORTS_PER_SOL).toFixed(4)} SOL received` : "Waiting for deposit..."}
+                </span>
+              </div>
+              {balance > 0 && balance < MIN_LAMPORTS && (
+                <span className="text-[9px] text-[var(--short)]">Need {((MIN_LAMPORTS - balance) / LAMPORTS_PER_SOL).toFixed(4)} more</span>
+              )}
+            </div>
+            <p className="text-[9px] text-[var(--text-dim)]">Get devnet SOL from <a href="https://faucet.solana.com" target="_blank" rel="noopener noreferrer" className="text-[var(--accent)] underline">faucet.solana.com</a>. Market creation starts automatically when deposit arrives.</p>
+          </div>
+
+          {/* How it works */}
+          <div className="border border-[var(--border)]/30 bg-[var(--bg)]/80 p-4 space-y-2">
+            <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-[var(--text-dim)]">How it works</p>
+            <div className="space-y-1.5 text-[10px] text-[var(--text-secondary)]">
+              <p>1. Send devnet SOL to the address above</p>
+              <p>2. We auto-create a perp market for your random token</p>
+              <p>3. Oracle starts pushing live prices correlated to SOL</p>
+              <p>4. Watch funding rates, liquidations & risk metrics live</p>
+            </div>
+          </div>
 
           {/* Error */}
           {error && (
             <div className="border border-[var(--short)]/30 bg-[var(--short)]/[0.04] p-3">
+              <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-[var(--short)] mb-1">Error</p>
               <p className="text-[10px] text-[var(--short)] break-all">{error}</p>
+              <p className="text-[9px] text-[var(--text-dim)] mt-2">Your SOL is still in the deposit address. Send more if needed and it will retry automatically.</p>
             </div>
           )}
+        </div>
+      </div>
+    );
+  }
 
-          {/* Idle */}
-          {phase === "idle" && (
-            <div className="space-y-3">
-              {!connected ? (
-                <div className="flex items-center justify-between border border-[var(--border)]/30 bg-[var(--bg)]/80 p-4">
-                  <div>
-                    <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-[var(--text-dim)]">Connect Wallet</p>
-                    <p className="text-[9px] text-[var(--text-dim)] mt-0.5">You will approve one transfer of {FUND_AMOUNT_SOL} SOL. Everything else is automatic.</p>
-                  </div>
-                  <WalletMultiButton />
-                </div>
-              ) : (
-                <div className="flex items-center gap-2 border border-[var(--accent)]/20 bg-[var(--accent)]/[0.03] p-3">
-                  <div className="h-2 w-2" style={{ backgroundColor: "var(--long)" }} />
-                  <span className="text-[11px] font-mono text-[var(--text)]">{publicKey?.toBase58().slice(0, 8)}...{publicKey?.toBase58().slice(-8)}</span>
-                  <span className="text-[9px] text-[var(--text-dim)] ml-auto">Cost: ~{FUND_AMOUNT_SOL} SOL (devnet)</span>
-                </div>
-              )}
-              <button onClick={handleLaunch} disabled={!connected} className="w-full border border-[var(--accent)]/50 bg-[var(--accent)]/[0.08] py-4 text-[13px] font-bold uppercase tracking-[0.2em] text-[var(--accent)] transition-all hover:border-[var(--accent)] hover:bg-[var(--accent)]/[0.15] disabled:opacity-40 disabled:cursor-not-allowed">Launch Simulation</button>
+  /* ─── Building Screen ─── */
+  if (phase === "building") {
+    return (
+      <div className="min-h-screen bg-[var(--bg)] flex items-center justify-center">
+        <div className="max-w-md w-full px-4 space-y-4">
+          <div className="border border-[var(--accent)]/30 bg-[var(--accent)]/[0.02] p-6 space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="h-4 w-4 animate-spin border-2 border-[var(--border)] border-t-[var(--accent)]" />
+              <p className="text-[12px] font-bold text-[var(--text)]">Building Market</p>
             </div>
-          )}
+            <p className="text-[11px] text-[var(--text-secondary)]">{step || "Preparing..."}</p>
+            {tokenPreview && (
+              <p className="text-[10px] text-[var(--text-dim)]">Token: {tokenPreview.symbol} -- {tokenPreview.name}</p>
+            )}
+            <p className="text-[9px] text-[var(--text-dim)]">6 transactions total. This takes ~30 seconds on devnet.</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
-          {/* Progress */}
-          {isLaunching && (
-            <div className="border border-[var(--accent)]/30 bg-[var(--accent)]/[0.02] p-4 space-y-3">
-              <div className="flex items-center gap-2">
-                <div className="h-3 w-3 animate-spin border border-[var(--border)] border-t-[var(--accent)]" />
-                <span className="text-[11px] text-[var(--text)]">{stepLabel || "Working..."}</span>
-              </div>
-              {/* Phase indicators */}
-              <div className="flex items-center gap-0 text-[9px] text-[var(--text-dim)]">
-                {(["funding-wallet", "creating", "funding", "starting"] as Phase[]).map((p, i) => (
-                  <div key={p} className="flex items-center flex-1">
-                    <div className="flex items-center gap-1.5">
-                      <div className="h-5 w-5 flex items-center justify-center text-[8px] font-bold" style={{ 
-                        backgroundColor: phase === p ? "var(--accent)" : phaseOrder(p) ? "var(--long)" : "transparent",
-                        color: phase === p || phaseOrder(p) ? "var(--bg)" : "var(--text-dim)",
-                        border: phase === p || phaseOrder(p) ? "none" : "1px solid var(--text-dim)"
-                      }}>{i + 1}</div>
-                      <span style={{ color: phase === p ? "var(--accent)" : phaseOrder(p) ? "var(--long)" : "var(--text-dim)" }}>
-                        {p === "funding-wallet" ? "Fund" : p === "creating" ? "Market" : p === "funding" ? "Tokens" : "Test"}
-                      </span>
-                    </div>
-                    {i < 3 && <div className="flex-1 h-px mx-2" style={{ backgroundColor: phaseOrder(p) ? "var(--long)" : "var(--border)" }} />}
-                  </div>
-                ))}
-              </div>
-              {/* Progress bar */}
-              {stepTotal > 0 && (
-                <div className="space-y-1">
-                  <div className="h-1 bg-[var(--border)]">
-                    <div className="h-1 bg-[var(--accent)] transition-all" style={{ width: `${(stepNum / stepTotal) * 100}%` }} />
-                  </div>
-                  <div className="flex justify-between text-[9px] text-[var(--text-dim)]">
-                    <span>{stepLabel || "Working..."}</span>
-                    <span>{stepNum}/{stepTotal}</span>
-                  </div>
-                </div>
-              )}
-              <p className="text-[9px] text-[var(--text-dim)]">One approval done. Everything else is automatic.</p>
-            </div>
-          )}
-
-          {/* Ended */}
-          {phase === "ended" && (
-            <div className="border border-[var(--border)] bg-[var(--bg)]/80 p-5 space-y-3">
-              <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-[var(--text-dim)]">Simulation Ended</p>
-              {slabAddress && <p className="text-[10px] font-mono text-[var(--text-secondary)]">Market: {slabAddress.slice(0, 12)}...{slabAddress.slice(-12)}</p>}
-              <button onClick={handleRestart} className="w-full border border-[var(--accent)]/50 bg-[var(--accent)]/[0.08] py-2.5 text-[11px] font-bold uppercase tracking-[0.15em] text-[var(--accent)] hover:bg-[var(--accent)]/[0.15] transition-all">Start New Simulation</button>
-            </div>
-          )}
+  /* ─── Ended Screen ─── */
+  if (phase === "ended") {
+    return (
+      <div className="min-h-screen bg-[var(--bg)] flex items-center justify-center">
+        <div className="max-w-md w-full px-4">
+          <div className="border border-[var(--border)] bg-[var(--bg)]/80 p-5 space-y-3">
+            <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-[var(--text-dim)]">Simulation Ended</p>
+            {slabAddress && <p className="text-[10px] font-mono text-[var(--text-secondary)]">Market: {slabAddress.slice(0, 12)}...{slabAddress.slice(-12)}</p>}
+            <button onClick={handleRestart} className="w-full border border-[var(--accent)]/50 bg-[var(--accent)]/[0.08] py-2.5 text-[11px] font-bold uppercase tracking-[0.15em] text-[var(--accent)] hover:bg-[var(--accent)]/[0.15] transition-all">Start New Simulation</button>
+          </div>
         </div>
       </div>
     );
@@ -555,7 +522,6 @@ export default function SimulationPage() {
                 <h1 className="text-lg font-bold text-[var(--text)]" style={{ fontFamily: "var(--font-display)" }}>{tokenPreview?.symbol || "SIM"}</h1>
                 <span className="text-[12px] text-[var(--text-secondary)]">{tokenPreview?.name || "Simulation"}</span>
               </div>
-              <p className="mt-0.5 text-[10px] text-[var(--text-secondary)]">Self-service simulation -- real on-chain market</p>
             </div>
             <div className="flex items-center gap-3">
               <div className="border border-[var(--border)]/50 bg-[var(--bg-elevated)] px-3 py-2">
