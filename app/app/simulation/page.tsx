@@ -677,7 +677,8 @@ export default function SimulationPage() {
         const res = await railwayFetch("/api/simulation");
         if (res.ok) {
           const data = await res.json();
-          const newPrice = data.price ?? 1_000_000;
+          const stats = data.stats ?? {};
+          const newPrice = data.currentPriceE6 ?? data.price ?? 1_000_000;
           setState(prev => ({
             ...prev,
             running: data.running,
@@ -685,10 +686,10 @@ export default function SimulationPage() {
             scenario: data.scenario ?? prev.scenario,
             model: data.model ?? prev.model,
             uptime: data.uptime ?? prev.uptime,
-            totalTrades: data.totalTrades ?? prev.totalTrades,
-            liquidations: data.liquidations ?? prev.liquidations,
-            fundingRate: data.fundingRate ?? prev.fundingRate,
-            openInterest: data.openInterest ?? prev.openInterest,
+            totalTrades: stats.tradesCount ?? data.totalTrades ?? prev.totalTrades,
+            liquidations: stats.liquidationsCount ?? data.liquidations ?? prev.liquidations,
+            fundingRate: stats.fundingRate ? Number(stats.fundingRate) / 10000 : (data.fundingRate ?? prev.fundingRate),
+            openInterest: stats.openInterest ? Number(stats.openInterest) / 1_000_000 : (data.openInterest ?? prev.openInterest),
           }));
           const priceUsd = newPrice / 1e6;
           setPriceHistory(prev => {
@@ -702,12 +703,12 @@ export default function SimulationPage() {
             endPrice: priceUsd,
             dataPoints: prev.dataPoints + 1,
             scenario: data.scenario ?? prev.scenario,
-            totalTrades: data.totalTrades ?? prev.totalTrades,
-            liquidations: data.liquidations ?? prev.liquidations,
-            fundingRate: data.fundingRate ?? prev.fundingRate,
-            openInterest: data.openInterest ?? prev.openInterest,
-            peakOpenInterest: Math.max(prev.peakOpenInterest, data.openInterest ?? prev.openInterest),
-            insuranceBalance: data.insuranceBalance ?? prev.insuranceBalance,
+            totalTrades: stats.tradesCount ?? prev.totalTrades,
+            liquidations: stats.liquidationsCount ?? prev.liquidations,
+            fundingRate: stats.fundingRate ? Number(stats.fundingRate) / 10000 : prev.fundingRate,
+            openInterest: stats.openInterest ? Number(stats.openInterest) / 1_000_000 : prev.openInterest,
+            peakOpenInterest: Math.max(prev.peakOpenInterest, stats.openInterest ? Number(stats.openInterest) / 1_000_000 : prev.openInterest),
+            insuranceBalance: stats.insuranceBalance ? Number(stats.insuranceBalance) / 1_000_000 : prev.insuranceBalance,
             insuranceHealth: data.insuranceHealth ?? prev.insuranceHealth,
             forceCloses: data.forceCloses ?? prev.forceCloses,
           } : prev);

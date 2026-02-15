@@ -744,34 +744,31 @@ export class SimulationService {
       return;
     }
 
-    // Ensure oracle keypair has enough SOL for bot init tx fees
-    // Each bot needs ~0.01 SOL for InitUser + DepositCollateral fees
-    // Plus ATA creation, minting, etc. Request 2 SOL to be safe.
-    try {
-      const balance = await this.connection.getBalance(this.oracleKeypair.publicKey);
-      const MIN_SOL = 1_000_000_000; // 1 SOL minimum
-      if (balance < MIN_SOL) {
-        console.log(`🪂 Oracle keypair low on SOL (${(balance / 1e9).toFixed(3)} SOL), requesting airdrop...`);
-        // Use devnet public RPC for airdrops (Helius doesn't support requestAirdrop)
-        const devnetConn = new Connection("https://api.devnet.solana.com", "confirmed");
-        const airdropSig = await devnetConn.requestAirdrop(this.oracleKeypair.publicKey, 2_000_000_000);
-        await devnetConn.confirmTransaction(airdropSig, "confirmed");
-        console.log(`✅ Airdropped 2 SOL to oracle keypair (sig=${airdropSig.slice(0, 16)}...)`);
-        await new Promise((r) => setTimeout(r, 2000)); // wait for propagation
-      } else {
-        console.log(`💰 Oracle keypair has ${(balance / 1e9).toFixed(3)} SOL — sufficient for bot init`);
+    // Wait for frontend to transfer SOL to oracle keypair (0.3 SOL for tx fees)
+    // Frontend sends SOL transfer before calling /api/simulation/start, but it may not be confirmed yet
+    const MIN_SOL = 100_000_000; // 0.1 SOL minimum needed
+    const MAX_WAIT_ATTEMPTS = 12; // 12 x 5s = 60s max wait
+    let solBalance = 0;
+    for (let attempt = 1; attempt <= MAX_WAIT_ATTEMPTS; attempt++) {
+      solBalance = await this.connection.getBalance(this.oracleKeypair.publicKey);
+      console.log(`💰 Oracle SOL check ${attempt}/${MAX_WAIT_ATTEMPTS}: ${(solBalance / 1e9).toFixed(4)} SOL`);
+      if (solBalance >= MIN_SOL) break;
+      if (attempt < MAX_WAIT_ATTEMPTS) {
+        await new Promise((r) => setTimeout(r, 5000));
       }
-    } catch (err) {
-      console.error("Airdrop failed (devnet rate limit?), continuing anyway:", err);
-      // If airdrop fails, try a second time with smaller amount
+    }
+    if (solBalance < MIN_SOL) {
+      // Last resort: try devnet airdrop
+      console.log("🪂 No SOL from frontend, trying devnet airdrop...");
       try {
         const devnetConn = new Connection("https://api.devnet.solana.com", "confirmed");
-        const sig = await devnetConn.requestAirdrop(this.oracleKeypair.publicKey, 500_000_000);
+        const sig = await devnetConn.requestAirdrop(this.oracleKeypair.publicKey, 1_000_000_000);
         await devnetConn.confirmTransaction(sig, "confirmed");
-        console.log(`✅ Retry airdrop 0.5 SOL succeeded`);
+        console.log("✅ Airdrop 1 SOL succeeded");
         await new Promise((r) => setTimeout(r, 2000));
-      } catch {
-        console.error("Retry airdrop also failed — bots may fail to init");
+      } catch (err) {
+        console.error("❌ Airdrop failed — bots cannot init without SOL:", err);
+        return;
       }
     }
 
