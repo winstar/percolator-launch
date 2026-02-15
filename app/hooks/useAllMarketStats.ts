@@ -18,7 +18,15 @@ export function useAllMarketStats() {
   useEffect(() => {
     setLoading(true);
     setError(null);
-    const supabase = getSupabase();
+    let supabase: ReturnType<typeof getSupabase>;
+    try {
+      supabase = getSupabase();
+    } catch {
+      // Supabase client creation can fail if env vars missing
+      setError("Database unavailable");
+      setLoading(false);
+      return;
+    }
 
     async function load() {
       try {
@@ -47,20 +55,32 @@ export function useAllMarketStats() {
 
     load();
 
-    // Subscribe to market_stats updates
-    const channel = supabase
-      .channel("all-market-stats")
-      .on("postgres_changes", {
-        event: "*",
-        schema: "public",
-        table: "market_stats",
-      }, (payload) => {
-        // Re-fetch on any stats update (could optimize this later)
-        load();
-      })
-      .subscribe();
+    // Subscribe to market_stats updates (WebSocket)
+    // Wrapped in try/catch — Safari/iOS blocks insecure WebSocket on HTTPS pages
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+    try {
+      channel = supabase
+        .channel("all-market-stats")
+        .on("postgres_changes", {
+          event: "*",
+          schema: "public",
+          table: "market_stats",
+        }, () => {
+          load();
+        })
+        .subscribe();
+    } catch {
+      // WebSocket unavailable — fall back to polling
+      console.warn("[useAllMarketStats] Realtime unavailable, falling back to 30s polling");
+    }
 
-    return () => { supabase.removeChannel(channel); };
+    // Polling fallback (also acts as backup if realtime subscription fails)
+    const pollInterval = setInterval(load, 30_000);
+
+    return () => {
+      clearInterval(pollInterval);
+      if (channel) supabase.removeChannel(channel);
+    };
   }, []);
 
   return { statsMap, loading, error };
