@@ -20,6 +20,7 @@ import {
 import {
   encodeInitMarket,
   encodeInitLP,
+  encodeInitVamm,
   encodeSetOracleAuthority,
   encodePushOraclePrice,
   encodeSetOraclePriceCap,
@@ -27,6 +28,7 @@ import {
   encodeKeeperCrank,
   ACCOUNTS_INIT_MARKET,
   ACCOUNTS_INIT_LP,
+  ACCOUNTS_INIT_VAMM,
   ACCOUNTS_SET_ORACLE_AUTHORITY,
   ACCOUNTS_PUSH_ORACLE_PRICE,
   ACCOUNTS_UPDATE_CONFIG,
@@ -255,32 +257,6 @@ export async function POST(request: NextRequest) {
       })
     );
 
-    // Initialize vAMM matcher
-    const vammData = new Uint8Array(66);
-    const vammDv = new DataView(vammData.buffer);
-    let off = 0;
-    vammData[off] = 2; off += 1; // Tag 2 = InitVamm
-    vammData[off] = 0; off += 1; // mode 0 = passive
-    vammDv.setUint32(off, 30, true); off += 4;  // tradingFeeBps
-    vammDv.setUint32(off, 50, true); off += 4;  // baseSpreadBps
-    vammDv.setUint32(off, 200, true); off += 4; // maxTotalBps
-    vammDv.setUint32(off, 0, true); off += 4;   // impactKBps
-    vammDv.setBigUint64(off, 10000000000000n, true); off += 8; // liquidityE6
-    vammDv.setBigUint64(off, 0n, true); off += 8;
-    vammDv.setBigUint64(off, 1_000_000_000_000n, true); off += 8; // maxFillAbs
-    vammDv.setBigUint64(off, 0n, true); off += 8;
-    vammDv.setBigUint64(off, 0n, true); off += 8;
-    vammDv.setBigUint64(off, 0n, true); off += 8;
-
-    tx3.add(new TransactionInstruction({
-      programId: matcherProgramId,
-      keys: [
-        { pubkey: lpPda, isSigner: false, isWritable: false },
-        { pubkey: matcherCtxKeypair.publicKey, isSigner: false, isWritable: true },
-      ],
-      data: Buffer.from(vammData),
-    }));
-
     // Mint tokens for LP fee payment (payer is mint authority)
     const LP_FEE = 1_000_000; // matches newAccountFee in InitMarket
     tx3.add(
@@ -292,7 +268,7 @@ export async function POST(request: NextRequest) {
       )
     );
 
-    // InitLP
+    // InitLP — must come BEFORE InitVamm so LP exists in slab
     const initLpData = encodeInitLP({
       matcherProgram: matcherProgramId,
       matcherContext: matcherCtxKeypair.publicKey,
@@ -302,6 +278,25 @@ export async function POST(request: NextRequest) {
       payerPk, slabKeypair.publicKey, payerAta, vaultAta, WELL_KNOWN.tokenProgram,
     ]);
     tx3.add(buildIx({ programId, keys: initLpKeys, data: initLpData }));
+
+    // Initialize vAMM matcher — AFTER InitLP so LP exists in slab
+    const vammData = encodeInitVamm({
+      mode: 0,              // passive
+      tradingFeeBps: 30,
+      baseSpreadBps: 50,
+      maxTotalBps: 200,
+      impactKBps: 0,
+      liquidityNotionalE6: 10_000_000_000_000n,
+      maxFillAbs: 1_000_000_000_000n,
+      maxInventoryAbs: 0n,
+    });
+    const vammKeys = buildAccountMetas(ACCOUNTS_INIT_VAMM, [
+      payerPk,
+      matcherCtxKeypair.publicKey,
+      slabKeypair.publicKey,
+      lpPda,
+    ]);
+    tx3.add(buildIx({ programId: matcherProgramId, keys: vammKeys, data: vammData }));
 
     // ─── Transaction 4: Delegate oracle authority to server keypair ───
     const tx4 = new Transaction();
