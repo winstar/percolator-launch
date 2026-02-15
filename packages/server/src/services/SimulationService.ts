@@ -4,6 +4,7 @@ import {
   PublicKey,
   Transaction,
   ComputeBudgetProgram,
+  SystemProgram,
 } from "@solana/web3.js";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import {
@@ -40,6 +41,7 @@ import {
   getAssociatedTokenAddress,
   createAssociatedTokenAccountInstruction,
   createMintToInstruction,
+  createTransferInstruction,
   getAccount,
   TokenAccountNotFoundError,
 } from "@solana/spl-token";
@@ -127,6 +129,7 @@ interface SimStats {
 interface BotState {
   name: string;
   type: "MarketMaker" | "TrendFollower" | "LiquidationBot" | "WhaleBot" | "InsuranceBot";
+  keypair: Keypair | null; // Each bot gets its own keypair for unique on-chain accounts
   accountIdx: number | null;
   initialized: boolean;
   funded: boolean;
@@ -317,11 +320,11 @@ export class SimulationService {
       livePriceE6: livePrice ? BigInt(Math.round(livePrice * 1_000_000)) : null,
       stats: this.freshStats(),
       bots: [
-        { name: "MarketMaker", type: "MarketMaker", accountIdx: null, initialized: false, funded: false, lastTradeTime: 0, tradeInterval: 4000, trades: 0 },
-        { name: "TrendFollower", type: "TrendFollower", accountIdx: null, initialized: false, funded: false, lastTradeTime: 0, tradeInterval: 6000, trades: 0 },
-        { name: "LiquidationBot", type: "LiquidationBot", accountIdx: null, initialized: false, funded: false, lastTradeTime: 0, tradeInterval: 5000, trades: 0 },
-        { name: "WhaleBot", type: "WhaleBot", accountIdx: null, initialized: false, funded: false, lastTradeTime: 0, tradeInterval: 10000, trades: 0 },
-        { name: "InsuranceBot", type: "InsuranceBot", accountIdx: null, initialized: false, funded: false, lastTradeTime: 0, tradeInterval: 15000, trades: 0 },
+        { name: "MarketMaker", type: "MarketMaker", keypair: Keypair.generate(), accountIdx: null, initialized: false, funded: false, lastTradeTime: 0, tradeInterval: 4000, trades: 0 },
+        { name: "TrendFollower", type: "TrendFollower", keypair: Keypair.generate(), accountIdx: null, initialized: false, funded: false, lastTradeTime: 0, tradeInterval: 6000, trades: 0 },
+        { name: "LiquidationBot", type: "LiquidationBot", keypair: Keypair.generate(), accountIdx: null, initialized: false, funded: false, lastTradeTime: 0, tradeInterval: 5000, trades: 0 },
+        { name: "WhaleBot", type: "WhaleBot", keypair: Keypair.generate(), accountIdx: null, initialized: false, funded: false, lastTradeTime: 0, tradeInterval: 10000, trades: 0 },
+        { name: "InsuranceBot", type: "InsuranceBot", keypair: null, accountIdx: null, initialized: false, funded: false, lastTradeTime: 0, tradeInterval: 15000, trades: 0 },
       ],
     };
 
@@ -851,9 +854,10 @@ export class SimulationService {
       // Continue anyway — bots will fail individually
     }
 
-    // Initialize each bot sequentially (avoid nonce conflicts)
+    // Fund each bot keypair with SOL + tokens, then InitUser
+    const oracleAta = await getAssociatedTokenAddress(mint, payer.publicKey);
+    
     for (const bot of this.state.bots) {
-      // InsuranceBot doesn't need a trading account
       if (bot.type === "InsuranceBot") {
         bot.initialized = true;
         bot.funded = true;
@@ -861,9 +865,47 @@ export class SimulationService {
         continue;
       }
 
+      if (!bot.keypair) continue;
+
       try {
+        // Step 1: Fund bot with SOL + create ATA + transfer tokens in one tx
+        const botAta = await getAssociatedTokenAddress(mint, bot.keypair.publicKey);
+        const fundTx = new Transaction();
+        fundTx.add(ComputeBudgetProgram.setComputeUnitLimit({ units: 400_000 }));
+        
+        // Transfer SOL for tx fees
+        fundTx.add(SystemProgram.transfer({
+          fromPubkey: payer.publicKey,
+          toPubkey: bot.keypair.publicKey,
+          lamports: 50_000_000, // 0.05 SOL per bot
+        }));
+        
+        // Create bot's ATA
+        fundTx.add(createAssociatedTokenAccountInstruction(
+          payer.publicKey, botAta, bot.keypair.publicKey, mint
+        ));
+        
+        // Transfer tokens from oracle ATA to bot ATA
+        const depositAmounts: Record<string, bigint> = {
+          MarketMaker: BigInt(50_000_000) + BigInt(100_000),
+          TrendFollower: BigInt(30_000_000) + BigInt(100_000),
+          LiquidationBot: BigInt(5_000_000) + BigInt(100_000),
+          WhaleBot: BigInt(200_000_000) + BigInt(100_000),
+        };
+        const tokenAmount = depositAmounts[bot.type] ?? BigInt(10_100_000);
+        fundTx.add(createTransferInstruction(oracleAta, botAta, payer.publicKey, tokenAmount));
+        
+        const { blockhash: fundBh } = await this.connection.getLatestBlockhash("confirmed");
+        fundTx.recentBlockhash = fundBh;
+        fundTx.feePayer = payer.publicKey;
+        
+        const fundSig = await this.connection.sendTransaction(fundTx, [payer], { skipPreflight: true });
+        console.log(`💰 ${bot.name} funded: 0.05 SOL + ${tokenAmount} tokens (sig=${fundSig.slice(0, 16)}...)`);
+        await new Promise((r) => setTimeout(r, 2500));
+        
+        // Step 2: InitUser with bot's own keypair
         await this.initSingleBot(slab, bot, vault, mint);
-        await new Promise((r) => setTimeout(r, 1500)); // wait for confirmation
+        await new Promise((r) => setTimeout(r, 1500));
         this.startBotLoop(slab, bot);
       } catch (err) {
         console.error(`Failed to init bot ${bot.name}:`, err);
@@ -878,8 +920,8 @@ export class SimulationService {
     vault: PublicKey,
     mint: PublicKey,
   ): Promise<void> {
-    if (!this.oracleKeypair) return;
-    const payer = this.oracleKeypair;
+    if (!bot.keypair) return;
+    const payer = bot.keypair;
     const userAta = await getAssociatedTokenAddress(mint, payer.publicKey);
 
     // InitUser
@@ -1209,9 +1251,9 @@ export class SimulationService {
     size: bigint,
     notionalUsd: number,
   ): Promise<void> {
-    if (!this.oracleKeypair || bot.accountIdx === null) return;
+    if (!bot.keypair || bot.accountIdx === null) return;
 
-    const payer = this.oracleKeypair;
+    const payer = bot.keypair;
     const tradeData = encodeTradeNoCpi({
       lpIdx: this.lpIdx,
       userIdx: bot.accountIdx,
