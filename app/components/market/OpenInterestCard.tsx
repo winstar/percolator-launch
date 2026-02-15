@@ -51,8 +51,8 @@ function formatSignedUsdAmount(amountE6: string): string {
   return usd >= 0 ? `+$${formatted}` : `-$${formatted}`;
 }
 
-export const OpenInterestCard: FC<{ slabAddress: string; simulation?: boolean }> = ({
-  slabAddress, simulation,
+export const OpenInterestCard: FC<{ slabAddress: string }> = ({
+  slabAddress,
 }) => {
   const mockMode = isMockMode() && isMockSlab(slabAddress);
   const { engine } = useEngineState();
@@ -60,32 +60,12 @@ export const OpenInterestCard: FC<{ slabAddress: string; simulation?: boolean }>
   const [oiData, setOiData] = useState<OpenInterestData | null>(
     mockMode ? MOCK_OI : null
   );
-  const [loading, setLoading] = useState(!mockMode && !simulation);
+  const [loading, setLoading] = useState(!mockMode);
   const [error, setError] = useState<string | null>(null);
 
-  // In simulation mode, derive from on-chain state
+  // Fetch OI data from API
   useEffect(() => {
-    if (!simulation || !engine) return;
-    const totalOi = engine.totalOpenInterest ?? 0n;
-    const netLpPos = engine.netLpPos ?? 0n;
-    // Clamp to avoid negative values when netLpPos > totalOi
-    const rawLong = (totalOi + netLpPos) / 2n;
-    const rawShort = (totalOi - netLpPos) / 2n;
-    const longOi = rawLong < 0n ? 0n : rawLong;
-    const shortOi = rawShort < 0n ? 0n : rawShort;
-    setOiData({
-      totalOi: totalOi.toString(),
-      longOi: longOi.toString(),
-      shortOi: shortOi.toString(),
-      netLpPosition: netLpPos.toString(),
-      historicalOi: [],
-    });
-    setLoading(false);
-  }, [simulation, engine]);
-
-  // Fetch OI data from API (non-simulation)
-  useEffect(() => {
-    if (mockMode || simulation) return;
+    if (mockMode) return;
 
     const fetchOi = async () => {
       try {
@@ -121,7 +101,7 @@ export const OpenInterestCard: FC<{ slabAddress: string; simulation?: boolean }>
     fetchOi();
     const interval = setInterval(fetchOi, 30000); // Refresh every 30s
     return () => clearInterval(interval);
-  }, [slabAddress, mockMode, simulation, engine]);
+  }, [slabAddress, mockMode, engine]);
 
   // Calculate percentages and imbalance
   const { longPct, shortPct, imbalancePct, imbalanceLabel, imbalanceColor } =

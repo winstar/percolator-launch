@@ -46,8 +46,8 @@ function formatUsdAmount(amountE6: string | bigint): string {
   });
 }
 
-export const InsuranceDashboard: FC<{ slabAddress: string; simulation?: boolean }> = ({
-  slabAddress, simulation,
+export const InsuranceDashboard: FC<{ slabAddress: string }> = ({
+  slabAddress,
 }) => {
   const mockMode = isMockMode() && isMockSlab(slabAddress);
   const { engine, insuranceFund, totalOI } = useEngineState();
@@ -55,30 +55,14 @@ export const InsuranceDashboard: FC<{ slabAddress: string; simulation?: boolean 
   const [insuranceData, setInsuranceData] = useState<InsuranceData | null>(
     mockMode ? MOCK_INSURANCE : null
   );
-  const [loading, setLoading] = useState(!mockMode && !simulation);
+  const [loading, setLoading] = useState(!mockMode);
   const [error, setError] = useState<string | null>(null);
   const [showExplainer, setShowExplainer] = useState(false);
   const [showTopUp, setShowTopUp] = useState(false);
 
-  // In simulation mode, derive from on-chain state
+  // Fetch insurance data from API
   useEffect(() => {
-    if (!simulation || !engine) return;
-    const balance = (insuranceFund?.balance ?? 0n).toString();
-    const feeRev = (insuranceFund?.feeRevenue ?? 0n).toString();
-    const risk = (totalOI ?? 0n).toString();
-    const healthRatio = Number(totalOI ?? 0n) > 0
-      ? Number(insuranceFund?.balance ?? 0n) / Number(totalOI ?? 0n)
-      : 0;
-    setInsuranceData({
-      balance, feeRevenue: feeRev, dailyAccumulationRate: 0,
-      coverageRatio: healthRatio, totalRisk: risk, historicalBalance: [],
-    });
-    setLoading(false);
-  }, [simulation, engine, insuranceFund, totalOI]);
-
-  // Fetch insurance data from API (non-simulation)
-  useEffect(() => {
-    if (mockMode || simulation) return;
+    if (mockMode) return;
 
     const fetchInsurance = async () => {
       try {
@@ -113,7 +97,7 @@ export const InsuranceDashboard: FC<{ slabAddress: string; simulation?: boolean 
     fetchInsurance();
     const interval = setInterval(fetchInsurance, 30000); // Refresh every 30s
     return () => clearInterval(interval);
-  }, [slabAddress, mockMode, simulation, engine]);
+  }, [slabAddress, mockMode, engine]);
 
   // Calculate health status
   const healthStatus = useMemo(() => {

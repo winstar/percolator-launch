@@ -28,10 +28,8 @@ interface PriceState {
  * Gets the slab address from SlabProvider context (not query params)
  * so it works on both /trade/[slab] and ?market= routes.
  * 
- * @param options.simulation - If true, skips Railway price cache calls (for simulation markets)
  */
-export function useLivePrice(options?: { simulation?: boolean }): PriceState {
-  const simulation = options?.simulation ?? false;
+export function useLivePrice(): PriceState {
   const [state, setState] = useState<PriceState>({
     price: null,
     priceUsd: null,
@@ -153,8 +151,8 @@ export function useLivePrice(options?: { simulation?: boolean }): PriceState {
 
     connect();
 
-    // Also fetch 24h stats via REST (skip for simulation markets)
-    if (!simulation && WS_URL) {
+    // Also fetch 24h stats via REST
+    if (WS_URL) {
       fetch(`${WS_URL.replace("ws://", "http://").replace("wss://", "https://")}/prices/${slabAddr}`)
         .then((r) => { if (!r.ok) throw new Error("not found"); return r.json(); })
         .then((json: { stats?: { change24h?: number; high24h?: string; low24h?: string } }) => {
@@ -188,7 +186,7 @@ export function useLivePrice(options?: { simulation?: boolean }): PriceState {
         wsRef.current = null;
       }
     };
-  }, [slabAddr, simulation]);
+  }, [slabAddr]);
 
   return state;
 }
