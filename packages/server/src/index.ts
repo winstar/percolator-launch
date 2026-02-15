@@ -20,6 +20,7 @@ import { webhookRoutes } from "./routes/webhook.js";
 import { tradeRoutes } from "./routes/trades.js";
 import { oracleRouterRoutes } from "./routes/oracle-router.js";
 import { readRateLimit, writeRateLimit } from "./middleware/rate-limit.js";
+import { SimulationService, type Scenario } from "./services/SimulationService.js";
 
 // Services
 const oracleService = new OracleService();
@@ -31,6 +32,7 @@ const insuranceService = new InsuranceLPService(crankService);
 const tradeIndexer = new TradeIndexerPolling();
 const webhookManager = new HeliusWebhookManager();
 const statsCollector = new StatsCollector(crankService, oracleService);
+const simulationService = new SimulationService();
 
 // Hono app
 const app = new Hono();
@@ -68,6 +70,39 @@ app.get("/webhook/status", async (c) => {
 app.post("/webhook/re-register", async (c) => {
   const result = await webhookManager.reRegister();
   return c.json(result);
+});
+
+// Simulation endpoints
+app.post("/api/simulation/start", async (c) => {
+  const body = await c.req.json() as {
+    slabAddress: string;
+    oracleSecret: string;
+    startPriceE6?: number;
+    intervalMs?: number;
+  };
+  const result = await simulationService.start(body);
+  return c.json(result, result.ok ? 200 : 400);
+});
+
+app.post("/api/simulation/stop", async (c) => {
+  const result = await simulationService.stop();
+  return c.json(result);
+});
+
+app.get("/api/simulation", (c) => {
+  const state = simulationService.getState();
+  return c.json(state ?? { running: false });
+});
+
+app.post("/api/simulation/scenario", async (c) => {
+  const body = await c.req.json() as { scenario: Scenario };
+  const result = simulationService.setScenario(body.scenario);
+  return c.json(result, result.ok ? 200 : 400);
+});
+
+app.get("/api/simulation/history", (c) => {
+  const history = simulationService.getHistory();
+  return c.json(history);
 });
 
 // Root
