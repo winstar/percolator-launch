@@ -286,10 +286,13 @@ export default function SimulationPage() {
       setPhase("running");
     } catch (err: unknown) {
       let msg = err instanceof Error ? err.message : String(err);
-      // Try to extract more detail
+      // Try to extract more detail from Solana errors
       const anyErr = err as Record<string, unknown>;
-      if (anyErr?.logs) msg += ` | ${(anyErr.logs as string[]).join("; ")}`;
-      console.error("Simulation launch error:", err);
+      if (anyErr?.logs) msg += ` | Logs: ${(anyErr.logs as string[]).join("; ")}`;
+      if (anyErr?.error) msg += ` | ${JSON.stringify(anyErr.error)}`;
+      // WalletSendTransactionError wraps inner error
+      if (anyErr?.name) msg = `[${anyErr.name}] ${msg}`;
+      console.error("Simulation launch error:", JSON.stringify(err, Object.getOwnPropertyNames(err as object), 2));
       setError(msg);
       setPhase("idle");
     }
