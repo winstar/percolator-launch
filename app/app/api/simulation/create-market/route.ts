@@ -85,11 +85,13 @@ export async function POST(request: NextRequest) {
     const vaultAta = await getAssociatedTokenAddress(mintKeypair.publicKey, vaultPda, true);
     const [lpPda] = deriveLpPda(programId, slabKeypair.publicKey, 0);
 
-    // Calculate costs
-    const mintRent = await connection.getMinimumBalanceForRentExemption(getMintLen([]));
-    const slabRent = await connection.getMinimumBalanceForRentExemption(tier.dataSize);
-    const matcherCtxRent = await connection.getMinimumBalanceForRentExemption(MATCHER_CTX_SIZE);
-    const estimatedCostSol = (mintRent + slabRent + matcherCtxRent + 50_000_000) / 1e9; // + buffer for tx fees
+    // Calculate costs (parallel RPC calls for speed)
+    const [mintRent, slabRent, matcherCtxRent] = await Promise.all([
+      connection.getMinimumBalanceForRentExemption(getMintLen([])),
+      connection.getMinimumBalanceForRentExemption(tier.dataSize),
+      connection.getMinimumBalanceForRentExemption(MATCHER_CTX_SIZE),
+    ]);
+    const estimatedCostSol = (mintRent + slabRent + matcherCtxRent + 50_000_000) / 1e9;
 
     const initialPriceE6 = 1_000_000; // $1.00 initial price
 

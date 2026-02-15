@@ -157,8 +157,15 @@ export default function SimulationPage() {
           preflightCommitment: "confirmed",
         });
         await connection.confirmTransaction(sig, "confirmed");
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
+      } catch (err: unknown) {
+        let msg = err instanceof Error ? err.message : String(err);
+        // Extract logs from SendTransactionError
+        const anyErr = err as Record<string, unknown>;
+        if (anyErr?.logs) {
+          const logs = anyErr.logs as string[];
+          const failLog = logs.filter((l: string) => l.includes("failed") || l.includes("Error")).join("; ");
+          if (failLog) msg += ` | Logs: ${failLog}`;
+        }
         throw new Error(`Failed at step ${i + 1} (${group.label}): ${msg}`);
       }
     }
@@ -270,8 +277,12 @@ export default function SimulationPage() {
       });
 
       setPhase("running");
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
+    } catch (err: unknown) {
+      let msg = err instanceof Error ? err.message : String(err);
+      // Try to extract more detail
+      const anyErr = err as Record<string, unknown>;
+      if (anyErr?.logs) msg += ` | ${(anyErr.logs as string[]).join("; ")}`;
+      console.error("Simulation launch error:", err);
       setError(msg);
       setPhase("idle");
     }
