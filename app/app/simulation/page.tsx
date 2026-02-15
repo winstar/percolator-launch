@@ -595,7 +595,7 @@ function RunningDashboardInner({
 /* ─── Component ─── */
 export default function SimulationPage() {
   const rpcConnection = useRef(new Connection(RPC_URL, "confirmed")).current;
-  const { publicKey, connected, sendTransaction } = useWallet();
+  const { publicKey, connected, sendTransaction, signTransaction } = useWallet();
   const { connection: walletConnection } = useConnection();
 
   const [phase, setPhase] = useState<Phase>("deposit");
@@ -749,8 +749,15 @@ export default function SimulationPage() {
       await walletConnection.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight }, "confirmed");
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
-      if (!msg.includes("reject")) {
-        setError(`Transfer failed: ${msg}. Make sure Phantom is on devnet with SOL.`);
+      console.error("Transfer error:", err);
+      if (msg.includes("reject") || msg.includes("cancelled")) {
+        // user cancelled — no error
+      } else if (msg.includes("Blockhash not found") || msg.includes("block height exceeded")) {
+        setError("Transaction expired. Try again.");
+      } else if (msg.includes("0x1")) {
+        setError("Insufficient SOL balance. Need 0.5 SOL on devnet.");
+      } else {
+        setError(`Transfer failed: ${msg}`);
       }
     } finally {
       setSending(false);
