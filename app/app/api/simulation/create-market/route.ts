@@ -372,7 +372,7 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error('Create market error:', error);
-    const message = error instanceof Error ? error.message : 'Unknown error';
+    const message = error instanceof Error ? `${error.message}\n${error.stack}` : String(error);
     return NextResponse.json({ error: 'Failed to create market', details: message }, { status: 500 });
   }
 }
