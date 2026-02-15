@@ -48,9 +48,18 @@ import {
 } from "@percolator/core";
 import { ScenarioSelector } from "@/components/simulation/ScenarioSelector";
 import { SimulationControls } from "@/components/simulation/SimulationControls";
-import { LiveEventFeed } from "@/components/simulation/LiveEventFeed";
-import { SimulationMetrics } from "@/components/simulation/SimulationMetrics";
-import { BotLeaderboard } from "@/components/simulation/BotLeaderboard";
+import { SlabProvider } from "@/components/providers/SlabProvider";
+import { UsdToggleProvider } from "@/components/providers/UsdToggleProvider";
+import { ErrorBoundary } from "@/components/ui/ErrorBoundary";
+import { railwayUrl } from "@/lib/railway";
+
+/* ── Lazy-loaded trade page components (all read from SlabProvider context) ── */
+import { EngineHealthCard } from "@/components/trade/EngineHealthCard";
+import { MarketStatsCard } from "@/components/trade/MarketStatsCard";
+import { CrankHealthCard } from "@/components/trade/CrankHealthCard";
+import { SystemCapitalCard } from "@/components/trade/SystemCapitalCard";
+import { LiquidationAnalytics } from "@/components/trade/LiquidationAnalytics";
+import { TradingChart } from "@/components/trade/TradingChart";
 
 const WalletMultiButton = dynamic(
   () => import("@solana/wallet-adapter-react-ui").then((m) => m.WalletMultiButton),
@@ -80,6 +89,10 @@ interface SimState {
   scenario: string | null;
   model: string;
   uptime: number;
+  totalTrades?: number;
+  liquidations?: number;
+  fundingRate?: number;
+  openInterest?: number;
 }
 
 interface TokenPreview {
@@ -103,6 +116,10 @@ interface SessionStats {
   endPrice: number;
   dataPoints: number;
   scenario: string | null;
+  totalTrades: number;
+  liquidations: number;
+  fundingRate: number;
+  openInterest: number;
 }
 
 /* ─── Shareable Image Generator ─── */
@@ -147,13 +164,12 @@ function generateShareImage(
 
   // Price chart
   if (priceData.length > 1) {
-    const chartX = 40, chartY = 140, chartW = W - 80, chartH = 280;
+    const chartX = 40, chartY = 140, chartW = W - 80, chartH = 240;
     const prices = priceData.map(d => d.price);
     const min = Math.min(...prices);
     const max = Math.max(...prices);
     const range = max - min || 1;
 
-    // Grid lines
     ctx.strokeStyle = "#1a1a2e";
     ctx.lineWidth = 0.5;
     for (let i = 0; i <= 4; i++) {
@@ -165,7 +181,6 @@ function generateShareImage(
       ctx.fillText(`$${label}`, chartX + chartW + 5, y + 4);
     }
 
-    // Price line
     const isUp = prices[prices.length - 1] >= prices[0];
     ctx.strokeStyle = isUp ? "#00e676" : "#ff1744";
     ctx.lineWidth = 2;
@@ -177,7 +192,6 @@ function generateShareImage(
     });
     ctx.stroke();
 
-    // Gradient fill under line
     const gradient = ctx.createLinearGradient(0, chartY, 0, chartY + chartH);
     gradient.addColorStop(0, isUp ? "rgba(0,230,118,0.15)" : "rgba(255,23,68,0.15)");
     gradient.addColorStop(1, "rgba(0,0,0,0)");
@@ -194,8 +208,8 @@ function generateShareImage(
     ctx.fill();
   }
 
-  // Stats row
-  const statsY = 460;
+  // Stats rows — now with on-chain data
+  const statsY = 420;
   const pctChange = ((stats.endPrice - stats.startPrice) / stats.startPrice * 100);
   const duration = Math.floor((stats.endTime - stats.startTime) / 1000);
   const durStr = duration > 60 ? `${Math.floor(duration / 60)}m ${duration % 60}s` : `${duration}s`;
@@ -205,8 +219,8 @@ function generateShareImage(
     { label: "HIGH", value: `$${stats.highPrice.toFixed(4)}`, color: "#00e676" },
     { label: "LOW", value: `$${stats.lowPrice.toFixed(4)}`, color: "#ff1744" },
     { label: "DURATION", value: durStr, color: "#e0e0e0" },
-    { label: "DATA POINTS", value: stats.dataPoints.toString(), color: "#e0e0e0" },
-    { label: "SCENARIO", value: stats.scenario || "none", color: "#00e5ff" },
+    { label: "TRADES", value: stats.totalTrades.toString(), color: "#e0e0e0" },
+    { label: "LIQUIDATIONS", value: stats.liquidations.toString(), color: stats.liquidations > 0 ? "#ff1744" : "#e0e0e0" },
   ];
 
   const colW = (W - 80) / statItems.length;
@@ -218,6 +232,26 @@ function generateShareImage(
     ctx.fillStyle = s.color;
     ctx.font = "bold 18px monospace";
     ctx.fillText(s.value, x, statsY + 24);
+  });
+
+  // Second stats row
+  const statsY2 = 475;
+  const statItems2 = [
+    { label: "FUNDING RATE", value: `${stats.fundingRate >= 0 ? "+" : ""}${(stats.fundingRate * 100).toFixed(4)}%`, color: stats.fundingRate >= 0 ? "#00e676" : "#ff1744" },
+    { label: "OPEN INTEREST", value: stats.openInterest > 1e6 ? `$${(stats.openInterest / 1e6).toFixed(1)}M` : stats.openInterest > 1e3 ? `$${(stats.openInterest / 1e3).toFixed(1)}K` : `$${stats.openInterest.toFixed(0)}`, color: "#00e5ff" },
+    { label: "DATA POINTS", value: stats.dataPoints.toString(), color: "#e0e0e0" },
+    { label: "SCENARIO", value: stats.scenario || "none", color: "#00e5ff" },
+  ];
+
+  const colW2 = (W - 80) / statItems2.length;
+  statItems2.forEach((s, i) => {
+    const x = 40 + i * colW2;
+    ctx.fillStyle = "#555";
+    ctx.font = "bold 9px monospace";
+    ctx.fillText(s.label, x, statsY2);
+    ctx.fillStyle = s.color;
+    ctx.font = "bold 16px monospace";
+    ctx.fillText(s.value, x, statsY2 + 22);
   });
 
   // Footer
@@ -291,6 +325,212 @@ async function sendAndConfirm(
   }
 }
 
+/* ─── Railway API helpers ─── */
+async function railwayFetch(path: string, opts?: RequestInit): Promise<Response> {
+  return fetch(railwayUrl(path), {
+    ...opts,
+    headers: { "Content-Type": "application/json", ...opts?.headers },
+  });
+}
+
+/* ─── Running Dashboard (wrapped in SlabProvider) ─── */
+function RunningDashboard({
+  slabAddress,
+  tokenPreview,
+  state,
+  priceHistory,
+  speed,
+  loading,
+  onStop,
+  onSpeedChange,
+  onPriceOverride,
+  onScenarioSelect,
+}: {
+  slabAddress: string;
+  tokenPreview: TokenPreview | null;
+  state: SimState;
+  priceHistory: PricePoint[];
+  speed: number;
+  loading: boolean;
+  onStop: () => Promise<void>;
+  onSpeedChange: (s: number) => void;
+  onPriceOverride: (price: number) => Promise<void>;
+  onScenarioSelect: (scenario: string) => Promise<void>;
+}) {
+  return (
+    <SlabProvider slabAddress={slabAddress}>
+      <UsdToggleProvider>
+        <RunningDashboardInner
+          slabAddress={slabAddress}
+          tokenPreview={tokenPreview}
+          state={state}
+          priceHistory={priceHistory}
+          speed={speed}
+          loading={loading}
+          onStop={onStop}
+          onSpeedChange={onSpeedChange}
+          onPriceOverride={onPriceOverride}
+          onScenarioSelect={onScenarioSelect}
+        />
+      </UsdToggleProvider>
+    </SlabProvider>
+  );
+}
+
+function RunningDashboardInner({
+  slabAddress,
+  tokenPreview,
+  state,
+  priceHistory,
+  speed,
+  loading,
+  onStop,
+  onSpeedChange,
+  onPriceOverride,
+  onScenarioSelect,
+}: {
+  slabAddress: string;
+  tokenPreview: TokenPreview | null;
+  state: SimState;
+  priceHistory: PricePoint[];
+  speed: number;
+  loading: boolean;
+  onStop: () => Promise<void>;
+  onSpeedChange: (s: number) => void;
+  onPriceOverride: (price: number) => Promise<void>;
+  onScenarioSelect: (scenario: string) => Promise<void>;
+}) {
+  const currentPrice = state.price / 1e6;
+  const priceChange = priceHistory.length > 1
+    ? ((currentPrice - priceHistory[0].price) / priceHistory[0].price) * 100
+    : 0;
+
+  const formatUptime = (ms: number) => {
+    const s = Math.floor(ms / 1000);
+    const m = Math.floor(s / 60);
+    const h = Math.floor(m / 60);
+    if (h > 0) return `${h}h ${m % 60}m`;
+    if (m > 0) return `${m}m ${s % 60}s`;
+    return `${s}s`;
+  };
+
+  return (
+    <div className="min-h-screen bg-[var(--bg)]">
+      {/* Header */}
+      <div className="border-b border-[var(--border)]/30 bg-[var(--bg)]/95 px-4 py-3">
+        <div className="mx-auto max-w-7xl">
+          <div className="flex items-start justify-between">
+            <div>
+              <p className="mb-0.5 text-[9px] font-medium uppercase tracking-[0.2em] text-[var(--accent)]/70">// SIMULATION</p>
+              <div className="flex items-center gap-3">
+                <h1 className="text-lg font-bold text-[var(--text)]" style={{ fontFamily: "var(--font-display)" }}>{tokenPreview?.symbol || "SIM"}/USD</h1>
+                <span className="text-[20px] font-bold font-mono text-[var(--text)]">${currentPrice.toFixed(4)}</span>
+                <span className="text-[11px] font-mono" style={{ color: priceChange >= 0 ? "var(--long)" : "var(--short)" }}>
+                  {priceChange >= 0 ? "+" : ""}{priceChange.toFixed(2)}%
+                </span>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="border border-[var(--border)]/50 bg-[var(--bg-elevated)] px-3 py-2">
+                <div className="flex items-center gap-2">
+                  <div className="h-2 w-2 animate-pulse" style={{ backgroundColor: state.running ? "var(--long)" : "var(--short)" }} />
+                  <div className="text-right">
+                    <p className="text-[8px] uppercase tracking-[0.15em] text-[var(--text-dim)]">{state.running ? "Live" : "Stopped"}</p>
+                    {state.running && state.uptime > 0 && <p className="text-[9px] font-mono text-[var(--text)]">{formatUptime(state.uptime)}</p>}
+                  </div>
+                </div>
+              </div>
+              <button onClick={onStop} disabled={loading} className="border border-[var(--short)]/50 bg-[var(--short)]/[0.08] px-4 py-2 text-[10px] font-bold uppercase tracking-[0.15em] text-[var(--short)] hover:bg-[var(--short)]/[0.15] transition-all disabled:opacity-50">{loading ? "Ending..." : "End Simulation"}</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* On-chain Trading Chart */}
+      <div className="mx-auto max-w-7xl px-3 pt-3">
+        <ErrorBoundary label="TradingChart">
+          <TradingChart slabAddress={slabAddress} />
+        </ErrorBoundary>
+      </div>
+
+      {/* Main Grid */}
+      <div className="mx-auto max-w-7xl px-3 py-3">
+        <div className="grid grid-cols-1 lg:grid-cols-[380px_1fr] gap-3">
+          {/* Left Sidebar */}
+          <div className="space-y-3">
+            {/* Market Info */}
+            <div className="border border-[var(--border)]/50 bg-[var(--bg)]/80 p-3 space-y-2">
+              <p className="text-[9px] font-bold uppercase tracking-[0.15em] text-[var(--text-dim)]">Market Info</p>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <p className="text-[8px] uppercase tracking-[0.15em] text-[var(--text-dim)]">Token</p>
+                  <p className="text-[12px] font-bold text-[var(--accent)]">{tokenPreview?.symbol}</p>
+                </div>
+                <div>
+                  <p className="text-[8px] uppercase tracking-[0.15em] text-[var(--text-dim)]">Model</p>
+                  <p className="text-[12px] font-bold text-[var(--text)]">{state.model}</p>
+                </div>
+                <div>
+                  <p className="text-[8px] uppercase tracking-[0.15em] text-[var(--text-dim)]">Scenario</p>
+                  <p className="text-[12px] font-bold text-[var(--text)]">{state.scenario || "none"}</p>
+                </div>
+                <div>
+                  <p className="text-[8px] uppercase tracking-[0.15em] text-[var(--text-dim)]">Speed</p>
+                  <p className="text-[12px] font-bold text-[var(--text)]">{speed}x</p>
+                </div>
+              </div>
+              {slabAddress && <p className="text-[8px] font-mono text-[var(--text-dim)] truncate">Slab: {slabAddress}</p>}
+            </div>
+
+            <SimulationControls isRunning={state.running} currentSlab={slabAddress} speed={speed} onStart={async () => {}} onStop={onStop} onSpeedChange={onSpeedChange} onPriceOverride={onPriceOverride} />
+
+            <div className="border border-[var(--border)]/50 bg-[var(--bg)]/80 p-3">
+              <h3 className="text-[10px] font-bold uppercase tracking-[0.15em] text-[var(--text-dim)] mb-3">Scenarios</h3>
+              <ScenarioSelector activeScenario={state.scenario} onScenarioSelect={onScenarioSelect} disabled={loading} />
+            </div>
+          </div>
+
+          {/* Right Content — REAL on-chain components */}
+          <div className="space-y-3">
+            {/* Row 1: Market Stats + Engine Health */}
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
+              <ErrorBoundary label="MarketStatsCard">
+                <MarketStatsCard />
+              </ErrorBoundary>
+              <ErrorBoundary label="EngineHealthCard">
+                <EngineHealthCard />
+              </ErrorBoundary>
+            </div>
+
+            {/* Row 2: Risk analytics */}
+            <div className="grid grid-cols-1 xl:grid-cols-3 gap-3">
+              <ErrorBoundary label="CrankHealthCard">
+                <CrankHealthCard />
+              </ErrorBoundary>
+              <ErrorBoundary label="LiquidationAnalytics">
+                <LiquidationAnalytics />
+              </ErrorBoundary>
+              <ErrorBoundary label="SystemCapitalCard">
+                <SystemCapitalCard />
+              </ErrorBoundary>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Bottom Bar */}
+      <div className="fixed bottom-0 left-0 right-0 border-t border-[var(--border)]/30 bg-[var(--bg)]/95 backdrop-blur-sm px-4 py-2">
+        <div className="mx-auto max-w-7xl flex items-center justify-between">
+          <p className="text-[9px] uppercase tracking-[0.15em] text-[var(--text-dim)]">
+            {state.running ? `${tokenPreview?.symbol}/USD | ${state.model} | ${state.scenario || "no scenario"} | ${speed}x` : "Simulation paused"}
+          </p>
+          <p className="text-[9px] font-mono text-[var(--text-secondary)]">{slabAddress.slice(0, 8)}...{slabAddress.slice(-8)}</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ─── Component ─── */
 export default function SimulationPage() {
   const rpcConnection = useRef(new Connection(RPC_URL, "confirmed")).current;
@@ -349,20 +589,31 @@ export default function SimulationPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase, payer]);
 
-  /* ─── Poll simulation state ─── */
+  /* ─── Poll simulation state from Railway ─── */
   useEffect(() => {
     if (phase !== "running") return;
     const interval = setInterval(async () => {
       try {
-        const res = await fetch("/api/simulation");
+        const res = await railwayFetch("/api/simulation");
         if (res.ok) {
           const data = await res.json();
           const newPrice = data.price ?? state.price;
-          setState(prev => ({ ...prev, running: data.running, price: newPrice, scenario: data.scenario ?? prev.scenario, model: data.model ?? prev.model, uptime: data.uptime ?? prev.uptime }));
+          setState(prev => ({
+            ...prev,
+            running: data.running,
+            price: newPrice,
+            scenario: data.scenario ?? prev.scenario,
+            model: data.model ?? prev.model,
+            uptime: data.uptime ?? prev.uptime,
+            totalTrades: data.totalTrades ?? prev.totalTrades,
+            liquidations: data.liquidations ?? prev.liquidations,
+            fundingRate: data.fundingRate ?? prev.fundingRate,
+            openInterest: data.openInterest ?? prev.openInterest,
+          }));
           const priceUsd = newPrice / 1e6;
           setPriceHistory(prev => {
             const next = [...prev, { time: Date.now(), price: priceUsd }];
-            return next.slice(-600); // keep last 600 data points (~30 min at 3s interval)
+            return next.slice(-600);
           });
           setSessionStats(prev => prev ? {
             ...prev,
@@ -371,6 +622,10 @@ export default function SimulationPage() {
             endPrice: priceUsd,
             dataPoints: prev.dataPoints + 1,
             scenario: data.scenario ?? prev.scenario,
+            totalTrades: data.totalTrades ?? prev.totalTrades,
+            liquidations: data.liquidations ?? prev.liquidations,
+            fundingRate: data.fundingRate ?? prev.fundingRate,
+            openInterest: data.openInterest ?? prev.openInterest,
           } : prev);
           if (!data.running) {
             const finalStats = sessionStats ? { ...sessionStats, endTime: Date.now(), endPrice: priceUsd } : null;
@@ -387,6 +642,34 @@ export default function SimulationPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase]);
 
+  /* ─── Fetch price history from Railway ─── */
+  useEffect(() => {
+    if (phase !== "running" || !slabAddress) return;
+    const fetchHistory = async () => {
+      try {
+        const res = await railwayFetch(`/api/simulation/history?slab=${slabAddress}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data.history) && data.history.length > 0) {
+            const railwayPoints: PricePoint[] = data.history.map((p: { time: number; price: number }) => ({
+              time: p.time,
+              price: p.price / 1e6,
+            }));
+            setPriceHistory(prev => {
+              // Merge: use railway history as base, append any local points that are newer
+              const lastRailway = railwayPoints[railwayPoints.length - 1]?.time ?? 0;
+              const localNewer = prev.filter(p => p.time > lastRailway);
+              return [...railwayPoints, ...localNewer].slice(-600);
+            });
+          }
+        }
+      } catch { /* ignore */ }
+    };
+    fetchHistory();
+    const interval = setInterval(fetchHistory, 15000);
+    return () => clearInterval(interval);
+  }, [phase, slabAddress]);
+
   /* ─── Send SOL via wallet ─── */
   const handleWalletSend = async () => {
     if (!publicKey || !sendTransaction) return;
@@ -399,7 +682,6 @@ export default function SimulationPage() {
       );
       const sig = await sendTransaction(tx, walletConnection, { skipPreflight: true });
       await walletConnection.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight }, "confirmed");
-      // Balance poll will detect it and trigger buildMarket
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       if (!msg.includes("reject")) {
@@ -535,12 +817,11 @@ export default function SimulationPage() {
         await sendAndConfirm(rpcConnection, tx2, [payer, oracleKp], "Fund market");
       }
 
-      // Step 6: Start simulation engine
+      // Step 6: Start simulation engine on Railway
       setStep("Starting simulation engine..."); setStepNum(6);
       const oracleSecret = Buffer.from(oracleKp.secretKey).toString("base64");
-      const startRes = await fetch("/api/simulation/start", {
+      const startRes = await railwayFetch("/api/simulation/start", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ slabAddress: slabKp.publicKey.toBase58(), oracleSecret, startPriceE6: Number(INITIAL_PRICE_E6), intervalMs: 5000 / speed }),
       });
       if (!startRes.ok) {
@@ -551,7 +832,7 @@ export default function SimulationPage() {
       setState({ running: true, slabAddress: slabKp.publicKey.toBase58(), price: Number(INITIAL_PRICE_E6), scenario: null, model: "random-walk", uptime: 0 });
       const startPrice = Number(INITIAL_PRICE_E6) / 1e6;
       setPriceHistory([{ time: Date.now(), price: startPrice }]);
-      setSessionStats({ startTime: Date.now(), endTime: 0, highPrice: startPrice, lowPrice: startPrice, startPrice, endPrice: startPrice, dataPoints: 1, scenario: null });
+      setSessionStats({ startTime: Date.now(), endTime: 0, highPrice: startPrice, lowPrice: startPrice, startPrice, endPrice: startPrice, dataPoints: 1, scenario: null, totalTrades: 0, liquidations: 0, fundingRate: 0, openInterest: 0 });
       setShareImage(null);
       setPhase("running");
     } catch (err: unknown) {
@@ -566,12 +847,28 @@ export default function SimulationPage() {
   const handleStop = async () => {
     setLoading(true);
     try {
-      await fetch("/api/simulation/stop", { method: "POST" });
-      const finalStats: SessionStats = sessionStats ? { ...sessionStats, endTime: Date.now() } : {
-        startTime: Date.now(), endTime: Date.now(), highPrice: 1, lowPrice: 1, startPrice: 1, endPrice: 1, dataPoints: 0, scenario: null,
+      // Fetch final stats from Railway before stopping
+      let finalRailwayStats: Record<string, number> = {};
+      try {
+        const statusRes = await railwayFetch("/api/simulation");
+        if (statusRes.ok) {
+          finalRailwayStats = await statusRes.json();
+        }
+      } catch { /* ignore */ }
+
+      await railwayFetch("/api/simulation/stop", { method: "POST" });
+
+      const finalStats: SessionStats = sessionStats ? {
+        ...sessionStats,
+        endTime: Date.now(),
+        totalTrades: finalRailwayStats.totalTrades ?? sessionStats.totalTrades,
+        liquidations: finalRailwayStats.liquidations ?? sessionStats.liquidations,
+        fundingRate: finalRailwayStats.fundingRate ?? sessionStats.fundingRate,
+        openInterest: finalRailwayStats.openInterest ?? sessionStats.openInterest,
+      } : {
+        startTime: Date.now(), endTime: Date.now(), highPrice: 1, lowPrice: 1, startPrice: 1, endPrice: 1, dataPoints: 0, scenario: null, totalTrades: 0, liquidations: 0, fundingRate: 0, openInterest: 0,
       };
       setSessionStats(finalStats);
-      // Generate shareable image
       try {
         const img = generateShareImage(finalStats, priceHistory, tokenPreview?.symbol || "SIM", tokenPreview?.name || "Simulation");
         setShareImage(img);
@@ -598,9 +895,8 @@ export default function SimulationPage() {
 
   const handleScenarioSelect = async (scenario: string) => {
     try {
-      await fetch("/api/simulation/scenario", {
+      await railwayFetch("/api/simulation/scenario", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ scenario }),
       });
       setState(prev => ({ ...prev, scenario }));
@@ -609,50 +905,17 @@ export default function SimulationPage() {
 
   const handlePriceOverride = async (price: number) => {
     try {
-      await fetch("/api/simulation/price", {
+      await railwayFetch("/api/simulation/price", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ priceE6: price }),
       });
     } catch (err) { console.error("Price override error:", err); }
-  };
-
-  const formatUptime = (ms: number) => {
-    const s = Math.floor(ms / 1000);
-    const m = Math.floor(s / 60);
-    const h = Math.floor(m / 60);
-    if (h > 0) return `${h}h ${m % 60}m`;
-    if (m > 0) return `${m}m ${s % 60}s`;
-    return `${s}s`;
   };
 
   const copyAddress = () => {
     navigator.clipboard.writeText(payer.publicKey.toBase58());
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
-  };
-
-  /* ─── Mini price chart (SVG) ─── */
-  const MiniChart = ({ data, width = 320, height = 80 }: { data: PricePoint[]; width?: number; height?: number }) => {
-    if (data.length < 2) return null;
-    const prices = data.map(d => d.price);
-    const min = Math.min(...prices);
-    const max = Math.max(...prices);
-    const range = max - min || 1;
-    const points = data.map((d, i) => {
-      const x = (i / (data.length - 1)) * width;
-      const y = height - ((d.price - min) / range) * (height - 8) - 4;
-      return `${x},${y}`;
-    }).join(" ");
-    const lastPrice = prices[prices.length - 1];
-    const firstPrice = prices[0];
-    const color = lastPrice >= firstPrice ? "var(--long)" : "var(--short)";
-    return (
-      <svg viewBox={`0 0 ${width} ${height}`} className="w-full" style={{ height }}>
-        <polyline fill="none" stroke={color} strokeWidth="1.5" points={points} />
-        <circle cx={(data.length - 1) / (data.length - 1) * width} cy={height - ((lastPrice - min) / range) * (height - 8) - 4} r="3" fill={color} />
-      </svg>
-    );
   };
 
   /* ─── Deposit Screen ─── */
@@ -798,7 +1061,15 @@ export default function SimulationPage() {
 
     const shareToTwitter = () => {
       const pct = sessionStats ? ((sessionStats.endPrice - sessionStats.startPrice) / sessionStats.startPrice * 100).toFixed(2) : "0";
-      const text = encodeURIComponent(`Just ran a ${tokenPreview?.symbol}/USD perp simulation on @peraborator\n\n${Number(pct) >= 0 ? "+" : ""}${pct}% price movement\nHigh: $${sessionStats?.highPrice.toFixed(4)} | Low: $${sessionStats?.lowPrice.toFixed(4)}\n\nPermissionless perpetual futures on Solana\npercolator-launch.vercel.app/simulation`);
+      const trades = sessionStats?.totalTrades ?? 0;
+      const liqs = sessionStats?.liquidations ?? 0;
+      const text = encodeURIComponent(
+        `Just ran a ${tokenPreview?.symbol}/USD perp simulation on @peraborator\n\n` +
+        `${Number(pct) >= 0 ? "+" : ""}${pct}% price movement\n` +
+        `${trades} trades | ${liqs} liquidations\n` +
+        `High: $${sessionStats?.highPrice.toFixed(4)} | Low: $${sessionStats?.lowPrice.toFixed(4)}\n\n` +
+        `Permissionless perpetual futures on Solana\npercolator-launch.vercel.app/simulation`
+      );
       window.open(`https://twitter.com/intent/tweet?text=${text}`, "_blank");
     };
 
@@ -855,6 +1126,30 @@ export default function SimulationPage() {
                   <p className="text-[12px] font-mono text-[var(--text)]">{sessionStats.dataPoints}</p>
                 </div>
               </div>
+
+              {/* On-chain stats row */}
+              <div className="mt-3 pt-3 border-t border-[var(--border)]/30 grid grid-cols-4 gap-3">
+                <div>
+                  <p className="text-[8px] uppercase tracking-[0.15em] text-[var(--text-dim)]">Total Trades</p>
+                  <p className="text-[12px] font-bold font-mono text-[var(--text)]">{sessionStats.totalTrades}</p>
+                </div>
+                <div>
+                  <p className="text-[8px] uppercase tracking-[0.15em] text-[var(--text-dim)]">Liquidations</p>
+                  <p className="text-[12px] font-bold font-mono" style={{ color: sessionStats.liquidations > 0 ? "var(--short)" : "var(--text)" }}>{sessionStats.liquidations}</p>
+                </div>
+                <div>
+                  <p className="text-[8px] uppercase tracking-[0.15em] text-[var(--text-dim)]">Funding Rate</p>
+                  <p className="text-[12px] font-bold font-mono" style={{ color: sessionStats.fundingRate >= 0 ? "var(--long)" : "var(--short)" }}>
+                    {sessionStats.fundingRate >= 0 ? "+" : ""}{(sessionStats.fundingRate * 100).toFixed(4)}%
+                  </p>
+                </div>
+                <div>
+                  <p className="text-[8px] uppercase tracking-[0.15em] text-[var(--text-dim)]">Open Interest</p>
+                  <p className="text-[12px] font-bold font-mono text-[var(--accent)]">
+                    {sessionStats.openInterest > 1e6 ? `$${(sessionStats.openInterest / 1e6).toFixed(1)}M` : sessionStats.openInterest > 1e3 ? `$${(sessionStats.openInterest / 1e3).toFixed(1)}K` : `$${sessionStats.openInterest.toFixed(0)}`}
+                  </p>
+                </div>
+              </div>
             </div>
           )}
 
@@ -869,116 +1164,18 @@ export default function SimulationPage() {
   }
 
   /* ─── Running Dashboard ─── */
-  const currentPrice = state.price / 1e6;
-  const priceChange = priceHistory.length > 1 ? ((currentPrice - priceHistory[0].price) / priceHistory[0].price) * 100 : 0;
-
   return (
-    <div className="min-h-screen bg-[var(--bg)]">
-      {/* Header */}
-      <div className="border-b border-[var(--border)]/30 bg-[var(--bg)]/95 px-4 py-3">
-        <div className="mx-auto max-w-7xl">
-          <div className="flex items-start justify-between">
-            <div>
-              <p className="mb-0.5 text-[9px] font-medium uppercase tracking-[0.2em] text-[var(--accent)]/70">// SIMULATION</p>
-              <div className="flex items-center gap-3">
-                <h1 className="text-lg font-bold text-[var(--text)]" style={{ fontFamily: "var(--font-display)" }}>{tokenPreview?.symbol || "SIM"}/USD</h1>
-                <span className="text-[20px] font-bold font-mono text-[var(--text)]">${currentPrice.toFixed(4)}</span>
-                <span className="text-[11px] font-mono" style={{ color: priceChange >= 0 ? "var(--long)" : "var(--short)" }}>
-                  {priceChange >= 0 ? "+" : ""}{priceChange.toFixed(2)}%
-                </span>
-              </div>
-            </div>
-            <div className="flex items-center gap-3">
-              <div className="border border-[var(--border)]/50 bg-[var(--bg-elevated)] px-3 py-2">
-                <div className="flex items-center gap-2">
-                  <div className="h-2 w-2 animate-pulse" style={{ backgroundColor: state.running ? "var(--long)" : "var(--short)" }} />
-                  <div className="text-right">
-                    <p className="text-[8px] uppercase tracking-[0.15em] text-[var(--text-dim)]">{state.running ? "Live" : "Stopped"}</p>
-                    {state.running && state.uptime > 0 && <p className="text-[9px] font-mono text-[var(--text)]">{formatUptime(state.uptime)}</p>}
-                  </div>
-                </div>
-              </div>
-              <button onClick={handleStop} disabled={loading} className="border border-[var(--short)]/50 bg-[var(--short)]/[0.08] px-4 py-2 text-[10px] font-bold uppercase tracking-[0.15em] text-[var(--short)] hover:bg-[var(--short)]/[0.15] transition-all disabled:opacity-50">{loading ? "Ending..." : "End Simulation"}</button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Price Chart */}
-      <div className="mx-auto max-w-7xl px-3 pt-3">
-        <div className="border border-[var(--border)]/30 bg-[var(--bg)]/80 p-3">
-          <div className="flex items-center justify-between mb-2">
-            <p className="text-[9px] font-bold uppercase tracking-[0.15em] text-[var(--text-dim)]">Oracle Price</p>
-            <p className="text-[9px] text-[var(--text-dim)]">{priceHistory.length} data points</p>
-          </div>
-          {priceHistory.length > 1 ? (
-            <MiniChart data={priceHistory} width={800} height={120} />
-          ) : (
-            <div className="h-[120px] flex items-center justify-center text-[10px] text-[var(--text-dim)]">Collecting price data...</div>
-          )}
-        </div>
-      </div>
-
-      {/* Main Grid */}
-      <div className="mx-auto max-w-7xl px-3 py-3">
-        <div className="grid grid-cols-1 lg:grid-cols-[380px_1fr] gap-3">
-          {/* Left Sidebar */}
-          <div className="space-y-3">
-            {/* Market Info */}
-            <div className="border border-[var(--border)]/50 bg-[var(--bg)]/80 p-3 space-y-2">
-              <p className="text-[9px] font-bold uppercase tracking-[0.15em] text-[var(--text-dim)]">Market Info</p>
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <p className="text-[8px] uppercase tracking-[0.15em] text-[var(--text-dim)]">Token</p>
-                  <p className="text-[12px] font-bold text-[var(--accent)]">{tokenPreview?.symbol}</p>
-                </div>
-                <div>
-                  <p className="text-[8px] uppercase tracking-[0.15em] text-[var(--text-dim)]">Model</p>
-                  <p className="text-[12px] font-bold text-[var(--text)]">{state.model}</p>
-                </div>
-                <div>
-                  <p className="text-[8px] uppercase tracking-[0.15em] text-[var(--text-dim)]">Scenario</p>
-                  <p className="text-[12px] font-bold text-[var(--text)]">{state.scenario || "none"}</p>
-                </div>
-                <div>
-                  <p className="text-[8px] uppercase tracking-[0.15em] text-[var(--text-dim)]">Speed</p>
-                  <p className="text-[12px] font-bold text-[var(--text)]">{speed}x</p>
-                </div>
-              </div>
-              {mintAddress && <p className="text-[8px] font-mono text-[var(--text-dim)] truncate">Mint: {mintAddress}</p>}
-              {slabAddress && <p className="text-[8px] font-mono text-[var(--text-dim)] truncate">Slab: {slabAddress}</p>}
-            </div>
-
-            <SimulationControls isRunning={state.running} currentSlab={state.slabAddress || slabAddress} speed={speed} onStart={async () => {}} onStop={handleStop} onSpeedChange={(s: number) => setSpeed(s)} onPriceOverride={handlePriceOverride} />
-
-            <div className="border border-[var(--border)]/50 bg-[var(--bg)]/80 p-3">
-              <h3 className="text-[10px] font-bold uppercase tracking-[0.15em] text-[var(--text-dim)] mb-3">Scenarios</h3>
-              <ScenarioSelector activeScenario={state.scenario} onScenarioSelect={handleScenarioSelect} disabled={loading} />
-            </div>
-          </div>
-
-          {/* Right Content */}
-          <div className="space-y-3">
-            <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
-              <SimulationMetrics isSimulationRunning={state.running} />
-              <LiveEventFeed isSimulationRunning={state.running} />
-            </div>
-            <BotLeaderboard isSimulationRunning={state.running} />
-          </div>
-        </div>
-      </div>
-
-      {/* Bottom Bar */}
-      <div className="fixed bottom-0 left-0 right-0 border-t border-[var(--border)]/30 bg-[var(--bg)]/95 backdrop-blur-sm px-4 py-2">
-        <div className="mx-auto max-w-7xl flex items-center justify-between">
-          <p className="text-[9px] uppercase tracking-[0.15em] text-[var(--text-dim)]">
-            {state.running ? `${tokenPreview?.symbol}/USD | ${state.model} | ${state.scenario || "no scenario"} | ${speed}x` : "Simulation paused"}
-          </p>
-          {(state.slabAddress || slabAddress) && (
-            <p className="text-[9px] font-mono text-[var(--text-secondary)]">{(state.slabAddress || slabAddress || "").slice(0, 8)}...{(state.slabAddress || slabAddress || "").slice(-8)}</p>
-          )}
-        </div>
-      </div>
-    </div>
+    <RunningDashboard
+      slabAddress={slabAddress!}
+      tokenPreview={tokenPreview}
+      state={state}
+      priceHistory={priceHistory}
+      speed={speed}
+      loading={loading}
+      onStop={handleStop}
+      onSpeedChange={(s: number) => setSpeed(s)}
+      onPriceOverride={handlePriceOverride}
+      onScenarioSelect={handleScenarioSelect}
+    />
   );
 }
