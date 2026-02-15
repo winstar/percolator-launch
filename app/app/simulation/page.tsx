@@ -487,25 +487,36 @@ export default function SimulationPage() {
                 <div className="h-3 w-3 animate-spin border border-[var(--border)] border-t-[var(--accent)]" />
                 <span className="text-[11px] text-[var(--text)]">{stepLabel || "Working..."}</span>
               </div>
+              {/* Phase indicators */}
+              <div className="flex items-center gap-0 text-[9px] text-[var(--text-dim)]">
+                {(["funding-wallet", "creating", "funding", "starting"] as Phase[]).map((p, i) => (
+                  <div key={p} className="flex items-center flex-1">
+                    <div className="flex items-center gap-1.5">
+                      <div className="h-5 w-5 flex items-center justify-center text-[8px] font-bold" style={{ 
+                        backgroundColor: phase === p ? "var(--accent)" : phaseOrder(p) ? "var(--long)" : "transparent",
+                        color: phase === p || phaseOrder(p) ? "var(--bg)" : "var(--text-dim)",
+                        border: phase === p || phaseOrder(p) ? "none" : "1px solid var(--text-dim)"
+                      }}>{i + 1}</div>
+                      <span style={{ color: phase === p ? "var(--accent)" : phaseOrder(p) ? "var(--long)" : "var(--text-dim)" }}>
+                        {p === "funding-wallet" ? "Fund" : p === "creating" ? "Market" : p === "funding" ? "Tokens" : "Test"}
+                      </span>
+                    </div>
+                    {i < 3 && <div className="flex-1 h-px mx-2" style={{ backgroundColor: phaseOrder(p) ? "var(--long)" : "var(--border)" }} />}
+                  </div>
+                ))}
+              </div>
+              {/* Progress bar */}
               {stepTotal > 0 && (
                 <div className="space-y-1">
-                  <div className="flex justify-between text-[9px] text-[var(--text-dim)]">
-                    <span>Step {stepNum} of {stepTotal}</span>
-                    <span>{Math.round((stepNum / stepTotal) * 100)}%</span>
-                  </div>
                   <div className="h-1 bg-[var(--border)]">
                     <div className="h-1 bg-[var(--accent)] transition-all" style={{ width: `${(stepNum / stepTotal) * 100}%` }} />
                   </div>
+                  <div className="flex justify-between text-[9px] text-[var(--text-dim)]">
+                    <span>{stepLabel || "Working..."}</span>
+                    <span>{stepNum}/{stepTotal}</span>
+                  </div>
                 </div>
               )}
-              <div className="flex items-center gap-4 text-[9px] text-[var(--text-dim)]">
-                {(["funding-wallet", "creating", "funding", "starting"] as Phase[]).map((p) => (
-                  <span key={p} className="flex items-center gap-1.5">
-                    <div className="h-1.5 w-1.5" style={{ backgroundColor: phase === p ? "var(--accent)" : phaseOrder(p) ? "var(--long)" : "var(--text-dim)" }} />
-                    {p === "funding-wallet" ? "Fund" : p === "creating" ? "Market" : p === "funding" ? "Tokens" : "Start"}
-                  </span>
-                ))}
-              </div>
               <p className="text-[9px] text-[var(--text-dim)]">One approval done. Everything else is automatic.</p>
             </div>
           )}
