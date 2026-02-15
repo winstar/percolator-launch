@@ -737,25 +737,38 @@ export default function SimulationPage() {
 
   /* ─── Send SOL via wallet ─── */
   const handleWalletSend = async () => {
-    if (!publicKey || !sendTransaction) return;
+    if (!publicKey) return;
     setSending(true);
     setError(null);
     try {
-      const { blockhash, lastValidBlockHeight } = await walletConnection.getLatestBlockhash("confirmed");
+      /* Use our own devnet RPC for blockhash — walletConnection may differ */
+      const conn = rpcConnection;
+      const { blockhash, lastValidBlockHeight } = await conn.getLatestBlockhash("confirmed");
       const tx = new Transaction({ blockhash, lastValidBlockHeight, feePayer: publicKey }).add(
         SystemProgram.transfer({ fromPubkey: publicKey, toPubkey: payer.publicKey, lamports: MIN_LAMPORTS })
       );
-      const sig = await sendTransaction(tx, walletConnection, { skipPreflight: true });
-      await walletConnection.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight }, "confirmed");
+
+      /* Prefer signTransaction + sendRawTransaction for cross-wallet compatibility.
+         sendTransaction varies per wallet (some use their own RPC for simulation). */
+      let sig: string;
+      if (signTransaction) {
+        const signed = await signTransaction(tx);
+        sig = await conn.sendRawTransaction(signed.serialize(), { skipPreflight: true });
+      } else {
+        sig = await sendTransaction(tx, conn, { skipPreflight: true });
+      }
+      await conn.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight }, "confirmed");
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
-      console.error("Transfer error:", err);
-      if (msg.includes("reject") || msg.includes("cancelled")) {
+      console.error("Transfer error full:", err);
+      if (msg.includes("reject") || msg.includes("cancelled") || msg.includes("User rejected")) {
         // user cancelled — no error
       } else if (msg.includes("Blockhash not found") || msg.includes("block height exceeded")) {
-        setError("Transaction expired. Try again.");
-      } else if (msg.includes("0x1")) {
-        setError("Insufficient SOL balance. Need 0.5 SOL on devnet.");
+        setError("Transaction expired — try again.");
+      } else if (msg.includes("0x1") || msg.includes("insufficient lamports")) {
+        setError("Insufficient SOL. Need 0.5 devnet SOL.");
+      } else if (msg.includes("not connected")) {
+        setError("Wallet not connected. Reconnect and try again.");
       } else {
         setError(`Transfer failed: ${msg}`);
       }
