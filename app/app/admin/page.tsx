@@ -4,10 +4,12 @@ import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { createClient, type User } from "@supabase/supabase-js";
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+function getAuthClient() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
+}
 
 interface BugReport {
   id: string;
@@ -92,19 +94,19 @@ export default function AdminDashboard() {
 
   // Auth check + admin whitelist
   useEffect(() => {
-    supabase.auth.getUser().then(async ({ data }) => {
+    getAuthClient().auth.getUser().then(async ({ data }) => {
       if (!data.user) {
         router.push("/admin/login");
         return;
       }
       // Check admin_users whitelist
-      const { data: adminRow } = await supabase
+      const { data: adminRow } = await getAuthClient()
         .from("admin_users")
         .select("id")
         .eq("email", data.user.email!)
         .maybeSingle();
       if (!adminRow) {
-        await supabase.auth.signOut();
+        await getAuthClient().auth.signOut();
         router.push("/admin/login");
         return;
       }
@@ -115,7 +117,7 @@ export default function AdminDashboard() {
 
   // Fetch bugs
   const fetchBugs = useCallback(async () => {
-    const { data } = await supabase
+    const { data } = await getAuthClient()
       .from("bug_reports")
       .select("*")
       .order("created_at", { ascending: false });
@@ -129,7 +131,7 @@ export default function AdminDashboard() {
   // Update bug status
   const updateStatus = async (bugId: string, newStatus: string) => {
     setSaving(true);
-    await supabase
+    await getAuthClient()
       .from("bug_reports")
       .update({ status: newStatus, updated_at: new Date().toISOString() })
       .eq("id", bugId);
@@ -144,7 +146,7 @@ export default function AdminDashboard() {
   const saveNotes = async () => {
     if (!selectedBug) return;
     setSaving(true);
-    await supabase
+    await getAuthClient()
       .from("bug_reports")
       .update({ admin_notes: adminNotes, updated_at: new Date().toISOString() })
       .eq("id", selectedBug.id);
@@ -155,7 +157,7 @@ export default function AdminDashboard() {
 
   // Sign out
   const signOut = async () => {
-    await supabase.auth.signOut();
+    await getAuthClient().auth.signOut();
     router.push("/admin/login");
   };
 

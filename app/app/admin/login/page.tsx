@@ -4,10 +4,12 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@supabase/supabase-js";
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+function getAuthClient() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
+}
 
 const card = "rounded-none bg-[var(--panel-bg)] border border-[var(--border)] p-8";
 const labelStyle = "block text-[10px] font-bold uppercase tracking-[0.15em] text-[var(--text-muted)] mb-1.5";
@@ -26,7 +28,7 @@ export default function AdminLoginPage() {
     setLoading(true);
     setError("");
 
-    const { error: authError } = await supabase.auth.signInWithPassword({
+    const { error: authError } = await getAuthClient().auth.signInWithPassword({
       email,
       password,
     });
