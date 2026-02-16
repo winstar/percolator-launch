@@ -99,10 +99,11 @@ export const Header: FC = () => {
           <Link
             href="/"
             className="group flex items-center gap-2"
+            aria-label="Percolator home"
           >
             <img
               src="/images/logo.png"
-              alt="Percolator"
+              alt="Percolator logo"
               className="h-4 w-auto"
             />
           </Link>
@@ -159,6 +160,8 @@ export const Header: FC = () => {
           <button
             onClick={() => setMobileOpen(!mobileOpen)}
             className="flex h-8 w-8 items-center justify-center rounded-sm text-[var(--text-muted)] hover:text-[var(--text-secondary)] hover:bg-[var(--accent)]/[0.04] transition-colors md:hidden"
+            aria-label={mobileOpen ? "Close menu" : "Open menu"}
+            aria-expanded={mobileOpen}
           >
             <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               {mobileOpen ? (
@@ -172,12 +175,13 @@ export const Header: FC = () => {
       </div>
 
       {/* Mobile nav */}
-      <div
+      <nav
         ref={mobileMenuRef}
         className="overflow-hidden border-t border-[var(--border)] bg-[var(--bg)] md:hidden"
         style={{ display: "none", height: 0 }}
+        aria-label="Mobile navigation"
       >
-        <nav className="flex flex-col gap-0.5 p-3">
+        <div className="flex flex-col gap-0.5 p-3">
           {navLinks.map((link) => (
             <Link
               key={link.href}
@@ -237,8 +241,8 @@ export const Header: FC = () => {
               </svg>
             </a>
           </div>
-        </nav>
-      </div>
+        </div>
+      </nav>
     </header>
   );
 };

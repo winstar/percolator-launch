@@ -152,10 +152,28 @@ function TradePageInner({ slab }: { slab: string }) {
     return () => { cancelled = true; };
   }, [slab]);
 
-  // Dynamic page title
+  // Dynamic page title and meta tags
   useEffect(() => {
-    document.title = `${symbol}/USD — Percolator`;
-  }, [symbol]);
+    document.title = `Trade ${symbol} | Percolator`;
+    
+    // Update meta description
+    const metaDesc = document.querySelector('meta[name="description"]');
+    if (metaDesc) {
+      const priceText = priceUsd != null ? `Current price: $${priceUsd.toFixed(2)}` : "";
+      metaDesc.setAttribute("content", `Trade ${symbol} perpetual futures on Percolator. ${priceText}`);
+    }
+
+    // Update OG tags dynamically
+    const ogTitle = document.querySelector('meta[property="og:title"]');
+    if (ogTitle) ogTitle.setAttribute("content", `Trade ${symbol} | Percolator`);
+    
+    const ogDesc = document.querySelector('meta[property="og:description"]');
+    if (ogDesc) {
+      const priceText = priceUsd != null ? `Current price: $${priceUsd.toFixed(2)}` : "";
+      ogDesc.setAttribute("content", `Trade ${symbol} perpetual futures on Percolator. ${priceText}`);
+    }
+    
+  }, [symbol, priceUsd]);
 
   const priceDisplay = priceUsd != null
     ? `$${priceUsd < 0.01 ? priceUsd.toFixed(6) : priceUsd < 1 ? priceUsd.toFixed(4) : priceUsd.toFixed(2)}`
