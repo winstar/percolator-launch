@@ -1,61 +1,34 @@
 name: PR Check
-
 on:
   pull_request:
     branches: [main]
-    paths:
-      - 'app/**'
-      - 'packages/**'
+  push:
+    branches: [main]
 
 jobs:
-  typecheck:
-    name: TypeScript Check
+  build-and-test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - uses: pnpm/action-setup@v2
+      - uses: pnpm/action-setup@v4
         with:
           version: 9
-
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: pnpm
-
-      - name: Install root deps
-        run: pnpm install --frozen-lockfile
-
-      - name: Install app deps
-        run: cd app && pnpm install --frozen-lockfile
-
-      - name: Build core package
-        run: cd packages/core && pnpm run build
-
-      - name: TypeScript check
-        run: cd app && npx tsc --noEmit
-
-  lint:
-    name: ESLint
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: pnpm/action-setup@v2
-        with:
-          version: 9
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: pnpm
-
-      - name: Install root deps
-        run: pnpm install --frozen-lockfile
-
-      - name: Install app deps
-        run: cd app && pnpm install --frozen-lockfile
-
-      - name: Lint
-        run: cd app && npx next lint --quiet
-        continue-on-error: true  # Don't block PRs on lint warnings initially
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @percolator/shared build
+      - run: pnpm --filter @percolator/api build
+      - run: pnpm --filter @percolator/keeper build
+      - run: pnpm --filter @percolator/indexer build
+      - run: pnpm --filter @percolator/shared test
+      - run: pnpm --filter @percolator/api test
+      - run: pnpm --filter @percolator/keeper test
+      - run: pnpm --filter @percolator/indexer test
+      - name: Build frontend
+        run: cd app && npx next build
+        env:
+          NEXT_PUBLIC_API_URL: http://localhost:4000
+          NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: dummy
