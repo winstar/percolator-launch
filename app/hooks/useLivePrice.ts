@@ -3,9 +3,17 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useSlabState } from "@/components/providers/SlabProvider";
 
-const WS_URL = process.env.NEXT_PUBLIC_WS_URL ?? "";
+// Derive WebSocket URL from API URL: https://... → wss://...
+function getWsUrl(): string {
+  const explicit = process.env.NEXT_PUBLIC_WS_URL;
+  if (explicit) return explicit;
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? process.env.NEXT_PUBLIC_BACKEND_URL ?? "";
+  if (!apiUrl) return "";
+  return apiUrl.replace(/^https:\/\//, "wss://").replace(/^http:\/\//, "ws://");
+}
+const WS_URL = getWsUrl();
 if (!WS_URL && typeof window !== "undefined") {
-  console.warn("[useLivePrice] NEXT_PUBLIC_WS_URL not set — WebSocket price streaming disabled. Set this env var in production.");
+  console.warn("[useLivePrice] No API URL configured — WebSocket price streaming disabled. Set NEXT_PUBLIC_API_URL.");
 }
 const RECONNECT_BASE_MS = 1000;
 const RECONNECT_MAX_MS = 30_000;

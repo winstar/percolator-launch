@@ -63,9 +63,12 @@ export function setNetwork(network: Network) {
 // Removed eager eval: `export const config = getConfig()` broke SSG/SSR
 // when localStorage or env vars weren't available at module load time.
 
-/** Backend API URL — reads NEXT_PUBLIC_BACKEND_URL with Railway production as fallback */
+/** Backend API URL — reads NEXT_PUBLIC_API_URL with Railway production as fallback.
+ * This is the single source of truth for the backend URL across the entire frontend.
+ * Previously: NEXT_PUBLIC_BACKEND_URL, NEXT_PUBLIC_API_URL were used inconsistently.
+ */
 export function getBackendUrl(): string {
-  return process.env.NEXT_PUBLIC_BACKEND_URL ?? "https://percolator-api-production.up.railway.app";
+  return process.env.NEXT_PUBLIC_API_URL ?? process.env.NEXT_PUBLIC_BACKEND_URL ?? "https://percolator-api-production.up.railway.app";
 }
 
 /** Build an explorer URL for a transaction */

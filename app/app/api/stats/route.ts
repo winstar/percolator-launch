@@ -14,7 +14,7 @@ export async function GET() {
   const [marketsRes, statsRes, tradersRes, recentTradesRes] = await Promise.all([
     supabase.from("markets").select("slab_address", { count: "exact", head: true }),
     supabase.from("markets_with_stats").select("volume_24h, open_interest_long, open_interest_short, last_price").limit(500),
-    supabase.from("markets").select("deployer").limit(500),
+    supabase.from("trades").select("trader").limit(5000),
     supabase
       .from("trades")
       .select("id", { count: "exact", head: true })
@@ -33,7 +33,7 @@ export async function GET() {
     0
   );
   const uniqueTraders = new Set(
-    (tradersRes.data ?? []).map((r) => r.deployer)
+    (tradersRes.data ?? []).map((r) => r.trader)
   ).size;
   const trades24h = recentTradesRes.count ?? 0;
 

@@ -21,7 +21,8 @@ export interface PriceRouterState {
   error: string | null;
 }
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "https://percolator-api-production.up.railway.app";
+import { getBackendUrl } from "@/lib/config";
+const API_BASE = getBackendUrl();
 
 /**
  * Auto-discover the best oracle source for a given token mint.

@@ -45,7 +45,7 @@ export function fundingRoutes(): Hono {
       // Fetch current funding rate from market_stats
       const { data: stats, error: statsError } = await getSupabase()
         .from("market_stats")
-        .select("funding_rate_bps_per_slot, funding_index_qpb_e6, net_lp_position, last_funding_slot")
+        .select("funding_rate, net_lp_pos")
         .eq("slab_address", slab)
         .single();
 
@@ -61,10 +61,8 @@ export function fundingRoutes(): Hono {
       }
 
       // Parse current funding data
-      const currentRateBpsPerSlot = stats.funding_rate_bps_per_slot ?? 0;
-      const fundingIndexQpbE6 = stats.funding_index_qpb_e6 ?? "0";
-      const netLpPosition = stats.net_lp_position ?? "0";
-      const lastUpdatedSlot = stats.last_funding_slot ?? 0;
+      const currentRateBpsPerSlot = stats.funding_rate ?? 0;
+      const netLpPosition = stats.net_lp_pos ?? "0";
 
       // Calculate rates
       // Solana slots: ~2.5 slots/second = 400ms per slot
@@ -101,8 +99,6 @@ export function fundingRoutes(): Hono {
         dailyRatePercent: Number(dailyRatePercent.toFixed(4)),
         annualizedPercent: Number(annualizedPercent.toFixed(2)),
         netLpPosition,
-        fundingIndexQpbE6,
-        lastUpdatedSlot,
         last24hHistory,
         metadata: {
           dataPoints24h: last24hHistory.length,
@@ -178,7 +174,7 @@ export function fundingRoutes(): Hono {
     try {
       const { data: allStats, error } = await getSupabase()
         .from("market_stats")
-        .select("slab_address, funding_rate_bps_per_slot, net_lp_position, last_funding_slot");
+        .select("slab_address, funding_rate, net_lp_pos");
 
       if (error) throw error;
 
@@ -186,14 +182,13 @@ export function fundingRoutes(): Hono {
       const SLOTS_PER_DAY = 216000;
 
       const markets = (allStats ?? []).map((stats) => {
-        const rateBps = Number(stats.funding_rate_bps_per_slot ?? 0);
+        const rateBps = Number(stats.funding_rate ?? 0);
         return {
           slabAddress: stats.slab_address,
           currentRateBpsPerSlot: rateBps,
           hourlyRatePercent: Number(((rateBps / 10000.0) * SLOTS_PER_HOUR).toFixed(6)),
           dailyRatePercent: Number(((rateBps / 10000.0) * SLOTS_PER_DAY).toFixed(4)),
-          netLpPosition: stats.net_lp_position ?? "0",
-          lastUpdatedSlot: stats.last_funding_slot ?? 0,
+          netLpPosition: stats.net_lp_pos ?? "0",
         };
       });
 

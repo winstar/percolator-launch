@@ -9,6 +9,9 @@ import { priceRoutes } from "./routes/prices.js";
 import { fundingRoutes } from "./routes/funding.js";
 import { crankStatusRoutes } from "./routes/crank.js";
 import { oracleRouterRoutes } from "./routes/oracle-router.js";
+import { insuranceRoutes } from "./routes/insurance.js";
+import { openInterestRoutes } from "./routes/open-interest.js";
+import { statsRoutes } from "./routes/stats.js";
 import { setupWebSocket } from "./routes/ws.js";
 import { readRateLimit, writeRateLimit } from "./middleware/rate-limit.js";
 
@@ -35,6 +38,9 @@ app.route("/", priceRoutes());
 app.route("/", fundingRoutes());
 app.route("/", crankStatusRoutes());
 app.route("/", oracleRouterRoutes());
+app.route("/", insuranceRoutes());
+app.route("/", openInterestRoutes());
+app.route("/", statsRoutes());
 
 app.get("/", (c) => c.json({ name: "@percolator/api", version: "0.1.0" }));
 

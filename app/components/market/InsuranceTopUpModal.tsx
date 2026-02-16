@@ -93,23 +93,9 @@ export const InsuranceTopUpModal: FC<InsuranceTopUpModalProps> = ({
       setError(null);
 
       // Call API to build and send transaction
-      const res = await fetch("/api/insurance/topup", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          slabAddress,
-          amountUsd: amountNum,
-        }),
-      });
-
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || "Failed to top up insurance");
-      }
-
-      const data = await res.json();
-      setTxSignature(data.signature);
-      setSuccess(true);
+      // Insurance top-up requires wallet signing via on-chain instruction
+      // TODO: Implement client-side transaction building when insurance deposit instruction is available in @percolator/core
+      throw new Error("Insurance top-up is not yet available. This feature requires on-chain instruction support.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unknown error");
     } finally {

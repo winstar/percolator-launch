@@ -29,20 +29,30 @@ export function marketRoutes(): Hono {
         const s = statsMap.get(m.slab_address);
         return {
           slabAddress: m.slab_address,
-          programId: m.program_id,
-          admin: m.admin,
-          mint: m.mint,
-          metadata: m.metadata ?? {},
+          mintAddress: m.mint_address,
+          symbol: m.symbol,
+          name: m.name,
+          decimals: m.decimals,
+          deployer: m.deployer,
+          oracleAuthority: m.oracle_authority,
+          initialPriceE6: m.initial_price_e6,
+          maxLeverage: m.max_leverage,
+          tradingFeeBps: m.trading_fee_bps,
+          lpCollateral: m.lp_collateral,
+          matcherContext: m.matcher_context,
+          status: m.status,
+          logoUrl: m.logo_url,
           createdAt: m.created_at,
+          updatedAt: m.updated_at,
           // Include stats if available
           totalOpenInterest: s?.total_open_interest ?? null,
-          numUsedAccounts: s?.num_used_accounts ?? null,
+          totalAccounts: s?.total_accounts ?? null,
           lastCrankSlot: s?.last_crank_slot ?? null,
           lastPrice: s?.last_price ?? null,
           markPrice: s?.mark_price ?? null,
           indexPrice: s?.index_price ?? null,
-          fundingRateBpsPerSlot: s?.funding_rate_bps_per_slot ?? null,
-          netLpPosition: s?.net_lp_position ?? null,
+          fundingRate: s?.funding_rate ?? null,
+          netLpPos: s?.net_lp_pos ?? null,
         };
       });
 
