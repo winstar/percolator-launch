@@ -1,62 +1,52 @@
 import { Hono } from "hono";
 import { PublicKey } from "@solana/web3.js";
 import { validateSlab } from "../middleware/validateSlab.js";
+import { cacheMiddleware } from "../middleware/cache.js";
 import { fetchSlab, parseHeader, parseConfig, parseEngine } from "@percolator/core";
-import { getConnection, getSupabase, createLogger } from "@percolator/shared";
+import { getConnection, getSupabase, createLogger, sanitizeSlabAddress } from "@percolator/shared";
 
 const logger = createLogger("api:markets");
 
 export function marketRoutes(): Hono {
   const app = new Hono();
 
-  // GET /markets — list all markets from Supabase
+  // GET /markets — list all markets from Supabase (uses markets_with_stats view for performance)
   app.get("/markets", async (c) => {
     try {
-      // Fetch from markets table joined with market_stats
-      const { data: markets, error: marketsError } = await getSupabase()
-        .from("markets")
+      // Use the markets_with_stats view for a single optimized query
+      const { data, error } = await getSupabase()
+        .from("markets_with_stats")
         .select("*");
 
-      if (marketsError) throw marketsError;
+      if (error) throw error;
 
-      const { data: stats, error: statsError } = await getSupabase()
-        .from("market_stats")
-        .select("*");
-
-      if (statsError) throw statsError;
-
-      // Merge markets with their stats
-      const statsMap = new Map((stats ?? []).map((s) => [s.slab_address, s]));
-      const result = (markets ?? []).map((m) => {
-        const s = statsMap.get(m.slab_address);
-        return {
-          slabAddress: m.slab_address,
-          mintAddress: m.mint_address,
-          symbol: m.symbol,
-          name: m.name,
-          decimals: m.decimals,
-          deployer: m.deployer,
-          oracleAuthority: m.oracle_authority,
-          initialPriceE6: m.initial_price_e6,
-          maxLeverage: m.max_leverage,
-          tradingFeeBps: m.trading_fee_bps,
-          lpCollateral: m.lp_collateral,
-          matcherContext: m.matcher_context,
-          status: m.status,
-          logoUrl: m.logo_url,
-          createdAt: m.created_at,
-          updatedAt: m.updated_at,
-          // Include stats if available
-          totalOpenInterest: s?.total_open_interest ?? null,
-          totalAccounts: s?.total_accounts ?? null,
-          lastCrankSlot: s?.last_crank_slot ?? null,
-          lastPrice: s?.last_price ?? null,
-          markPrice: s?.mark_price ?? null,
-          indexPrice: s?.index_price ?? null,
-          fundingRate: s?.funding_rate ?? null,
-          netLpPos: s?.net_lp_pos ?? null,
-        };
-      });
+      const result = (data ?? []).map((m) => ({
+        slabAddress: m.slab_address,
+        mintAddress: m.mint_address,
+        symbol: m.symbol,
+        name: m.name,
+        decimals: m.decimals,
+        deployer: m.deployer,
+        oracleAuthority: m.oracle_authority,
+        initialPriceE6: m.initial_price_e6,
+        maxLeverage: m.max_leverage,
+        tradingFeeBps: m.trading_fee_bps,
+        lpCollateral: m.lp_collateral,
+        matcherContext: m.matcher_context,
+        status: m.status,
+        logoUrl: m.logo_url,
+        createdAt: m.created_at,
+        updatedAt: m.updated_at,
+        // Stats from the view
+        totalOpenInterest: m.total_open_interest ?? null,
+        totalAccounts: m.total_accounts ?? null,
+        lastCrankSlot: m.last_crank_slot ?? null,
+        lastPrice: m.last_price ?? null,
+        markPrice: m.mark_price ?? null,
+        indexPrice: m.index_price ?? null,
+        fundingRate: m.funding_rate ?? null,
+        netLpPos: m.net_lp_pos ?? null,
+      }));
 
       return c.json({ markets: result });
     } catch (err) {
@@ -92,8 +82,8 @@ export function marketRoutes(): Hono {
     }
   });
 
-  // GET /markets/:slab — single market details (on-chain read)
-  app.get("/markets/:slab", validateSlab, async (c) => {
+  // GET /markets/:slab — single market details (on-chain read) — 10s cache
+  app.get("/markets/:slab", cacheMiddleware(10), validateSlab, async (c) => {
     const slab = c.req.param("slab");
     try {
       const connection = getConnection();

@@ -10,6 +10,7 @@
  */
 import { Hono } from "hono";
 import { validateSlab } from "../middleware/validateSlab.js";
+import { cacheMiddleware } from "../middleware/cache.js";
 import { 
   getFundingHistory, 
   getFundingHistorySince,
@@ -64,7 +65,7 @@ export function fundingRoutes(): Hono {
   });
 
   /**
-   * GET /funding/:slab
+   * GET /funding/:slab — 30s cache
    * 
    * Returns current funding rate data and 24h history for a market.
    * 
@@ -82,7 +83,7 @@ export function fundingRoutes(): Hono {
    *   ]
    * }
    */
-  app.get("/funding/:slab", validateSlab, async (c) => {
+  app.get("/funding/:slab", cacheMiddleware(30), validateSlab, async (c) => {
     const slab = c.req.param("slab");
 
     try {

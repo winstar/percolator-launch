@@ -1,6 +1,7 @@
 import "dotenv/config";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
+import { compress } from "hono/compress";
 import { serve } from "@hono/node-server";
 import { createLogger } from "@percolator/shared";
 import { healthRoutes } from "./routes/health.js";
@@ -15,6 +16,7 @@ import { openInterestRoutes } from "./routes/open-interest.js";
 import { statsRoutes } from "./routes/stats.js";
 import { setupWebSocket } from "./routes/ws.js";
 import { readRateLimit, writeRateLimit } from "./middleware/rate-limit.js";
+import { cacheMiddleware } from "./middleware/cache.js";
 
 const logger = createLogger("api");
 
@@ -51,6 +53,9 @@ app.use("*", cors({
   allowHeaders: ["Content-Type", "x-api-key"],
 }));
 
+// Compression Middleware (gzip/brotli for JSON responses)
+app.use("*", compress());
+
 // Security Headers Middleware
 app.use("*", async (c, next) => {
   await next();
@@ -75,6 +80,20 @@ app.use("*", async (c, next) => {
   }
   return writeRateLimit()(c, next);
 });
+
+// Response Caching Middleware (applied per-route)
+// Cache read-heavy endpoints with varying TTLs:
+// - /markets — 30s TTL
+app.use("/markets", cacheMiddleware(30));
+// - /stats — 60s TTL
+app.use("/stats", cacheMiddleware(60));
+// - /funding/global — 60s TTL
+app.use("/funding/global", cacheMiddleware(60));
+
+// Dynamic route caching (with path parameters) applied in route handlers
+// - /markets/:slab — 10s TTL (handled in route)
+// - /open-interest/:slab — 15s TTL (handled in route)
+// - /funding/:slab — 30s TTL (handled in route)
 
 app.route("/", healthRoutes());
 app.route("/", marketRoutes());

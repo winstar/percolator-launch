@@ -9,6 +9,7 @@
  */
 import { Hono } from "hono";
 import { validateSlab } from "../middleware/validateSlab.js";
+import { cacheMiddleware } from "../middleware/cache.js";
 import { getSupabase, createLogger } from "@percolator/shared";
 
 const logger = createLogger("api:open-interest");
@@ -17,7 +18,7 @@ export function openInterestRoutes(): Hono {
   const app = new Hono();
 
   /**
-   * GET /open-interest/:slab
+   * GET /open-interest/:slab — 15s cache
    * 
    * Returns current open interest data and historical records for a market.
    * 
@@ -33,7 +34,7 @@ export function openInterestRoutes(): Hono {
    *   ]
    * }
    */
-  app.get("/open-interest/:slab", validateSlab, async (c) => {
+  app.get("/open-interest/:slab", cacheMiddleware(15), validateSlab, async (c) => {
     const slab = c.req.param("slab");
 
     try {

@@ -168,22 +168,28 @@ export class StatsCollector {
       let errors = 0;
 
       // Process markets in batches of 5 to avoid RPC rate limits
+      // Use getMultipleAccountsInfo for batch fetching to reduce RPC round trips
       const entries = Array.from(markets.entries());
       for (let i = 0; i < entries.length; i += 5) {
         const batch = entries.slice(i, i + 5);
+        const slabPubkeys = batch.map(([slabAddress]) => new PublicKey(slabAddress));
 
-        await Promise.all(batch.map(async ([slabAddress, state]) => {
-          try {
-            const slabPubkey = new PublicKey(slabAddress);
-            const accountInfo = await withRetry(
-              () => connection.getAccountInfo(slabPubkey),
-              { 
-                maxRetries: 3, 
-                baseDelayMs: 1000, 
-                label: `getAccountInfo(${slabAddress.slice(0, 8)})` 
-              }
-            );
-            if (!accountInfo?.data) return;
+        try {
+          // Batch fetch all account infos in one RPC call
+          const accountInfos = await withRetry(
+            () => connection.getMultipleAccountsInfo(slabPubkeys),
+            { 
+              maxRetries: 3, 
+              baseDelayMs: 1000, 
+              label: `getMultipleAccountsInfo(batch ${i / 5 + 1})` 
+            }
+          );
+
+          // Process each account
+          await Promise.all(batch.map(async ([slabAddress, state], batchIndex) => {
+            try {
+              const accountInfo = accountInfos[batchIndex];
+              if (!accountInfo?.data) return;
 
             const data = new Uint8Array(accountInfo.data);
 
@@ -342,12 +348,17 @@ export class StatsCollector {
               }
             }
 
-            updated++;
-          } catch (err) {
-            errors++;
-            console.warn(`[StatsCollector] Failed for ${slabAddress}:`, err instanceof Error ? err.message : err);
-          }
-        }));
+              updated++;
+            } catch (err) {
+              errors++;
+              console.warn(`[StatsCollector] Failed for ${slabAddress}:`, err instanceof Error ? err.message : err);
+            }
+          }));
+        } catch (batchErr) {
+          // If batch fetch fails, log all markets in batch as errors
+          errors += batch.length;
+          console.error(`[StatsCollector] Batch fetch failed:`, batchErr instanceof Error ? batchErr.message : batchErr);
+        }
 
         // Small delay between batches
         if (i + 5 < entries.length) {

@@ -1,22 +1,32 @@
 import { Hono } from "hono";
-import { getRecentTrades, get24hVolume, getGlobalRecentTrades, getPriceHistory, createLogger } from "@percolator/shared";
+import { 
+  getRecentTrades, 
+  get24hVolume, 
+  getGlobalRecentTrades, 
+  getPriceHistory, 
+  createLogger,
+  sanitizeSlabAddress,
+  sanitizePagination,
+  sanitizeNumber
+} from "@percolator/shared";
 
 const logger = createLogger("api:trades");
-const BASE58_PUBKEY = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
 
 export function tradeRoutes(): Hono {
   const app = new Hono();
 
   /** Recent trades for a specific market */
   app.get("/markets/:slab/trades", async (c) => {
-    const slab = c.req.param("slab");
-    if (!BASE58_PUBKEY.test(slab)) {
+    const slab = sanitizeSlabAddress(c.req.param("slab"));
+    if (!slab) {
       return c.json({ error: "Invalid slab address" }, 400);
     }
-    const limit = Math.min(Math.max(Number(c.req.query("limit") ?? 50), 1), 200);
+    
+    const { limit } = sanitizePagination(c.req.query("limit"), 0);
+    const safeLimit = Math.min(limit, 200); // Cap at 200
 
     try {
-      const trades = await getRecentTrades(slab, limit);
+      const trades = await getRecentTrades(slab, safeLimit);
       return c.json({ trades });
     } catch (err) {
       logger.error("Error fetching trades", { error: err instanceof Error ? err.message : err });
@@ -26,8 +36,8 @@ export function tradeRoutes(): Hono {
 
   /** 24h volume for a specific market */
   app.get("/markets/:slab/volume", async (c) => {
-    const slab = c.req.param("slab");
-    if (!BASE58_PUBKEY.test(slab)) {
+    const slab = sanitizeSlabAddress(c.req.param("slab"));
+    if (!slab) {
       return c.json({ error: "Invalid slab address" }, 400);
     }
 
@@ -42,13 +52,13 @@ export function tradeRoutes(): Hono {
 
   /** Price history for a specific market (for charts) */
   app.get("/markets/:slab/prices", async (c) => {
-    const slab = c.req.param("slab");
-    if (!BASE58_PUBKEY.test(slab)) {
+    const slab = sanitizeSlabAddress(c.req.param("slab"));
+    if (!slab) {
       return c.json({ error: "Invalid slab address" }, 400);
     }
 
     // Default to 24h of price history
-    const hoursBack = Math.min(Math.max(Number(c.req.query("hours") ?? 24), 1), 720); // max 30 days
+    const hoursBack = sanitizeNumber(c.req.query("hours"), 1, 720) ?? 24; // max 30 days
     const sinceEpoch = Math.floor((Date.now() - hoursBack * 60 * 60 * 1000) / 1000);
 
     try {
@@ -69,10 +79,11 @@ export function tradeRoutes(): Hono {
 
   /** Global recent trades across all markets */
   app.get("/trades/recent", async (c) => {
-    const limit = Math.min(Math.max(Number(c.req.query("limit") ?? 50), 1), 200);
+    const { limit } = sanitizePagination(c.req.query("limit"), 0);
+    const safeLimit = Math.min(limit, 200); // Cap at 200
 
     try {
-      const trades = await getGlobalRecentTrades(limit);
+      const trades = await getGlobalRecentTrades(safeLimit);
       return c.json({ trades });
     } catch (err) {
       logger.error("Error fetching global trades", { error: err instanceof Error ? err.message : err });
