@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { getConnection, getSupabase, createLogger } from "@percolator/shared";
+import { getWebSocketMetrics } from "./ws.js";
 
 const logger = createLogger("api:health");
 const startTime = Date.now();
@@ -43,6 +44,16 @@ export function healthRoutes(): Hono {
     const statusCode = status === "down" ? 503 : 200;
     
     return c.json({ status, checks, uptime }, statusCode);
+  });
+  
+  app.get("/ws/stats", async (c) => {
+    try {
+      const metrics = getWebSocketMetrics();
+      return c.json(metrics);
+    } catch (err) {
+      logger.error("Failed to get WebSocket metrics", { error: err instanceof Error ? err.message : err });
+      return c.json({ error: "Failed to retrieve metrics" }, 500);
+    }
   });
   
   return app;

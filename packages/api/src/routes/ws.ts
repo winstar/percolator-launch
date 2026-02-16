@@ -7,7 +7,8 @@ import { eventBus, getSupabase, createLogger, sanitizeSlabAddress } from "@perco
 const logger = createLogger("api:ws");
 
 // H2: Configurable limits
-const MAX_WS_CONNECTIONS = Number(process.env.MAX_WS_CONNECTIONS ?? 500);
+const MAX_WS_CONNECTIONS = Number(process.env.MAX_WS_CONNECTIONS ?? 1000); // Increased global limit
+const MAX_CONNECTIONS_PER_SLAB = 100; // New: per-slab connection limit
 const MAX_BUFFER_BYTES = 64 * 1024; // 64KB
 const MAX_SUBSCRIPTIONS_PER_CLIENT = 50; // Prevent Helius WS subscription exhaustion
 const MAX_GLOBAL_SUBSCRIPTIONS = 1000; // Global subscription cap to prevent DoS
@@ -18,10 +19,18 @@ const WS_AUTH_REQUIRED = process.env.WS_AUTH_REQUIRED === "true";
 const WS_AUTH_SECRET = process.env.WS_AUTH_SECRET || "percolator-ws-secret-change-in-production";
 const AUTH_TIMEOUT_MS = 5_000; // 5 seconds to authenticate
 
+// BH2: Heartbeat configuration
+const HEARTBEAT_INTERVAL_MS = 30_000; // 30 seconds
+const PONG_TIMEOUT_MS = 10_000; // 10 seconds to respond to ping
+
+// Price update batching configuration
+const PRICE_BATCH_INTERVAL_MS = 500; // Batch price updates every 500ms per slab
+
 interface WsClient {
   ws: WebSocket;
-  subscriptions: Set<string>;
+  subscriptions: Set<string>; // Channel subscriptions: "price:SOL", "trades:BTC", etc.
   pingInterval?: ReturnType<typeof setInterval>; // BH2: Heartbeat timer
+  pongTimeout?: ReturnType<typeof setTimeout>; // BH2: Pong response timeout
   isAlive: boolean; // BH2: Track pong responses
   authenticated: boolean; // Auth status
   ip: string; // Client IP address
@@ -34,8 +43,56 @@ let globalSubscriptionCount = 0;
 // Track connections per IP
 const connectionsPerIp = new Map<string, number>();
 
-// BH2: Heartbeat configuration
-const HEARTBEAT_INTERVAL_MS = 30_000; // 30 seconds
+// Track connections per slab (for per-slab limits)
+const connectionsPerSlab = new Map<string, Set<WsClient>>();
+
+// Price update batching: track pending updates per slab
+interface PendingPriceUpdate {
+  slabAddress: string;
+  data: any;
+  timestamp: number;
+}
+const pendingPriceUpdates = new Map<string, PendingPriceUpdate>();
+const priceUpdateTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+// Metrics tracking
+interface Metrics {
+  totalConnections: number;
+  connectionsPerSlab: Map<string, number>;
+  messagesReceived: number;
+  messagesSent: number;
+  bytesReceived: number;
+  bytesSent: number;
+  lastResetTime: number;
+}
+
+const metrics: Metrics = {
+  totalConnections: 0,
+  connectionsPerSlab: new Map(),
+  messagesReceived: 0,
+  messagesSent: 0,
+  bytesReceived: 0,
+  bytesSent: 0,
+  lastResetTime: Date.now(),
+};
+
+// Reset rate metrics every minute for messages/sec and bytes/sec
+setInterval(() => {
+  const now = Date.now();
+  const elapsedSec = (now - metrics.lastResetTime) / 1000;
+  
+  logger.info("WebSocket metrics", {
+    totalConnections: metrics.totalConnections,
+    messagesPerSec: (metrics.messagesReceived / elapsedSec).toFixed(2),
+    bytesPerSec: (metrics.bytesSent / elapsedSec).toFixed(0),
+  });
+  
+  metrics.messagesReceived = 0;
+  metrics.messagesSent = 0;
+  metrics.bytesReceived = 0;
+  metrics.bytesSent = 0;
+  metrics.lastResetTime = now;
+}, 60_000);
 
 /**
  * Extract client IP from request
@@ -89,48 +146,205 @@ function verifyWsToken(token: string): boolean {
   }
 }
 
+/**
+ * Extract slab address from channel name (e.g., "price:SOL" -> "SOL")
+ */
+function extractSlabFromChannel(channel: string): string | null {
+  const parts = channel.split(":");
+  if (parts.length === 2) {
+    return parts[1];
+  }
+  return null;
+}
+
+/**
+ * Get all slabs a client is subscribed to
+ */
+function getClientSlabs(client: WsClient): Set<string> {
+  const slabs = new Set<string>();
+  for (const channel of client.subscriptions) {
+    const slab = extractSlabFromChannel(channel);
+    if (slab) {
+      slabs.add(slab);
+    }
+  }
+  return slabs;
+}
+
+/**
+ * Add client to slab tracking
+ */
+function addClientToSlab(client: WsClient, slabAddress: string): void {
+  if (!connectionsPerSlab.has(slabAddress)) {
+    connectionsPerSlab.set(slabAddress, new Set());
+  }
+  connectionsPerSlab.get(slabAddress)!.add(client);
+  metrics.connectionsPerSlab.set(slabAddress, connectionsPerSlab.get(slabAddress)!.size);
+}
+
+/**
+ * Remove client from slab tracking
+ */
+function removeClientFromSlab(client: WsClient, slabAddress: string): void {
+  const slabClients = connectionsPerSlab.get(slabAddress);
+  if (slabClients) {
+    slabClients.delete(client);
+    if (slabClients.size === 0) {
+      connectionsPerSlab.delete(slabAddress);
+      metrics.connectionsPerSlab.delete(slabAddress);
+    } else {
+      metrics.connectionsPerSlab.set(slabAddress, slabClients.size);
+    }
+  }
+}
+
+/**
+ * Broadcast batched price update for a slab
+ */
+function flushPriceUpdate(slabAddress: string): void {
+  const pending = pendingPriceUpdates.get(slabAddress);
+  if (!pending) return;
+  
+  pendingPriceUpdates.delete(slabAddress);
+  priceUpdateTimers.delete(slabAddress);
+  
+  const channel = `price:${slabAddress}`;
+  const msg = JSON.stringify({
+    type: "price",
+    slab: slabAddress,
+    price: pending.data.priceE6 / 1_000_000,
+    markPrice: pending.data.markPriceE6 ? pending.data.markPriceE6 / 1_000_000 : undefined,
+    indexPrice: pending.data.indexPriceE6 ? pending.data.indexPriceE6 / 1_000_000 : undefined,
+    timestamp: pending.timestamp,
+  });
+  
+  const slabClients = connectionsPerSlab.get(slabAddress);
+  if (!slabClients) return;
+  
+  for (const client of slabClients) {
+    if (
+      client.ws.readyState === WebSocket.OPEN &&
+      client.subscriptions.has(channel)
+    ) {
+      if (client.ws.bufferedAmount > MAX_BUFFER_BYTES) continue;
+      client.ws.send(msg);
+      metrics.messagesSent++;
+      metrics.bytesSent += msg.length;
+    }
+  }
+}
+
+/**
+ * Get WebSocket metrics for /ws/stats endpoint
+ */
+export function getWebSocketMetrics(): any {
+  const now = Date.now();
+  const elapsedSec = (now - metrics.lastResetTime) / 1000;
+  
+  return {
+    totalConnections: metrics.totalConnections,
+    connectionsPerSlab: Object.fromEntries(metrics.connectionsPerSlab),
+    messagesPerSec: parseFloat((metrics.messagesReceived / elapsedSec).toFixed(2)),
+    bytesPerSec: parseInt((metrics.bytesSent / elapsedSec).toFixed(0), 10),
+    limits: {
+      maxGlobalConnections: MAX_WS_CONNECTIONS,
+      maxConnectionsPerSlab: MAX_CONNECTIONS_PER_SLAB,
+      maxConnectionsPerIp: MAX_CONNECTIONS_PER_IP,
+    },
+  };
+}
+
 export function setupWebSocket(server: Server): WebSocketServer {
   const wss = new WebSocketServer({ server, maxPayload: 4096 });
   // H2: Use Set for O(1) removal
   const clients = new Set<WsClient>();
 
-  // Broadcast price updates to subscribed clients
+  // Broadcast price updates to subscribed clients (with batching)
   eventBus.on("price.updated", (payload: any) => {
-    const msg = JSON.stringify({
-      type: "price.updated",
-      slabAddress: payload.slabAddress,
+    const slabAddress = payload.slabAddress;
+    
+    // Check if anyone is subscribed to price updates for this slab
+    const slabClients = connectionsPerSlab.get(slabAddress);
+    if (!slabClients || slabClients.size === 0) {
+      return; // No subscribers, skip
+    }
+    
+    // Store pending update (overwrites previous if exists)
+    pendingPriceUpdates.set(slabAddress, {
+      slabAddress,
       data: payload.data,
       timestamp: payload.timestamp,
     });
-
-    for (const client of clients) {
-      if (
-        client.ws.readyState === WebSocket.OPEN &&
-        client.subscriptions.has(payload.slabAddress) // H2: removed default "*" — must explicitly subscribe
-      ) {
-        // H2: Check bufferedAmount before sending
-        if (client.ws.bufferedAmount > MAX_BUFFER_BYTES) continue;
-        client.ws.send(msg);
-      }
+    
+    // If no timer exists for this slab, create one
+    if (!priceUpdateTimers.has(slabAddress)) {
+      const timer = setTimeout(() => {
+        flushPriceUpdate(slabAddress);
+      }, PRICE_BATCH_INTERVAL_MS);
+      priceUpdateTimers.set(slabAddress, timer);
     }
+    // Otherwise, the existing timer will flush the latest update
   });
 
   // Broadcast trade events to subscribed clients
   eventBus.on("trade.executed", (payload: any) => {
+    const slabAddress = payload.slabAddress;
+    const channel = `trades:${slabAddress}`;
+    
+    // Check if anyone is subscribed
+    const slabClients = connectionsPerSlab.get(slabAddress);
+    if (!slabClients || slabClients.size === 0) {
+      return;
+    }
+    
     const msg = JSON.stringify({
-      type: "trade.executed",
-      slabAddress: payload.slabAddress,
-      data: payload.data,
+      type: "trade",
+      slab: slabAddress,
+      side: payload.data.side,
+      size: payload.data.size,
+      price: payload.data.price,
       timestamp: payload.timestamp,
     });
 
-    for (const client of clients) {
+    for (const client of slabClients) {
       if (
         client.ws.readyState === WebSocket.OPEN &&
-        client.subscriptions.has(payload.slabAddress)
+        client.subscriptions.has(channel)
       ) {
         if (client.ws.bufferedAmount > MAX_BUFFER_BYTES) continue;
         client.ws.send(msg);
+        metrics.messagesSent++;
+        metrics.bytesSent += msg.length;
+      }
+    }
+  });
+
+  // Broadcast funding rate updates to subscribed clients
+  eventBus.on("funding.updated", (payload: any) => {
+    const slabAddress = payload.slabAddress;
+    const channel = `funding:${slabAddress}`;
+    
+    const slabClients = connectionsPerSlab.get(slabAddress);
+    if (!slabClients || slabClients.size === 0) {
+      return;
+    }
+    
+    const msg = JSON.stringify({
+      type: "funding",
+      slab: slabAddress,
+      rate: payload.data.rate,
+      timestamp: payload.timestamp,
+    });
+
+    for (const client of slabClients) {
+      if (
+        client.ws.readyState === WebSocket.OPEN &&
+        client.subscriptions.has(channel)
+      ) {
+        if (client.ws.bufferedAmount > MAX_BUFFER_BYTES) continue;
+        client.ws.send(msg);
+        metrics.messagesSent++;
+        metrics.bytesSent += msg.length;
       }
     }
   });
@@ -141,7 +355,7 @@ export function setupWebSocket(server: Server): WebSocketServer {
     // H2: Reject if at max connections
     if (clients.size >= MAX_WS_CONNECTIONS) {
       logger.warn("Max global WS connections reached", { ip: clientIp });
-      ws.close(1013, "Max connections reached");
+      ws.close(1008, "Max connections reached"); // 1008 = Policy Violation
       return;
     }
     
@@ -149,7 +363,7 @@ export function setupWebSocket(server: Server): WebSocketServer {
     const ipConnections = connectionsPerIp.get(clientIp) || 0;
     if (ipConnections >= MAX_CONNECTIONS_PER_IP) {
       logger.warn("Max connections per IP reached", { ip: clientIp, count: ipConnections });
-      ws.close(1013, `Max ${MAX_CONNECTIONS_PER_IP} connections per IP`);
+      ws.close(1008, `Max ${MAX_CONNECTIONS_PER_IP} connections per IP`);
       return;
     }
     
@@ -178,6 +392,7 @@ export function setupWebSocket(server: Server): WebSocketServer {
       ip: clientIp
     };
     clients.add(client);
+    metrics.totalConnections = clients.size;
     
     logger.info("WebSocket connection established", { 
       ip: clientIp, 
@@ -195,20 +410,38 @@ export function setupWebSocket(server: Server): WebSocketServer {
       }, AUTH_TIMEOUT_MS);
     }
 
-    // BH2: Set up ping/pong heartbeat
+    // BH2: Set up ping/pong heartbeat with 10s timeout
     ws.on("pong", () => {
       client.isAlive = true;
+      if (client.pongTimeout) {
+        clearTimeout(client.pongTimeout);
+        client.pongTimeout = undefined;
+      }
     });
 
     client.pingInterval = setInterval(() => {
       if (!client.isAlive) {
         // Client didn't respond to last ping — terminate
+        logger.warn("Client failed heartbeat", { ip: client.ip });
         clearInterval(client.pingInterval);
+        if (client.pongTimeout) {
+          clearTimeout(client.pongTimeout);
+        }
         ws.terminate();
         return;
       }
+      
       client.isAlive = false;
       ws.ping();
+      
+      // Set timeout for pong response (10 seconds)
+      client.pongTimeout = setTimeout(() => {
+        if (!client.isAlive) {
+          logger.warn("Pong timeout exceeded", { ip: client.ip });
+          clearInterval(client.pingInterval);
+          ws.terminate();
+        }
+      }, PONG_TIMEOUT_MS);
     }, HEARTBEAT_INTERVAL_MS);
 
     ws.send(JSON.stringify({ type: "connected", message: "Percolator WebSocket connected" }));
@@ -217,13 +450,22 @@ export function setupWebSocket(server: Server): WebSocketServer {
       try {
         const rawStr = raw.toString();
         
+        // Track metrics
+        metrics.messagesReceived++;
+        metrics.bytesReceived += rawStr.length;
+        
         // Limit message size
         if (rawStr.length > 1024) {
           ws.send(JSON.stringify({ type: "error", message: "Message too large" }));
           return;
         }
         
-        const msg = JSON.parse(rawStr) as { type: string; slabAddress?: string; token?: string };
+        const msg = JSON.parse(rawStr) as { 
+          type: string; 
+          slabAddress?: string; 
+          token?: string;
+          channels?: string[];
+        };
         
         // Handle auth message
         if (msg.type === "auth" && msg.token) {
@@ -248,65 +490,173 @@ export function setupWebSocket(server: Server): WebSocketServer {
           return;
         }
         
-        if (msg.type === "subscribe" && msg.slabAddress) {
-          // Sanitize slab address
+        // Handle subscribe with channels array
+        if (msg.type === "subscribe" && msg.channels && Array.isArray(msg.channels)) {
+          const subscribed: string[] = [];
+          const errors: string[] = [];
+          
+          for (const channel of msg.channels) {
+            // Validate channel format (e.g., "price:SOL", "trades:BTC")
+            if (!channel.includes(":")) {
+              errors.push(`Invalid channel format: ${channel}`);
+              continue;
+            }
+            
+            const [channelType, slabAddress] = channel.split(":");
+            if (!["price", "trades", "funding"].includes(channelType)) {
+              errors.push(`Unknown channel type: ${channelType}`);
+              continue;
+            }
+            
+            // Sanitize slab address
+            const sanitized = sanitizeSlabAddress(slabAddress);
+            if (!sanitized) {
+              errors.push(`Invalid slab address: ${slabAddress}`);
+              continue;
+            }
+            
+            const fullChannel = `${channelType}:${sanitized}`;
+            
+            // Check if already subscribed
+            if (client.subscriptions.has(fullChannel)) {
+              continue;
+            }
+            
+            // Cap global subscriptions to prevent DoS
+            if (globalSubscriptionCount >= MAX_GLOBAL_SUBSCRIPTIONS) {
+              errors.push(`Server subscription limit reached (${MAX_GLOBAL_SUBSCRIPTIONS})`);
+              break;
+            }
+            
+            // Cap subscriptions per client
+            if (client.subscriptions.size >= MAX_SUBSCRIPTIONS_PER_CLIENT) {
+              errors.push(`Max ${MAX_SUBSCRIPTIONS_PER_CLIENT} subscriptions per connection`);
+              break;
+            }
+            
+            // Check per-slab connection limit
+            const slabClients = connectionsPerSlab.get(sanitized);
+            if (slabClients && slabClients.size >= MAX_CONNECTIONS_PER_SLAB) {
+              errors.push(`Max ${MAX_CONNECTIONS_PER_SLAB} connections for slab ${sanitized}`);
+              continue;
+            }
+            
+            client.subscriptions.add(fullChannel);
+            globalSubscriptionCount++;
+            addClientToSlab(client, sanitized);
+            subscribed.push(fullChannel);
+          }
+          
+          if (subscribed.length > 0) {
+            ws.send(JSON.stringify({ type: "subscribed", channels: subscribed }));
+            
+            // Send initial data for price channels
+            for (const channel of subscribed) {
+              if (channel.startsWith("price:")) {
+                const slab = channel.split(":")[1];
+                try {
+                  const { data: stats } = await getSupabase()
+                    .from("market_stats")
+                    .select("last_price, mark_price, index_price, updated_at")
+                    .eq("slab_address", slab)
+                    .single();
+
+                  if (stats && stats.last_price) {
+                    if (ws.bufferedAmount <= MAX_BUFFER_BYTES) {
+                      ws.send(
+                        JSON.stringify({
+                          type: "price",
+                          slab,
+                          price: stats.last_price / 1_000_000,
+                          markPrice: stats.mark_price ? stats.mark_price / 1_000_000 : undefined,
+                          indexPrice: stats.index_price ? stats.index_price / 1_000_000 : undefined,
+                          timestamp: stats.updated_at,
+                        }),
+                      );
+                    }
+                  }
+                } catch {
+                  // Ignore errors fetching initial price
+                }
+              }
+            }
+          }
+          
+          if (errors.length > 0) {
+            ws.send(JSON.stringify({ type: "error", message: errors.join("; ") }));
+          }
+        }
+        // Legacy: single slab subscription (backward compatibility)
+        else if (msg.type === "subscribe" && msg.slabAddress) {
           const sanitized = sanitizeSlabAddress(msg.slabAddress);
           if (!sanitized) {
             ws.send(JSON.stringify({ type: "error", message: "Invalid slab address" }));
             return;
           }
           
-          // Cap global subscriptions to prevent DoS
-          if (globalSubscriptionCount >= MAX_GLOBAL_SUBSCRIPTIONS) {
-            ws.send(JSON.stringify({ type: "error", message: `Server subscription limit reached (${MAX_GLOBAL_SUBSCRIPTIONS})` }));
-            return;
+          // Subscribe to all channels for this slab (backward compatibility)
+          const channels = [`price:${sanitized}`, `trades:${sanitized}`, `funding:${sanitized}`];
+          ws.send(JSON.stringify({ 
+            type: "info", 
+            message: "Please use channels array. Subscribing to all channels for this slab." 
+          }));
+          
+          // Simulate channels subscription
+          for (const channel of channels) {
+            if (client.subscriptions.has(channel)) continue;
+            if (globalSubscriptionCount >= MAX_GLOBAL_SUBSCRIPTIONS) break;
+            if (client.subscriptions.size >= MAX_SUBSCRIPTIONS_PER_CLIENT) break;
+            
+            client.subscriptions.add(channel);
+            globalSubscriptionCount++;
           }
           
-          // Cap subscriptions per client to prevent Helius WS exhaustion
-          if (client.subscriptions.size >= MAX_SUBSCRIPTIONS_PER_CLIENT) {
-            ws.send(JSON.stringify({ type: "error", message: `Max ${MAX_SUBSCRIPTIONS_PER_CLIENT} subscriptions per connection` }));
-            return;
-          }
+          addClientToSlab(client, sanitized);
+          ws.send(JSON.stringify({ type: "subscribed", slabAddress: sanitized, channels }));
+        }
+        // Handle unsubscribe with channels array
+        else if (msg.type === "unsubscribe" && msg.channels && Array.isArray(msg.channels)) {
+          const unsubscribed: string[] = [];
           
-          client.subscriptions.add(sanitized);
-          globalSubscriptionCount++;
-
-          ws.send(JSON.stringify({ type: "subscribed", slabAddress: sanitized }));
-
-          // Optionally send current price from Supabase
-          try {
-            const { data: stats } = await getSupabase()
-              .from("market_stats")
-              .select("last_price, mark_price, index_price, updated_at")
-              .eq("slab_address", sanitized)
-              .single();
-
-            if (stats && stats.last_price) {
-              if (ws.bufferedAmount <= MAX_BUFFER_BYTES) {
-                ws.send(
-                  JSON.stringify({
-                    type: "price.updated",
-                    slabAddress: sanitized,
-                    data: { 
-                      priceE6: stats.last_price,
-                      markPriceE6: stats.mark_price,
-                      indexPriceE6: stats.index_price,
-                      source: "supabase"
-                    },
-                    timestamp: stats.updated_at,
-                  }),
+          for (const channel of msg.channels) {
+            if (client.subscriptions.delete(channel)) {
+              globalSubscriptionCount--;
+              unsubscribed.push(channel);
+              
+              // Extract slab and remove from slab tracking if no more subs for this slab
+              const slab = extractSlabFromChannel(channel);
+              if (slab) {
+                const stillHasSlab = Array.from(client.subscriptions).some(
+                  ch => extractSlabFromChannel(ch) === slab
                 );
+                if (!stillHasSlab) {
+                  removeClientFromSlab(client, slab);
+                }
               }
             }
-          } catch {
-            // Ignore errors fetching initial price
           }
-        } else if (msg.type === "unsubscribe" && msg.slabAddress) {
+          
+          if (unsubscribed.length > 0) {
+            ws.send(JSON.stringify({ type: "unsubscribed", channels: unsubscribed }));
+          }
+        }
+        // Legacy: single slab unsubscribe
+        else if (msg.type === "unsubscribe" && msg.slabAddress) {
           const sanitized = sanitizeSlabAddress(msg.slabAddress);
-          if (sanitized && client.subscriptions.delete(sanitized)) {
-            globalSubscriptionCount--;
+          if (sanitized) {
+            const channels = [`price:${sanitized}`, `trades:${sanitized}`, `funding:${sanitized}`];
+            const unsubscribed: string[] = [];
+            
+            for (const channel of channels) {
+              if (client.subscriptions.delete(channel)) {
+                globalSubscriptionCount--;
+                unsubscribed.push(channel);
+              }
+            }
+            
+            removeClientFromSlab(client, sanitized);
+            ws.send(JSON.stringify({ type: "unsubscribed", slabAddress: sanitized, channels: unsubscribed }));
           }
-          ws.send(JSON.stringify({ type: "unsubscribed", slabAddress: sanitized }));
         }
       } catch (err) {
         logger.warn("Error processing WS message", { ip: client.ip, error: err });
@@ -318,6 +668,11 @@ export function setupWebSocket(server: Server): WebSocketServer {
       // BH2: Clean up heartbeat interval
       if (client.pingInterval) {
         clearInterval(client.pingInterval);
+      }
+      
+      // Clean up pong timeout
+      if (client.pongTimeout) {
+        clearTimeout(client.pongTimeout);
       }
       
       // Clean up auth timeout
@@ -333,10 +688,17 @@ export function setupWebSocket(server: Server): WebSocketServer {
         connectionsPerIp.set(client.ip, ipCount - 1);
       }
       
+      // Remove from slab tracking
+      const clientSlabs = getClientSlabs(client);
+      for (const slab of clientSlabs) {
+        removeClientFromSlab(client, slab);
+      }
+      
       // H2: O(1) removal with Set
       // Decrement global subscription count for all client subscriptions
       globalSubscriptionCount -= client.subscriptions.size;
       clients.delete(client);
+      metrics.totalConnections = clients.size;
       
       logger.info("WebSocket connection closed", { 
         ip: client.ip, 
