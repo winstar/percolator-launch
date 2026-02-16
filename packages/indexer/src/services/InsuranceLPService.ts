@@ -1,7 +1,9 @@
-import { getSupabase, config, getConnection } from "@percolator/shared";
+import { getSupabase, config, getConnection, createLogger } from "@percolator/shared";
 import { deriveInsuranceLpMint } from "@percolator/core";
 import type { DiscoveredMarket } from "@percolator/core";
 import { PublicKey } from "@solana/web3.js";
+
+const logger = createLogger("indexer:insurance-lp");
 
 // BL2: Named constants for magic numbers
 const POLL_INTERVAL_MS = 30_000;
@@ -41,14 +43,14 @@ export class InsuranceLPService {
   start(): void {
     if (this.timer) return;
     if (!config.supabaseUrl || !config.supabaseKey) {
-      console.warn("[InsuranceLPService] SUPABASE_URL/KEY not set — service disabled");
+      logger.warn("SUPABASE_URL/KEY not set, service disabled");
       return;
     }
-    this.poll().catch((e) => console.error("[InsuranceLPService] Failed to run initial poll:", e));
+    this.poll().catch((e) => logger.error("Failed to run initial poll", { error: e }));
     this.timer = setInterval(() => {
-      this.poll().catch((e) => console.error("[InsuranceLPService] Failed to poll insurance data:", e));
+      this.poll().catch((e) => logger.error("Failed to poll insurance data", { error: e }));
     }, POLL_INTERVAL_MS);
-    console.log("[InsuranceLPService] started — polling every 30s");
+    logger.info("InsuranceLPService started", { intervalMs: POLL_INTERVAL_MS });
   }
 
   stop(): void {
@@ -110,7 +112,7 @@ export class InsuranceLPService {
           apy30d,
         });
       } catch (err) {
-        console.error(`[InsuranceLPService] error polling ${slab}:`, err);
+        logger.error("Error polling market", { slab, error: err });
       }
     }
   }
@@ -150,7 +152,7 @@ export class InsuranceLPService {
       
       return Math.round(annualized * 10_000) / 10_000; // 4 decimal places
     } catch (err) {
-      console.error(`[InsuranceLPService] APY calculation error for ${slab}:`, err);
+      logger.error("APY calculation error", { slab, error: err });
       return null;
     }
   }

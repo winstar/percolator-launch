@@ -1,6 +1,8 @@
 import { Connection, PublicKey, type ParsedTransactionWithMeta } from "@solana/web3.js";
 import { IX_TAG } from "@percolator/core";
-import { config, getConnection, insertTrade, tradeExistsBySignature, getMarkets, eventBus, decodeBase58, readU128LE, parseTradeSize, withRetry } from "@percolator/shared";
+import { config, getConnection, insertTrade, tradeExistsBySignature, getMarkets, eventBus, decodeBase58, readU128LE, parseTradeSize, withRetry, createLogger, captureException, addBreadcrumb } from "@percolator/shared";
+
+const logger = createLogger("indexer:trade-indexer");
 
 /** Trade instruction tags we want to index */
 const TRADE_TAGS = new Set<number>([IX_TAG.TradeNoCpi, IX_TAG.TradeCpi]);
@@ -51,7 +53,7 @@ export class TradeIndexerPolling {
     // Start periodic polling (proactive mode)
     this.pollTimer = setInterval(() => this.pollAllMarkets(), POLL_INTERVAL_MS);
 
-    console.log("[TradeIndexerPolling] Started — backup mode (5m interval)");
+    logger.info("TradeIndexerPolling started (backup mode)", { intervalMs: POLL_INTERVAL_MS });
   }
 
   stop(): void {
@@ -68,7 +70,7 @@ export class TradeIndexerPolling {
       clearInterval(this.pollTimer);
       this.pollTimer = null;
     }
-    console.log("[TradeIndexer] Stopped");
+    logger.info("TradeIndexer stopped");
   }
 
   /**
@@ -81,25 +83,33 @@ export class TradeIndexerPolling {
     try {
       const markets = await getMarkets();
       if (markets.length === 0) {
-        console.log("[TradeIndexer] No markets found for backfill");
+        logger.info("No markets found for backfill");
         return;
       }
 
-      console.log(`[TradeIndexer] Backfilling trades for ${markets.length} market(s)...`);
+      logger.info("Starting trade backfill", { marketCount: markets.length });
       for (const market of markets) {
         if (!this._running) break;
         try {
           await this.indexTradesForSlab(market.slab_address, BACKFILL_SIGNATURES);
         } catch (err) {
-          console.error(`[TradeIndexer] Backfill error for ${market.slab_address.slice(0, 8)}...:`,
-            err instanceof Error ? err.message : err);
+          logger.error("Backfill error", { 
+            slabAddress: market.slab_address.slice(0, 8),
+            error: err instanceof Error ? err.message : err
+          });
+          captureException(err, {
+            tags: {
+              context: "trade-indexer-backfill",
+              slabAddress: market.slab_address,
+            },
+          });
         }
         // Small delay between markets to avoid rate limits
         await sleep(1_000);
       }
-      console.log("[TradeIndexer] Backfill complete");
+      logger.info("Trade backfill complete");
     } catch (err) {
-      console.error("[TradeIndexer] Backfill failed:", err instanceof Error ? err.message : err);
+      logger.error("Backfill failed", { error: err instanceof Error ? err.message : err });
     }
   }
 
@@ -116,14 +126,16 @@ export class TradeIndexerPolling {
         try {
           await this.indexTradesForSlab(market.slab_address, MAX_SIGNATURES);
         } catch (err) {
-          console.error(`[TradeIndexer] Poll error for ${market.slab_address.slice(0, 8)}...:`,
-            err instanceof Error ? err.message : err);
+          logger.error("Poll error", { 
+            slabAddress: market.slab_address.slice(0, 8),
+            error: err instanceof Error ? err.message : err
+          });
         }
         // Small delay between markets
         await sleep(500);
       }
     } catch (err) {
-      console.error("[TradeIndexer] Poll failed:", err instanceof Error ? err.message : err);
+      logger.error("Poll failed", { error: err instanceof Error ? err.message : err });
     }
   }
 
@@ -141,7 +153,7 @@ export class TradeIndexerPolling {
         try {
           await this.indexTradesForSlab(slab);
         } catch (err) {
-          console.error(`[TradeIndexer] Error indexing ${slab}:`, err instanceof Error ? err.message : err);
+          logger.error("Error indexing trade", { slabAddress: slab, error: err instanceof Error ? err.message : err });
         }
       }
     }, 3_000); // 3s debounce after crank

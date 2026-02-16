@@ -6,7 +6,9 @@ import {
   ACCOUNTS_PUSH_ORACLE_PRICE,
   type MarketConfig,
 } from "@percolator/core";
-import { config, getConnection, loadKeypair, sendWithRetry, eventBus } from "@percolator/shared";
+import { config, getConnection, loadKeypair, sendWithRetry, eventBus, createLogger } from "@percolator/shared";
+
+const logger = createLogger("keeper:oracle");
 
 interface PriceEntry {
   priceE6: bigint;
@@ -169,10 +171,13 @@ export class OracleService {
       const divergencePct = Number((larger - smaller) * 100n / smaller);
 
       if (divergencePct > MAX_CROSS_SOURCE_DEVIATION_PCT) {
-        console.warn(
-          `[OracleService] Cross-source divergence ${divergencePct}% exceeds ${MAX_CROSS_SOURCE_DEVIATION_PCT}% for ${mint} ` +
-          `(dex=${dexPrice}, jup=${jupPrice}). Rejecting both — potential manipulation.`
-        );
+        logger.warn("Cross-source divergence detected", {
+          mint,
+          divergencePct,
+          maxAllowed: MAX_CROSS_SOURCE_DEVIATION_PCT,
+          dexPrice: dexPrice.toString(),
+          jupPrice: jupPrice.toString()
+        });
         return null;
       }
     }
@@ -191,7 +196,11 @@ export class OracleService {
         const last = history[history.length - 1];
         // Reject stale cached prices (>60s) to prevent bad liquidations
         if (Date.now() - last.timestamp > CACHED_PRICE_MAX_AGE_MS) {
-          console.warn(`[OracleService] Cached price for ${mint} is stale (${Math.round((Date.now() - last.timestamp) / 1000)}s old), rejecting`);
+          logger.warn("Cached price is stale", {
+            mint,
+            ageSeconds: Math.round((Date.now() - last.timestamp) / 1000),
+            maxAgeSeconds: CACHED_PRICE_MAX_AGE_MS / 1000
+          });
           return null;
         }
         return { ...last, source: "cached" };
@@ -208,10 +217,14 @@ export class OracleService {
           ? Number((priceE6 - lastPrice) * 100n / lastPrice)
           : Number((lastPrice - priceE6) * 100n / lastPrice);
         if (deviation > 30) {
-          console.warn(
-            `[OracleService] Price deviation ${deviation}% exceeds 30% threshold for ${mint} ` +
-            `(last=${lastPrice}, new=${priceE6}, source=${source}). Skipping.`
-          );
+          logger.warn("Price deviation exceeds threshold", {
+            mint,
+            deviation,
+            threshold: 30,
+            lastPrice: lastPrice.toString(),
+            newPrice: priceE6.toString(),
+            source
+          });
           return null;
         }
       }
@@ -266,9 +279,9 @@ export class OracleService {
       const onChainPrice = marketConfig.authorityPriceE6;
       if (onChainPrice > 0n) {
         priceEntry = { priceE6: onChainPrice, source: "on-chain", timestamp: Date.now() };
-        console.log(`[OracleService] No external price for ${mint}, using on-chain: ${onChainPrice}`);
+        logger.info("Using on-chain price", { mint, onChainPrice: onChainPrice.toString() });
       } else {
-        console.warn(`[OracleService] No price source for ${mint}, skipping`);
+        logger.warn("No price source available", { mint });
         return false; // Don't push a guessed price
       }
     }
@@ -284,7 +297,7 @@ export class OracleService {
         // Skip silently for markets we don't control — only log once per market
         if (!this._nonAuthorityLogged.has(slabAddress)) {
           this._nonAuthorityLogged.add(slabAddress);
-          console.log(`[OracleService] Skipping ${slabAddress}: not oracle authority (our=${keypair.publicKey.toBase58().slice(0, 8)}... theirs=${marketConfig.oracleAuthority.toBase58().slice(0, 8)}...)`);
+          logger.debug("Not oracle authority, skipping", { slabAddress, ourAuthority: keypair.publicKey.toBase58().slice(0, 8), theirAuthority: marketConfig.oracleAuthority.toBase58().slice(0, 8) });
         }
         return false;
       }
@@ -300,9 +313,9 @@ export class OracleService {
       ]);
 
       const ix = buildIx({ programId, keys, data });
-      console.log(`[OracleService] Pushing price ${priceEntry.priceE6} to ${slabAddress} via program ${programId.toBase58()}`);
+      logger.debug("Pushing oracle price", { slabAddress, priceE6: priceEntry.priceE6.toString(), programId: programId.toBase58() });
       const sig = await sendWithRetry(connection, ix, [keypair]);
-      console.log(`[OracleService] Price pushed OK: ${sig}`);
+      logger.info("Oracle price pushed", { signature: sig });
 
       this.lastPushTime.set(slabAddress, now);
       eventBus.publish("price.updated", slabAddress, {
@@ -311,7 +324,14 @@ export class OracleService {
       });
       return true;
     } catch (err) {
-      console.error(`[OracleService] Failed to push price for ${slabAddress}:`, err);
+      logger.error("Failed to push oracle price", { 
+        slabAddress, 
+        error: err,
+        mint,
+        priceE6: priceEntry?.priceE6.toString(),
+        source: priceEntry?.source
+      });
+      
       return false;
     }
   }

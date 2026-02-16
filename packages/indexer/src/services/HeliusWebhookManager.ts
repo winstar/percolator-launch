@@ -1,4 +1,6 @@
-import { config } from "@percolator/shared";
+import { config, createLogger } from "@percolator/shared";
+
+const logger = createLogger("indexer:webhook-manager");
 
 /**
  * Helius migrated from api.helius.dev to api-{network}.helius-rpc.com.
@@ -27,11 +29,11 @@ export class HeliusWebhookManager {
 
   async start(): Promise<void> {
     if (!config.heliusApiKey) {
-      console.warn("[HeliusWebhookManager] No HELIUS_API_KEY — skipping webhook registration");
+      logger.warn("No HELIUS_API_KEY, skipping webhook registration");
       return;
     }
     if (!config.webhookUrl) {
-      console.warn("[HeliusWebhookManager] No WEBHOOK_URL — skipping webhook registration");
+      logger.warn("No WEBHOOK_URL, skipping webhook registration");
       return;
     }
 
@@ -39,20 +41,20 @@ export class HeliusWebhookManager {
       // Check for existing webhook first
       const existing = await this.findExistingWebhook();
       if (existing) {
-        console.log(`[HeliusWebhookManager] Found existing webhook ${existing.webhookID}, updating...`);
+        logger.info("Found existing webhook, updating", { webhookID: existing.webhookID });
         await this.updateWebhook(existing.webhookID);
         this.webhookId = existing.webhookID;
       } else {
-        console.log("[HeliusWebhookManager] Creating new webhook...");
+        logger.info("Creating new webhook");
         this.webhookId = await this.createWebhook();
       }
       this._status = "active";
-      console.log(`[HeliusWebhookManager] Webhook active: ${this.webhookId}`);
+      logger.info("Webhook active", { webhookId: this.webhookId });
     } catch (err) {
       this._startError = err instanceof Error ? err.message : String(err);
       this._status = "failed";
-      console.error("[HeliusWebhookManager] Failed to register webhook:", this._startError);
-      console.warn("[HeliusWebhookManager] Falling back to polling-only mode");
+      logger.error("Failed to register webhook", { error: this._startError });
+      logger.warn("Falling back to polling-only mode");
     }
   }
 
@@ -102,7 +104,7 @@ export class HeliusWebhookManager {
 
   private async findExistingWebhook(): Promise<any | null> {
     const url = `${getHeliusWebhooksUrl()}?api-key=${config.heliusApiKey}`;
-    console.log(`[HeliusWebhookManager] Fetching ${url.replace(config.heliusApiKey, "***")}`);
+    logger.debug("Fetching Helius API", { url: url.replace(config.heliusApiKey, "***") });
     let res: Response;
     try {
       res = await fetch(url, {
@@ -112,13 +114,13 @@ export class HeliusWebhookManager {
     } catch (fetchErr) {
       const msg = fetchErr instanceof Error ? fetchErr.message : String(fetchErr);
       const cause = fetchErr instanceof Error && (fetchErr as any).cause ? (fetchErr as any).cause : undefined;
-      console.error(`[HeliusWebhookManager] Fetch to api.helius.dev failed: ${msg}`, cause ? `cause: ${cause.message ?? JSON.stringify(cause)}` : "");
+      logger.error("Fetch to api.helius.dev failed", { message: msg, cause: cause?.message });
       return null;
     }
 
     if (!res.ok) {
       const body = await res.text().catch(() => "");
-      console.warn(`[HeliusWebhookManager] Failed to list webhooks: ${res.status} ${body}`);
+      logger.warn("Failed to list webhooks", { status: res.status, body });
       return null;
     }
 

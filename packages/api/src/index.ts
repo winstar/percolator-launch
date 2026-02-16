@@ -47,6 +47,17 @@ app.route("/", statsRoutes());
 
 app.get("/", (c) => c.json({ name: "@percolator/api", version: "0.1.0" }));
 
+// Global error handler
+app.onError((err, c) => {
+  logger.error("Unhandled error", { 
+    error: err.message, 
+    stack: err.stack,
+    endpoint: c.req.path,
+    method: c.req.method
+  });
+  return c.json({ error: "Internal server error" }, 500);
+});
+
 const port = Number(process.env.API_PORT ?? 3001);
 const server = serve({ fetch: app.fetch, port }, (info) => {
   logger.info("Percolator API started", { port: info.port });

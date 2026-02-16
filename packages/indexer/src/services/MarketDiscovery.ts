@@ -1,6 +1,8 @@
 import { PublicKey } from "@solana/web3.js";
 import { discoverMarkets, type DiscoveredMarket } from "@percolator/core";
-import { config, getConnection, getFallbackConnection } from "@percolator/shared";
+import { config, getConnection, getFallbackConnection, createLogger, captureException } from "@percolator/shared";
+
+const logger = createLogger("indexer:market-discovery");
 
 export class MarketDiscovery {
   private markets = new Map<string, { market: DiscoveredMarket }>();
@@ -16,7 +18,7 @@ export class MarketDiscovery {
         const found = await discoverMarkets(conn, new PublicKey(id));
         all.push(...found);
       } catch (e) {
-        console.warn(`[MarketDiscovery] Failed on ${id}:`, e);
+        logger.warn("Failed to discover on program", { programId: id, error: e });
       }
       await new Promise(r => setTimeout(r, 2000));
     }
@@ -25,7 +27,7 @@ export class MarketDiscovery {
       this.markets.set(market.slabAddress.toBase58(), { market });
     }
     
-    console.log(`[MarketDiscovery] Found ${all.length} markets`);
+    logger.info("Market discovery complete", { totalMarkets: all.length });
     return all;
   }
   
@@ -34,8 +36,14 @@ export class MarketDiscovery {
   }
   
   start(intervalMs = 60_000) {
-    this.discover().catch(console.error);
-    this.timer = setInterval(() => this.discover().catch(console.error), intervalMs);
+    this.discover().catch((err) => {
+      logger.error("Initial discovery failed", { error: err });
+      captureException(err, { tags: { context: "market-discovery-initial" } });
+    });
+    this.timer = setInterval(() => this.discover().catch((err) => {
+      logger.error("Discovery failed", { error: err });
+      captureException(err, { tags: { context: "market-discovery-periodic" } });
+    }), intervalMs);
   }
   
   stop() {

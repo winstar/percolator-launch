@@ -9,7 +9,9 @@
  */
 import { Hono } from "hono";
 import { validateSlab } from "../middleware/validateSlab.js";
-import { getSupabase } from "@percolator/shared";
+import { getSupabase, createLogger } from "@percolator/shared";
+
+const logger = createLogger("api:open-interest");
 
 export function openInterestRoutes(): Hono {
   const app = new Hono();
@@ -78,7 +80,7 @@ export function openInterestRoutes(): Hono {
         })),
       });
     } catch (err) {
-      console.error(`[Open Interest API] Error fetching OI data for ${slab}:`, err);
+      logger.error("Error fetching OI data", { slab, error: err });
       return c.json({ 
         error: "Failed to fetch open interest data",
         details: err instanceof Error ? err.message : String(err)

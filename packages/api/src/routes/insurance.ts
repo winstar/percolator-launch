@@ -8,7 +8,9 @@
  */
 import { Hono } from "hono";
 import { validateSlab } from "../middleware/validateSlab.js";
-import { getSupabase } from "@percolator/shared";
+import { getSupabase, createLogger } from "@percolator/shared";
+
+const logger = createLogger("api:insurance");
 
 export function insuranceRoutes(): Hono {
   const app = new Hono();
@@ -75,7 +77,7 @@ export function insuranceRoutes(): Hono {
         })),
       });
     } catch (err) {
-      console.error(`[Insurance API] Error fetching insurance data for ${slab}:`, err);
+      logger.error("Error fetching insurance data", { slab, error: err });
       return c.json({ 
         error: "Failed to fetch insurance data",
         details: err instanceof Error ? err.message : String(err)

@@ -14,7 +14,10 @@ import {
   getFundingHistory, 
   getFundingHistorySince,
   getSupabase,
+  createLogger,
 } from "@percolator/shared";
+
+const logger = createLogger("api:funding");
 
 export function fundingRoutes(): Hono {
   const app = new Hono();
@@ -52,7 +55,7 @@ export function fundingRoutes(): Hono {
         markets,
       });
     } catch (err) {
-      console.error(`[Funding API] Error fetching global funding data:`, err);
+      logger.error("Error fetching global funding data", { error: err });
       return c.json({ 
         error: "Failed to fetch global funding data",
         details: err instanceof Error ? err.message : String(err)
@@ -154,7 +157,7 @@ export function fundingRoutes(): Hono {
         }
       });
     } catch (err) {
-      console.error(`[Funding API] Error fetching funding data for ${slab}:`, err);
+      logger.error("Error fetching funding data", { slab, error: err });
       return c.json({ 
         error: "Failed to fetch funding data",
         details: err instanceof Error ? err.message : String(err)
@@ -198,7 +201,7 @@ export function fundingRoutes(): Hono {
         })),
       });
     } catch (err) {
-      console.error(`[Funding API] Error fetching funding history for ${slab}:`, err);
+      logger.error("Error fetching funding history", { slab, error: err });
       return c.json({ 
         error: "Failed to fetch funding history",
         details: err instanceof Error ? err.message : String(err)

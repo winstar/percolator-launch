@@ -8,8 +8,10 @@ import {
   ACCOUNTS_KEEPER_CRANK,
   type DiscoveredMarket,
 } from "@percolator/core";
-import { config, getConnection, getFallbackConnection, loadKeypair, sendWithRetry, rateLimitedCall, eventBus } from "@percolator/shared";
+import { config, getConnection, getFallbackConnection, loadKeypair, sendWithRetry, rateLimitedCall, eventBus, createLogger } from "@percolator/shared";
 import { OracleService } from "./oracle.js";
+
+const logger = createLogger("keeper:crank");
 
 interface MarketCrankState {
   market: DiscoveredMarket;
@@ -47,7 +49,7 @@ async function processBatched<T>(
         const itemKey = String(item);
         const errorObj = err instanceof Error ? err : new Error(String(err));
         errors.set(itemKey, errorObj);
-        console.error(`[processBatched] Item ${itemKey} failed:`, errorObj.message);
+        logger.error("Batch item failed", { item: itemKey, error: errorObj.message });
       }
     }));
     if (i + batchSize < items.length) {
@@ -86,7 +88,7 @@ export class CrankService {
 
   async discover(): Promise<DiscoveredMarket[]> {
     const programIds = config.allProgramIds;
-    console.log(`[CrankService] Discovering markets across ${programIds.length} programs...`);
+    logger.info("Discovering markets", { programCount: programIds.length });
     // Use fallback RPC for discovery (Helius rate-limits getProgramAccounts)
     // Sequential calls with delay to avoid 429 from public RPC
     const discoveryConn = getFallbackConnection();
@@ -94,10 +96,10 @@ export class CrankService {
     for (const id of programIds) {
       try {
         const found = await discoverMarkets(discoveryConn, new PublicKey(id));
-        console.log(`[CrankService] Program ${id}: ${found.length} markets`);
+        logger.debug("Program scan complete", { programId: id, marketCount: found.length });
         allFound.push(...found);
       } catch (e) {
-        console.warn(`[CrankService] Failed to discover on ${id}:`, e);
+        logger.warn("Program scan failed", { programId: id, error: e });
       }
       // 2s delay between programs to avoid rate limits
       if (programIds.indexOf(id) < programIds.length - 1) {
@@ -106,7 +108,7 @@ export class CrankService {
     }
     const discovered = allFound;
     this.lastDiscoveryTime = Date.now();
-    console.log(`[CrankService] Found ${discovered.length} markets total`);
+    logger.info("Market discovery complete", { totalMarkets: discovered.length });
 
     const discoveredKeys = new Set<string>();
     for (const market of discovered) {
@@ -134,7 +136,7 @@ export class CrankService {
       if (!discoveredKeys.has(key)) {
         state.missingDiscoveryCount++;
         if (state.missingDiscoveryCount >= 3) {
-          console.warn(`[CrankService] Removing dead market ${key} (missing from ${state.missingDiscoveryCount} consecutive discoveries)`);
+          logger.warn("Removing dead market", { slabAddress: key, missingCount: state.missingDiscoveryCount });
           this.markets.delete(key);
         }
       }
@@ -156,7 +158,7 @@ export class CrankService {
   async crankMarket(slabAddress: string): Promise<boolean> {
     const state = this.markets.get(slabAddress);
     if (!state) {
-      console.warn(`[CrankService] Market ${slabAddress} not found`);
+      logger.warn("Market not found", { slabAddress });
       return false;
     }
 
@@ -168,7 +170,7 @@ export class CrankService {
           await this.oracleService.pushPrice(slabAddress, market.config, market.programId);
         } catch (priceErr) {
           // Non-fatal: oracle authority may be the market admin, not the crank.
-          console.warn(`[CrankService] Price push skipped for ${slabAddress}:`, priceErr instanceof Error ? priceErr.message : String(priceErr));
+          logger.warn("Price push skipped", { slabAddress, error: priceErr instanceof Error ? priceErr.message : String(priceErr) });
         }
       }
 
@@ -222,10 +224,18 @@ export class CrankService {
       if (state.consecutiveFailures >= 10) {
         state.isActive = false;
       }
+      
+      logger.error("Crank failed", { 
+        slabAddress, 
+        error: err,
+        consecutiveFailures: state.consecutiveFailures,
+        market: market.slabAddress.toBase58(),
+        programId: market.programId.toBase58()
+      });
+      
       eventBus.publish("crank.failure", slabAddress, {
         error: err instanceof Error ? err.message : String(err),
       });
-      console.error(`[CrankService] Crank failed for ${slabAddress}:`, err);
       return false;
     }
   }
@@ -255,7 +265,7 @@ export class CrankService {
     }
 
     if (toCrank.length !== this.markets.size - skipped) {
-      console.warn(`[CrankService] crankAll: markets=${this.markets.size} toCrank=${toCrank.length} skipped=${skipped} (mismatch)`);
+      logger.warn("Crank mismatch", { totalMarkets: this.markets.size, toCrank: toCrank.length, skipped });
     }
 
     // Process in batches of 3 with 2s gaps between batches
@@ -268,9 +278,12 @@ export class CrankService {
 
     // BM7: Log detailed error summary if any failed
     if (batchResult.failed > 0) {
-      console.error(`[CrankService] Batch completed with ${batchResult.failed} errors:`);
+      logger.error("Batch completed with errors", { 
+        failedCount: batchResult.failed,
+        successCount: success
+      });
       for (const [slab, error] of batchResult.errors) {
-        console.error(`  - ${slab}: ${error.message}`);
+        logger.error("Batch error detail", { slabAddress: slab, error: error.message });
       }
     }
 
@@ -281,12 +294,12 @@ export class CrankService {
   start(): void {
     if (this.timer) return;
     this._isRunning = true;
-    console.log(`[CrankService] Starting with interval ${this.intervalMs}ms (inactive: ${this.inactiveIntervalMs}ms)`);
+    logger.info("Crank service starting", { intervalMs: this.intervalMs, inactiveIntervalMs: this.inactiveIntervalMs });
 
     this.discover().then(markets => {
-      console.log(`[CrankService] Initial discover: ${markets.length} markets found`);
+      logger.info("Initial discovery complete", { marketCount: markets.length });
     }).catch(err => {
-      console.error("[CrankService] Initial discover failed:", err);
+      logger.error("Initial discovery failed", { error: err });
     });
 
     this.timer = setInterval(async () => {
@@ -302,11 +315,11 @@ export class CrankService {
         if (this.markets.size > 0) {
           const result = await this.crankAll();
           if (result.failed > 0) {
-            console.warn(`[CrankService] Crank cycle: ${result.success} ok, ${result.failed} failed, ${result.skipped} skipped`);
+            logger.info("Crank cycle complete", { success: result.success, failed: result.failed, skipped: result.skipped });
           }
         }
       } catch (err) {
-        console.error("[CrankService] Failed to complete crank cycle:", err);
+        logger.error("Crank cycle failed", { error: err });
       } finally {
         this._cycling = false;
       }
@@ -318,7 +331,7 @@ export class CrankService {
       clearInterval(this.timer);
       this.timer = null;
       this._isRunning = false;
-      console.log("[CrankService] Stopped");
+      logger.info("Crank service stopped");
     }
   }
 

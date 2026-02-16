@@ -2,7 +2,9 @@ import { Hono } from "hono";
 import { PublicKey } from "@solana/web3.js";
 import { validateSlab } from "../middleware/validateSlab.js";
 import { fetchSlab, parseHeader, parseConfig, parseEngine } from "@percolator/core";
-import { getConnection, getSupabase } from "@percolator/shared";
+import { getConnection, getSupabase, createLogger } from "@percolator/shared";
+
+const logger = createLogger("api:markets");
 
 export function marketRoutes(): Hono {
   const app = new Hono();
@@ -58,7 +60,7 @@ export function marketRoutes(): Hono {
 
       return c.json({ markets: result });
     } catch (err) {
-      console.error("[Markets API] Error fetching markets:", err);
+      logger.error("Error fetching markets", { error: err });
       return c.json({ error: "Failed to fetch markets" }, 500);
     }
   });

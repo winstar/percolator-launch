@@ -1,6 +1,8 @@
 import { Hono } from "hono";
 import { IX_TAG } from "@percolator/core";
-import { config, insertTrade, eventBus, decodeBase58, readU128LE, parseTradeSize } from "@percolator/shared";
+import { config, insertTrade, eventBus, decodeBase58, readU128LE, parseTradeSize, createLogger } from "@percolator/shared";
+
+const logger = createLogger("indexer:webhook");
 
 const TRADE_TAGS = new Set<number>([IX_TAG.TradeNoCpi, IX_TAG.TradeCpi]);
 const PROGRAM_IDS = new Set(config.allProgramIds);
@@ -35,7 +37,7 @@ export function webhookRoutes(): Hono {
     try {
       await processTransactions(transactions);
     } catch (err) {
-      console.error("[Webhook] Processing error:", err instanceof Error ? err.message : err);
+      logger.error("Webhook processing error", { error: err instanceof Error ? err.message : err });
       // Still return 200 to prevent Helius retries — we logged the error
     }
 
@@ -65,16 +67,16 @@ async function processTransactions(transactions: any[]): Promise<void> {
           indexed++;
         } catch (err) {
           // insertTrade already handles duplicate constraint (23505)
-          console.warn("[Webhook] Insert error:", err instanceof Error ? err.message : err);
+          logger.warn("Trade insert error", { error: err instanceof Error ? err.message : err });
         }
       }
     } catch (err) {
-      console.warn("[Webhook] Failed to process tx:", err instanceof Error ? err.message : err);
+      logger.warn("Failed to process transaction", { error: err instanceof Error ? err.message : err });
     }
   }
 
   if (indexed > 0) {
-    console.log(`[Webhook] Indexed ${indexed} trade(s)`);
+    logger.info("Trades indexed", { count: indexed });
   }
 }
 

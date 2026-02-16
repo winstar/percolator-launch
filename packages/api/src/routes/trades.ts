@@ -1,6 +1,7 @@
 import { Hono } from "hono";
-import { getRecentTrades, get24hVolume, getGlobalRecentTrades, getPriceHistory } from "@percolator/shared";
+import { getRecentTrades, get24hVolume, getGlobalRecentTrades, getPriceHistory, createLogger } from "@percolator/shared";
 
+const logger = createLogger("api:trades");
 const BASE58_PUBKEY = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
 
 export function tradeRoutes(): Hono {
@@ -18,7 +19,7 @@ export function tradeRoutes(): Hono {
       const trades = await getRecentTrades(slab, limit);
       return c.json({ trades });
     } catch (err) {
-      console.error("[TradeRoutes] Error fetching trades:", err instanceof Error ? err.message : err);
+      logger.error("Error fetching trades", { error: err instanceof Error ? err.message : err });
       return c.json({ error: "Failed to fetch trades" }, 500);
     }
   });
@@ -34,7 +35,7 @@ export function tradeRoutes(): Hono {
       const { volume, tradeCount } = await get24hVolume(slab);
       return c.json({ slab_address: slab, volume_24h: volume, trade_count_24h: tradeCount });
     } catch (err) {
-      console.error("[TradeRoutes] Error fetching volume:", err instanceof Error ? err.message : err);
+      logger.error("Error fetching volume", { error: err instanceof Error ? err.message : err });
       return c.json({ error: "Failed to fetch volume" }, 500);
     }
   });
@@ -61,7 +62,7 @@ export function tradeRoutes(): Hono {
         })),
       });
     } catch (err) {
-      console.error("[TradeRoutes] Error fetching price history:", err instanceof Error ? err.message : err);
+      logger.error("Error fetching price history", { error: err instanceof Error ? err.message : err });
       return c.json({ error: "Failed to fetch price history" }, 500);
     }
   });
@@ -74,7 +75,7 @@ export function tradeRoutes(): Hono {
       const trades = await getGlobalRecentTrades(limit);
       return c.json({ trades });
     } catch (err) {
-      console.error("[TradeRoutes] Error fetching global trades:", err instanceof Error ? err.message : err);
+      logger.error("Error fetching global trades", { error: err instanceof Error ? err.message : err });
       return c.json({ error: "Failed to fetch trades" }, 500);
     }
   });

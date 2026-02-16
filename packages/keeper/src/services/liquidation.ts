@@ -18,8 +18,10 @@ import {
   derivePythPushOraclePDA,
   type DiscoveredMarket,
 } from "@percolator/core";
-import { config, getConnection, loadKeypair, sendWithRetry, pollSignatureStatus, getRecentPriorityFees, checkTransactionSize, eventBus } from "@percolator/shared";
+import { config, getConnection, loadKeypair, sendWithRetry, pollSignatureStatus, getRecentPriorityFees, checkTransactionSize, eventBus, createLogger } from "@percolator/shared";
 import { OracleService } from "./oracle.js";
+
+const logger = createLogger("keeper:liquidation");
 
 // BL2: Extract magic numbers to named constants
 const PRICE_E6_DIVISOR = 1_000_000n; // Price precision divisor (6 decimals)
@@ -81,7 +83,7 @@ export class LiquidationService {
       if (priceAge > 60n) {
         // Only log for markets with actual positions (reduce noise)
         if (engine.totalOpenInterest > 0n) {
-          console.warn(`[LiquidationService] Skipping ${slabAddress}: oracle price is ${priceAge}s old (max 60s)`);
+          logger.warn("Stale oracle price, skipping", { slabAddress, priceAgeSeconds: priceAge, maxAge: 60 });
         }
         return []; // Don't liquidate with stale prices
       }
@@ -117,10 +119,10 @@ export class LiquidationService {
             
             // Check if multiplication would overflow
             if (diff > 0n && absPosSize > MAX_SAFE_BIGINT / diff) {
-              console.warn(`[LiquidationService] PnL calculation overflow for account ${i} in ${slabAddress}`);
+              logger.warn("PnL calculation overflow", { accountIndex: i, slabAddress });
               markPnl = diff > 0n ? MAX_SAFE_BIGINT : -MAX_SAFE_BIGINT;
             } else if (diff < 0n && absPosSize > MAX_SAFE_BIGINT / -diff) {
-              console.warn(`[LiquidationService] PnL calculation overflow for account ${i} in ${slabAddress}`);
+              logger.warn("PnL calculation overflow", { accountIndex: i, slabAddress });
               markPnl = -MAX_SAFE_BIGINT;
             } else {
               markPnl = (diff * absPosSize) / price;
@@ -166,7 +168,7 @@ export class LiquidationService {
 
       return candidates;
     } catch (err) {
-      console.error(`[LiquidationService] Failed to scan market ${slabAddress}:`, err);
+      logger.error("Market scan failed", { slabAddress, error: err });
       return [];
     }
   }
@@ -237,7 +239,7 @@ export class LiquidationService {
         // Use bitmap to verify account is still active (not sequential numUsedAccounts)
         const freshUsed = parseUsedIndices(freshData);
         if (!freshUsed.includes(accountIdx)) {
-          console.warn(`[LiquidationService] Race condition: accountIdx ${accountIdx} no longer in bitmap on ${slabAddress.toBase58()}, skipping`);
+          logger.warn("Race condition: account not in bitmap", { accountIndex: accountIdx, slabAddress: slabAddress.toBase58() });
           return null;
         }
 
@@ -246,7 +248,7 @@ export class LiquidationService {
 
         // Verify still undercollateralized
         if (freshAccount.kind !== 0 || freshAccount.positionSize === 0n) {
-          console.warn(`[LiquidationService] Race condition: account ${accountIdx} on ${slabAddress.toBase58()} no longer active, skipping`);
+          logger.warn("Race condition: account no longer active", { accountIndex: accountIdx, slabAddress: slabAddress.toBase58() });
           return null;
         }
 
@@ -267,7 +269,7 @@ export class LiquidationService {
             if (equity > 0n) {
               const marginRatioBps = equity * BPS_MULTIPLIER / notional;
               if (marginRatioBps >= freshParams.maintenanceMarginBps) {
-                console.warn(`[LiquidationService] Race condition: account ${accountIdx} on ${slabAddress.toBase58()} no longer undercollateralized (margin: ${marginRatioBps} bps), skipping`);
+                logger.warn("Race condition: account no longer undercollateralized", { accountIndex: accountIdx, slabAddress: slabAddress.toBase58(), marginRatioBps });
                 return null;
               }
             }
@@ -339,14 +341,21 @@ export class LiquidationService {
         accountIdx,
         signature: sig!,
       });
-      console.log(`[LiquidationService] Liquidated account ${accountIdx} on ${slabAddress.toBase58()}: ${sig}`);
+      logger.info("Account liquidated", { accountIndex: accountIdx, slabAddress: slabAddress.toBase58(), signature: sig });
       return sig!;
     } catch (err) {
+      logger.error("Liquidation failed", { 
+        error: err,
+        slabAddress: slabAddress.toBase58(),
+        accountIdx,
+        market: slabAddress.toBase58(),
+        programId: market.programId.toBase58()
+      });
+      
       eventBus.publish("liquidation.failure", slabAddress.toBase58(), {
         accountIdx,
         error: err instanceof Error ? err.message : String(err),
       });
-      console.error(`[LiquidationService] Liquidation failed:`, err);
       return null;
     }
   }
@@ -381,7 +390,7 @@ export class LiquidationService {
 
   start(getMarkets: () => Map<string, { market: DiscoveredMarket }>): void {
     if (this.timer) return;
-    console.log(`[LiquidationService] Starting with interval ${this.intervalMs}ms`);
+    logger.info("Liquidation service starting", { intervalMs: this.intervalMs });
 
     this.timer = setInterval(async () => {
       // Overlap guard: skip if previous cycle is still running (mirrors CrankService pattern)
@@ -392,12 +401,14 @@ export class LiquidationService {
         const marketsSnapshot = new Map(getMarkets());
         const result = await this.scanAndLiquidateAll(marketsSnapshot);
         if (result.candidates > 0) {
-          console.log(
-            `[LiquidationService] Scan: ${result.scanned} markets, ${result.candidates} candidates, ${result.liquidated} liquidated`,
-          );
+          logger.info("Liquidation scan complete", { 
+            scanned: result.scanned, 
+            candidates: result.candidates, 
+            liquidated: result.liquidated 
+          });
         }
       } catch (err) {
-        console.error("[LiquidationService] Failed to complete liquidation cycle:", err);
+        logger.error("Liquidation cycle failed", { error: err });
       } finally {
         this._scanning = false;
       }
@@ -408,7 +419,7 @@ export class LiquidationService {
     if (this.timer) {
       clearInterval(this.timer);
       this.timer = null;
-      console.log("[LiquidationService] Stopped");
+      logger.info("Liquidation service stopped");
     }
   }
 

@@ -29,7 +29,12 @@ import {
   insertMarket,
   getSupabase,
   withRetry,
+  createLogger,
+  captureException,
+  addBreadcrumb,
 } from "@percolator/shared";
+
+const logger = createLogger("indexer:stats-collector");
 
 /** Market provider interface — allows different market discovery strategies */
 export interface MarketProvider {
@@ -66,7 +71,7 @@ export class StatsCollector {
     // Periodic collection
     this.timer = setInterval(() => this.collect(), COLLECT_INTERVAL_MS);
 
-    console.log("[StatsCollector] Started — collecting every 30s");
+    logger.info("StatsCollector started", { intervalMs: COLLECT_INTERVAL_MS });
   }
 
   stop(): void {
@@ -75,7 +80,7 @@ export class StatsCollector {
       clearInterval(this.timer);
       this.timer = null;
     }
-    console.log("[StatsCollector] Stopped");
+    logger.info("StatsCollector stopped");
   }
 
   /**
@@ -101,7 +106,7 @@ export class StatsCollector {
 
       if (missingMarkets.length === 0) return;
 
-      console.log(`[StatsCollector] Found ${missingMarkets.length} new markets to register`);
+      logger.info("New markets found", { count: missingMarkets.length });
 
       // Insert missing markets
       for (const [slabAddress, state] of missingMarkets) {
@@ -134,13 +139,13 @@ export class StatsCollector {
             status: "active",
           });
 
-          console.log(`[StatsCollector] Registered new market: ${slabAddress} (${symbol})`);
+          logger.info("Market registered", { slabAddress, symbol });
         } catch (err) {
-          console.warn(`[StatsCollector] Failed to register market ${slabAddress}:`, err instanceof Error ? err.message : err);
+          logger.warn("Failed to register market", { slabAddress, error: err instanceof Error ? err.message : err });
         }
       }
     } catch (err) {
-      console.error("[StatsCollector] Market sync failed:", err);
+      logger.error("Market sync failed", { error: err });
     }
   }
 
@@ -224,7 +229,7 @@ export class StatsCollector {
               volume24h = Number(volume);
             } catch (volErr) {
               // Non-fatal — volume calculation failure shouldn't break stats collection
-              console.warn(`[StatsCollector] 24h volume calculation failed for ${slabAddress}:`, volErr instanceof Error ? volErr.message : volErr);
+              logger.warn("24h volume calculation failed", { slabAddress, error: volErr instanceof Error ? volErr.message : volErr });
             }
 
             // Upsert market stats with ALL RiskEngine fields (migration 010)
@@ -276,7 +281,7 @@ export class StatsCollector {
                   this.lastOracleLogTime.set(slabAddress, Date.now());
                 } catch (oracleErr) {
                   // Non-fatal — oracle logging shouldn't break stats collection
-                  console.warn(`[StatsCollector] Oracle price log failed for ${slabAddress}:`, oracleErr instanceof Error ? oracleErr.message : oracleErr);
+                  logger.warn("Oracle price log failed", { slabAddress, error: oracleErr instanceof Error ? oracleErr.message : oracleErr });
                 }
               }
             }
@@ -297,7 +302,7 @@ export class StatsCollector {
                 this.lastOiHistoryTime.set(slabAddress, Date.now());
               } catch (e) {
                 // Non-fatal
-                console.warn(`[StatsCollector] OI history log failed for ${slabAddress}:`, e instanceof Error ? e.message : e);
+                logger.warn("OI history log failed", { slabAddress, error: e instanceof Error ? e.message : e });
               }
             }
 
@@ -314,7 +319,7 @@ export class StatsCollector {
                 });
                 this.lastInsHistoryTime.set(slabAddress, Date.now());
               } catch (e) {
-                console.warn(`[StatsCollector] Insurance history log failed for ${slabAddress}:`, e instanceof Error ? e.message : e);
+                logger.warn("Insurance history log failed", { slabAddress, error: e instanceof Error ? e.message : e });
               }
             }
 
@@ -352,9 +357,22 @@ export class StatsCollector {
 
       if (updated > 0 || errors > 0) {
         console.log(`[StatsCollector] Updated ${updated}/${markets.size} markets (${errors} errors)`);
+        if (errors > 0) {
+          addBreadcrumb("StatsCollector completed with errors", {
+            updated,
+            errors,
+            totalMarkets: markets.size,
+          });
+        }
       }
     } catch (err) {
       console.error("[StatsCollector] Collection failed:", err);
+      captureException(err, {
+        tags: { context: "stats-collector-error" },
+        extra: {
+          marketsCount: this.marketProvider.getMarkets().size,
+        },
+      });
     } finally {
       this._collecting = false;
     }
