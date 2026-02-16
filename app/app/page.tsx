@@ -10,6 +10,7 @@ import { ScrollReveal } from "@/components/ui/ScrollReveal";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { GradientText } from "@/components/ui/GradientText";
 import { usePrefersReducedMotion } from "@/hooks/usePrefersReducedMotion";
+import { ErrorBoundary } from "@/components/ui/ErrorBoundary";
 
 const HOW_STEPS = [
   {
@@ -243,56 +244,61 @@ export default function Home() {
 
       {/* ═══════════════════════ STATS ═══════════════════════ */}
       {hasStats && (
-        <section className="relative py-16">
+        <ErrorBoundary label="Stats Section">
+          <section className="relative py-16">
+            <div className="mx-auto max-w-[1100px] px-6">
+              <ScrollReveal>
+                <div className="mb-10 text-center">
+                  <div className="mb-2 text-[10px] font-medium uppercase tracking-[0.25em] text-[var(--accent)]/60">
+                    // protocol metrics
+                  </div>
+                  <h2 className="text-xl font-medium tracking-[-0.01em] text-white sm:text-2xl" style={{ fontFamily: "var(--font-heading)" }}>
+                    Built <GradientText variant="muted">Different</GradientText>
+                  </h2>
+                </div>
+              </ScrollReveal>
+
+              <ScrollReveal stagger={0.08}>
+                <div className="grid grid-cols-2 gap-px overflow-hidden border border-[var(--border)] bg-[var(--border)] md:grid-cols-4">
+                  {[
+                    { label: "Markets Live", value: <AnimatedNumber value={stats.markets} decimals={0} />, color: "text-[var(--accent)]" },
+                    { label: "24h Volume", value: <AnimatedNumber value={stats.volume / 1000} prefix="$" suffix="k" decimals={0} />, color: "text-[var(--long)]" },
+                    { label: "Insurance Fund", value: <AnimatedNumber value={stats.insurance / 1000} prefix="$" suffix="k" decimals={0} />, color: "text-[var(--accent)]" },
+                    { label: "Access", value: "Open", color: "text-[var(--long)]" },
+                  ].map((stat) => (
+                    <div key={stat.label} className="bg-[var(--panel-bg)] p-6 transition-colors duration-200 hover:bg-[var(--bg-elevated)]">
+                      <p className="mb-3 text-[9px] font-medium uppercase tracking-[0.2em] text-[var(--text-dim)]">{stat.label}</p>
+                      <p className={`text-2xl font-bold sm:text-3xl ${stat.color}`}>
+                        {stat.value}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </ScrollReveal>
+            </div>
+          </section>
+        </ErrorBoundary>
+      )}
+
+      {/* ═══════════════════════ HOW IT WORKS ═══════════════════════ */}
+      <ErrorBoundary label="How It Works Section">
+        <HowItWorks />
+      </ErrorBoundary>
+
+      {/* ═══════════════════════ FEATURES ═══════════════════════ */}
+      <ErrorBoundary label="Features Section">
+        <section className="relative overflow-hidden py-16">
           <div className="mx-auto max-w-[1100px] px-6">
             <ScrollReveal>
               <div className="mb-10 text-center">
                 <div className="mb-2 text-[10px] font-medium uppercase tracking-[0.25em] text-[var(--accent)]/60">
-                  // protocol metrics
+                  // architecture
                 </div>
                 <h2 className="text-xl font-medium tracking-[-0.01em] text-white sm:text-2xl" style={{ fontFamily: "var(--font-heading)" }}>
-                  Built <GradientText variant="muted">Different</GradientText>
+                  Purpose-Built <GradientText variant="muted">Infrastructure</GradientText>
                 </h2>
               </div>
             </ScrollReveal>
-
-            <ScrollReveal stagger={0.08}>
-              <div className="grid grid-cols-2 gap-px overflow-hidden border border-[var(--border)] bg-[var(--border)] md:grid-cols-4">
-                {[
-                  { label: "Markets Live", value: <AnimatedNumber value={stats.markets} decimals={0} />, color: "text-[var(--accent)]" },
-                  { label: "24h Volume", value: <AnimatedNumber value={stats.volume / 1000} prefix="$" suffix="k" decimals={0} />, color: "text-[var(--long)]" },
-                  { label: "Insurance Fund", value: <AnimatedNumber value={stats.insurance / 1000} prefix="$" suffix="k" decimals={0} />, color: "text-[var(--accent)]" },
-                  { label: "Access", value: "Open", color: "text-[var(--long)]" },
-                ].map((stat) => (
-                  <div key={stat.label} className="bg-[var(--panel-bg)] p-6 transition-colors duration-200 hover:bg-[var(--bg-elevated)]">
-                    <p className="mb-3 text-[9px] font-medium uppercase tracking-[0.2em] text-[var(--text-dim)]">{stat.label}</p>
-                    <p className={`text-2xl font-bold sm:text-3xl ${stat.color}`}>
-                      {stat.value}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            </ScrollReveal>
-          </div>
-        </section>
-      )}
-
-      {/* ═══════════════════════ HOW IT WORKS ═══════════════════════ */}
-      <HowItWorks />
-
-      {/* ═══════════════════════ FEATURES ═══════════════════════ */}
-      <section className="relative overflow-hidden py-16">
-        <div className="mx-auto max-w-[1100px] px-6">
-          <ScrollReveal>
-            <div className="mb-10 text-center">
-              <div className="mb-2 text-[10px] font-medium uppercase tracking-[0.25em] text-[var(--accent)]/60">
-                // architecture
-              </div>
-              <h2 className="text-xl font-medium tracking-[-0.01em] text-white sm:text-2xl" style={{ fontFamily: "var(--font-heading)" }}>
-                Purpose-Built <GradientText variant="muted">Infrastructure</GradientText>
-              </h2>
-            </div>
-          </ScrollReveal>
 
           {/* Hero feature — full width with terminal mockup */}
           <ScrollReveal>
@@ -385,9 +391,11 @@ export default function Home() {
           </ScrollReveal>
         </div>
       </section>
+      </ErrorBoundary>
 
       {/* ═══════════════════════ FEATURED MARKETS ═══════════════════════ */}
       {hasMarkets && (
+        <ErrorBoundary label="Featured Markets Section">
         <section className="relative py-16">
           <div className="mx-auto max-w-[1100px] px-6">
             <ScrollReveal>
@@ -448,6 +456,7 @@ export default function Home() {
             </ScrollReveal>
           </div>
         </section>
+        </ErrorBoundary>
       )}
 
       {/* ═══════════════════════ BOTTOM CTA ═══════════════════════ */}

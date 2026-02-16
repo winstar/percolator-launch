@@ -19,6 +19,7 @@ import { GlowButton } from "@/components/ui/GlowButton";
 import { useMultiTokenMeta } from "@/hooks/useMultiTokenMeta";
 import { useAllMarketStats } from "@/hooks/useAllMarketStats";
 import { MarketLogo } from "@/components/market/MarketLogo";
+import { ErrorBoundary } from "@/components/ui/ErrorBoundary";
 
 function formatNum(n: number | null | undefined): string {
   if (n === null || n === undefined) return "\u2014";
@@ -408,14 +409,15 @@ function MarketsPageInner() {
         </ScrollReveal>
 
         {/* Table */}
-        <ScrollReveal delay={0.2}>
-          {loading ? (
-            <div className="space-y-2">
-              {[1, 2, 3, 4, 5].map((i) => (
-                <ShimmerSkeleton key={i} className="h-[52px]" />
-              ))}
-            </div>
-          ) : filtered.length === 0 ? (
+        <ErrorBoundary label="Markets Table">
+          <ScrollReveal delay={0.2}>
+            {loading ? (
+              <div className="space-y-2">
+                {[1, 2, 3, 4, 5].map((i) => (
+                  <ShimmerSkeleton key={i} className="h-[52px]" />
+                ))}
+              </div>
+            ) : filtered.length === 0 ? (
             <div className="rounded-sm border border-[var(--border)] bg-[var(--panel-bg)] p-16 text-center">
               {hasSearch || hasActiveFilters ? (
                 <>
@@ -519,7 +521,8 @@ function MarketsPageInner() {
               )}
             </>
           )}
-        </ScrollReveal>
+          </ScrollReveal>
+        </ErrorBoundary>
       </div>
     </div>
   );
