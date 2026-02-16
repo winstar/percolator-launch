@@ -140,6 +140,46 @@ importers:
         specifier: ^4.0.18
         version: 4.0.18(@types/node@20.19.32)(@vitest/ui@4.0.18)(happy-dom@20.6.1(bufferutil@4.1.0)(utf-8-validate@5.0.10))(jiti@2.6.1)(jsdom@28.0.0(@noble/hashes@2.0.1))(lightningcss@1.30.2)(msw@2.12.10(@types/node@20.19.32)(typescript@5.9.3))(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
 
+  packages/api:
+    dependencies:
+      '@hono/node-server':
+        specifier: ^1.13.8
+        version: 1.19.9(hono@4.11.9)
+      '@percolator/core':
+        specifier: workspace:*
+        version: link:../core
+      '@percolator/shared':
+        specifier: workspace:*
+        version: link:../shared
+      '@solana/web3.js':
+        specifier: ^1.98.0
+        version: 1.98.4(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)
+      '@supabase/supabase-js':
+        specifier: ^2.49.1
+        version: 2.95.3(bufferutil@4.1.0)(utf-8-validate@5.0.10)
+      dotenv:
+        specifier: ^16.4.7
+        version: 16.6.1
+      hono:
+        specifier: ^4.7.4
+        version: 4.11.9
+      ws:
+        specifier: ^8.18.0
+        version: 8.19.0(bufferutil@4.1.0)(utf-8-validate@5.0.10)
+    devDependencies:
+      '@types/node':
+        specifier: ^25.2.2
+        version: 25.2.2
+      '@types/ws':
+        specifier: ^8.5.14
+        version: 8.18.1
+      tsx:
+        specifier: ^4.19.2
+        version: 4.21.0
+      typescript:
+        specifier: ^5.7.3
+        version: 5.9.3
+
   packages/core:
     dependencies:
       '@solana/spl-token':
@@ -164,6 +204,65 @@ importers:
       vitest:
         specifier: ^4.0.18
         version: 4.0.18(@types/node@20.19.32)(@vitest/ui@4.0.18)(happy-dom@20.6.1(bufferutil@4.1.0)(utf-8-validate@5.0.10))(jiti@2.6.1)(jsdom@28.0.0(@noble/hashes@2.0.1))(lightningcss@1.30.2)(msw@2.12.10(@types/node@20.19.32)(typescript@5.9.3))(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
+
+  packages/indexer:
+    dependencies:
+      '@hono/node-server':
+        specifier: ^1.13.8
+        version: 1.19.9(hono@4.11.9)
+      '@percolator/core':
+        specifier: workspace:*
+        version: link:../core
+      '@percolator/shared':
+        specifier: workspace:*
+        version: link:../shared
+      '@solana/web3.js':
+        specifier: ^1.98.0
+        version: 1.98.4(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)
+      '@supabase/supabase-js':
+        specifier: ^2.49.1
+        version: 2.95.3(bufferutil@4.1.0)(utf-8-validate@5.0.10)
+      dotenv:
+        specifier: ^16.4.7
+        version: 16.6.1
+      hono:
+        specifier: ^4.7.4
+        version: 4.11.9
+    devDependencies:
+      '@types/node':
+        specifier: ^25.2.2
+        version: 25.2.2
+      tsx:
+        specifier: ^4.19.2
+        version: 4.21.0
+      typescript:
+        specifier: ^5.7.3
+        version: 5.9.3
+
+  packages/keeper:
+    dependencies:
+      '@percolator/core':
+        specifier: workspace:*
+        version: link:../core
+      '@percolator/shared':
+        specifier: workspace:*
+        version: link:../shared
+      '@solana/web3.js':
+        specifier: ^1.98.0
+        version: 1.98.4(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)
+      dotenv:
+        specifier: ^16.4.7
+        version: 16.6.1
+    devDependencies:
+      '@types/node':
+        specifier: ^25.2.2
+        version: 25.2.2
+      tsx:
+        specifier: ^4.19.2
+        version: 4.21.0
+      typescript:
+        specifier: ^5.7.3
+        version: 5.9.3
 
   packages/server:
     dependencies:
@@ -219,6 +318,31 @@ importers:
       vitest:
         specifier: ^4.0.18
         version: 4.0.18(@types/node@25.2.2)(@vitest/ui@4.0.18)(happy-dom@20.6.1(bufferutil@4.1.0)(utf-8-validate@5.0.10))(jiti@2.6.1)(jsdom@28.0.0(@noble/hashes@2.0.1))(lightningcss@1.30.2)(msw@2.12.10(@types/node@25.2.2)(typescript@5.9.3))(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
+
+  packages/shared:
+    dependencies:
+      '@percolator/core':
+        specifier: workspace:*
+        version: link:../core
+      '@solana/web3.js':
+        specifier: ^1.98.0
+        version: 1.98.4(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)
+      '@supabase/supabase-js':
+        specifier: ^2.49.1
+        version: 2.95.3(bufferutil@4.1.0)(utf-8-validate@5.0.10)
+      bs58:
+        specifier: ^6.0.0
+        version: 6.0.0
+      dotenv:
+        specifier: ^16.4.7
+        version: 16.6.1
+    devDependencies:
+      '@types/node':
+        specifier: ^25.2.2
+        version: 25.2.2
+      typescript:
+        specifier: ^5.7.3
+        version: 5.9.3
 
   packages/simulation:
     dependencies:
