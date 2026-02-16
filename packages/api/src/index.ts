@@ -14,6 +14,7 @@ import { oracleRouterRoutes } from "./routes/oracle-router.js";
 import { insuranceRoutes } from "./routes/insurance.js";
 import { openInterestRoutes } from "./routes/open-interest.js";
 import { statsRoutes } from "./routes/stats.js";
+import { docsRoutes } from "./routes/docs.js";
 import { setupWebSocket } from "./routes/ws.js";
 import { readRateLimit, writeRateLimit } from "./middleware/rate-limit.js";
 import { cacheMiddleware } from "./middleware/cache.js";
@@ -105,8 +106,13 @@ app.route("/", oracleRouterRoutes());
 app.route("/", insuranceRoutes());
 app.route("/", openInterestRoutes());
 app.route("/", statsRoutes());
+app.route("/", docsRoutes());
 
-app.get("/", (c) => c.json({ name: "@percolator/api", version: "0.1.0" }));
+app.get("/", (c) => c.json({ 
+  name: "@percolator/api", 
+  version: "0.1.0",
+  docs: "/docs"
+}));
 
 // Global error handler
 app.onError((err, c) => {

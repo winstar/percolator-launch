@@ -113,7 +113,7 @@ export class HeliusWebhookManager {
       });
     } catch (fetchErr) {
       const msg = fetchErr instanceof Error ? fetchErr.message : String(fetchErr);
-      const cause = fetchErr instanceof Error && (fetchErr as any).cause ? (fetchErr as any).cause : undefined;
+      const cause = fetchErr instanceof Error && fetchErr.cause instanceof Error ? fetchErr.cause : undefined;
       logger.error("Fetch to api.helius.dev failed", { message: msg, cause: cause?.message });
       return null;
     }
