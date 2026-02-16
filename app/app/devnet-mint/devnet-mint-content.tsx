@@ -27,6 +27,7 @@ import gsap from "gsap";
 import Link from "next/link";
 import { ScrollReveal } from "@/components/ui/ScrollReveal";
 import { ShimmerSkeleton } from "@/components/ui/ShimmerSkeleton";
+import { LogoUpload } from "@/components/create/LogoUpload";
 import { usePrefersReducedMotion } from "@/hooks/usePrefersReducedMotion";
 
 const HELIUS_RPC = `https://devnet.helius-rpc.com/?api-key=${process.env.NEXT_PUBLIC_HELIUS_API_KEY ?? ""}`;
@@ -551,6 +552,7 @@ const DevnetMintContent: FC = () => {
                   )}
                 </div>
 
+                <LogoUpload mintAddress={mintAddress} symbol={tokenSymbol} />
                 <button onClick={() => { setMintAddress(null); setCreateStatus(null); setLastTxSig(null); }} className="mt-4 text-xs text-[var(--text-dim)] hover:text-[var(--text-muted)] underline">
                   Create another token
                 </button>
