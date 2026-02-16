@@ -28,11 +28,27 @@ start().catch((err) => {
   process.exit(1);
 });
 
-async function shutdown(signal: string) {
-  console.log(`${signal} received, shutting down keeper...`);
-  crankService.stop();
-  liquidationService.stop();
-  process.exit(0);
+async function shutdown(signal: string): Promise<void> {
+  console.log(`[Keeper] ${signal} received, shutting down gracefully...`);
+  
+  try {
+    // Stop crank service (clears timers, stops processing)
+    console.log("[Keeper] Stopping crank service...");
+    crankService.stop();
+    
+    // Stop liquidation service (clears timers)
+    console.log("[Keeper] Stopping liquidation service...");
+    liquidationService.stop();
+    
+    // Note: Solana connection doesn't need explicit cleanup
+    // Oracle service has no persistent state to clean up
+    
+    console.log("[Keeper] Shutdown complete");
+    process.exit(0);
+  } catch (err) {
+    console.error("[Keeper] Error during shutdown:", err);
+    process.exit(1);
+  }
 }
 
 process.on("SIGTERM", () => shutdown("SIGTERM"));

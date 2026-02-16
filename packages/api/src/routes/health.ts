@@ -1,28 +1,48 @@
 import { Hono } from "hono";
-import { getConnection, getSupabase } from "@percolator/shared";
+import { getConnection, getSupabase, createLogger } from "@percolator/shared";
+
+const logger = createLogger("api:health");
+const startTime = Date.now();
 
 export function healthRoutes(): Hono {
   const app = new Hono();
   
   app.get("/health", async (c) => {
-    const checks: Record<string, string> = {};
+    const checks: { db: boolean; rpc: boolean } = { db: false, rpc: false };
+    let status: "ok" | "degraded" | "down" = "ok";
     
+    // Check RPC connectivity
     try {
-      const slot = await getConnection().getSlot();
-      checks.rpc = `ok (slot: ${slot})`;
-    } catch {
-      checks.rpc = "error";
+      await getConnection().getSlot();
+      checks.rpc = true;
+    } catch (err) {
+      logger.error("RPC check failed", { error: err instanceof Error ? err.message : err });
+      checks.rpc = false;
     }
     
+    // Check Supabase connectivity
     try {
-      const { count } = await getSupabase().from("markets").select("*", { count: "exact", head: true });
-      checks.database = `ok (${count} markets)`;
-    } catch {
-      checks.database = "error";
+      await getSupabase().from("markets").select("id", { count: "exact", head: true });
+      checks.db = true;
+    } catch (err) {
+      logger.error("DB check failed", { error: err instanceof Error ? err.message : err });
+      checks.db = false;
     }
     
-    const healthy = !Object.values(checks).includes("error");
-    return c.json({ status: healthy ? "healthy" : "degraded", service: "api", checks }, healthy ? 200 : 503);
+    // Determine overall status
+    const failedChecks = Object.values(checks).filter(v => !v).length;
+    if (failedChecks === 0) {
+      status = "ok";
+    } else if (failedChecks === Object.keys(checks).length) {
+      status = "down";
+    } else {
+      status = "degraded";
+    }
+    
+    const uptime = Math.floor((Date.now() - startTime) / 1000);
+    const statusCode = status === "down" ? 503 : 200;
+    
+    return c.json({ status, checks, uptime }, statusCode);
   });
   
   return app;

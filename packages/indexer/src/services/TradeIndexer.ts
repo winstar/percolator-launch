@@ -1,6 +1,6 @@
 import { Connection, PublicKey, type ParsedTransactionWithMeta } from "@solana/web3.js";
 import { IX_TAG } from "@percolator/core";
-import { config, getConnection, insertTrade, tradeExistsBySignature, getMarkets, eventBus, decodeBase58, readU128LE, parseTradeSize } from "@percolator/shared";
+import { config, getConnection, insertTrade, tradeExistsBySignature, getMarkets, eventBus, decodeBase58, readU128LE, parseTradeSize, withRetry } from "@percolator/shared";
 
 /** Trade instruction tags we want to index */
 const TRADE_TAGS = new Set<number>([IX_TAG.TradeNoCpi, IX_TAG.TradeCpi]);
@@ -159,9 +159,16 @@ export class TradeIndexerPolling {
 
     let signatures;
     try {
-      signatures = await connection.getSignaturesForAddress(slabPk, opts);
+      signatures = await withRetry(
+        () => connection.getSignaturesForAddress(slabPk, opts),
+        { 
+          maxRetries: 3, 
+          baseDelayMs: 1000, 
+          label: `getSignaturesForAddress(${slabAddress.slice(0, 8)})` 
+        }
+      );
     } catch (err) {
-      console.warn(`[TradeIndexer] Failed to get signatures for ${slabAddress.slice(0, 8)}...:`,
+      console.warn(`[TradeIndexer] Failed to get signatures for ${slabAddress.slice(0, 8)}... after retries:`,
         err instanceof Error ? err.message : err);
       return;
     }
@@ -181,7 +188,14 @@ export class TradeIndexerPolling {
     for (let i = 0; i < validSigs.length; i += 5) {
       const batch = validSigs.slice(i, i + 5);
       const txResults = await Promise.allSettled(
-        batch.map(sig => connection.getParsedTransaction(sig, { maxSupportedTransactionVersion: 0 }))
+        batch.map(sig => withRetry(
+          () => connection.getParsedTransaction(sig, { maxSupportedTransactionVersion: 0 }),
+          { 
+            maxRetries: 3, 
+            baseDelayMs: 1000, 
+            label: `getParsedTransaction(${sig.slice(0, 12)})` 
+          }
+        ))
       );
 
       for (let j = 0; j < txResults.length; j++) {

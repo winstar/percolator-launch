@@ -28,6 +28,7 @@ import {
   getMarkets,
   insertMarket,
   getSupabase,
+  withRetry,
 } from "@percolator/shared";
 
 /** Market provider interface — allows different market discovery strategies */
@@ -169,7 +170,14 @@ export class StatsCollector {
         await Promise.all(batch.map(async ([slabAddress, state]) => {
           try {
             const slabPubkey = new PublicKey(slabAddress);
-            const accountInfo = await connection.getAccountInfo(slabPubkey);
+            const accountInfo = await withRetry(
+              () => connection.getAccountInfo(slabPubkey),
+              { 
+                maxRetries: 3, 
+                baseDelayMs: 1000, 
+                label: `getAccountInfo(${slabAddress.slice(0, 8)})` 
+              }
+            );
             if (!accountInfo?.data) return;
 
             const data = new Uint8Array(accountInfo.data);

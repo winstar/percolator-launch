@@ -41,14 +41,34 @@ start().catch((err) => {
   process.exit(1);
 });
 
-async function shutdown(signal: string) {
-  console.log(`${signal} received, shutting down indexer...`);
-  discovery.stop();
-  statsCollector.stop();
-  tradeIndexer.stop();
-  insuranceService.stop();
-  webhookManager.stop();
-  process.exit(0);
+async function shutdown(signal: string): Promise<void> {
+  console.log(`[Indexer] ${signal} received, shutting down gracefully...`);
+  
+  try {
+    // Stop all services (clears timers and intervals)
+    console.log("[Indexer] Stopping market discovery...");
+    discovery.stop();
+    
+    console.log("[Indexer] Stopping stats collector...");
+    statsCollector.stop();
+    
+    console.log("[Indexer] Stopping trade indexer...");
+    tradeIndexer.stop();
+    
+    console.log("[Indexer] Stopping insurance LP service...");
+    insuranceService.stop();
+    
+    console.log("[Indexer] Stopping webhook manager...");
+    webhookManager.stop();
+    
+    // Note: Solana connection and Supabase client don't need explicit cleanup
+    
+    console.log("[Indexer] Shutdown complete");
+    process.exit(0);
+  } catch (err) {
+    console.error("[Indexer] Error during shutdown:", err);
+    process.exit(1);
+  }
 }
 
 process.on("SIGTERM", () => shutdown("SIGTERM"));
