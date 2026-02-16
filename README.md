@@ -626,6 +626,7 @@ Detailed docs live in the [`docs/`](./docs/) directory:
 
 | Document | Description |
 |----------|-------------|
+| [`ARCHITECTURE.md`](./docs/ARCHITECTURE.md) | **Complete system architecture** — service breakdown, data flow, deployment |
 | [`BACKEND-ARCHITECTURE.md`](./docs/BACKEND-ARCHITECTURE.md) | Backend service architecture and data flow |
 | [`INSURANCE-LP-SPEC.md`](./docs/INSURANCE-LP-SPEC.md) | Insurance LP token system (VaR-based yield model) |
 | [`MAINNET-READINESS.md`](./docs/MAINNET-READINESS.md) | Mainnet deployment checklist |
@@ -635,6 +636,17 @@ Detailed docs live in the [`docs/`](./docs/) directory:
 | [`AUDIT-TRADE.md`](./AUDIT-TRADE.md) | Trade system audit (23 findings, all resolved) |
 | [`AUDIT-PAGES.md`](./AUDIT-PAGES.md) | Frontend pages audit (34 findings, all resolved) |
 | [`AUDIT-BACKEND.md`](./AUDIT-BACKEND.md) | Backend audit (15 findings, all resolved) |
+
+### API Documentation
+
+**Interactive Swagger UI**: Visit `http://localhost:3001/docs` when running the API locally.
+
+The API service provides comprehensive REST endpoints for market data, trades, funding rates, and platform statistics. See [`packages/api/README.md`](./packages/api/README.md) for complete API documentation including:
+- All available endpoints
+- Request/response schemas
+- Rate limiting and caching policies
+- Environment configuration
+- Deployment guide
 
 ---
 
