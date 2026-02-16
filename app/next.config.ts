@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { withSentryConfig } from "@sentry/nextjs";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://percolator-api-production.up.railway.app";
 
@@ -43,4 +44,12 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+export default withSentryConfig(nextConfig, {
+  // Sentry webpack plugin options
+  silent: true, // Suppresses all logs
+  
+  // Disable automatic source map upload (we'll enable later with auth token)
+  sourcemaps: {
+    disable: true,
+  },
+});

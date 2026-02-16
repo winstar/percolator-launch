@@ -20,13 +20,55 @@ const logger = createLogger("api");
 
 const app = new Hono();
 
-const allowedOrigins = (process.env.ALLOWED_ORIGINS ?? "https://percolatorlaunch.com,http://localhost:3000").split(",").map(s => s.trim()).filter(Boolean);
+// CORS Configuration
+const allowedOrigins = process.env.CORS_ORIGINS 
+  ? process.env.CORS_ORIGINS.split(",").map(s => s.trim()).filter(Boolean)
+  : ["http://localhost:3000", "http://localhost:3001"];
+
+// In production, CORS_ORIGINS must be explicitly set
+if (process.env.NODE_ENV === "production" && !process.env.CORS_ORIGINS) {
+  logger.error("CORS_ORIGINS environment variable is required in production");
+  process.exit(1);
+}
+
+logger.info("CORS allowed origins", { origins: allowedOrigins });
+
 app.use("*", cors({
-  origin: allowedOrigins,
+  origin: (origin) => {
+    // Allow requests with no origin (like mobile apps or curl)
+    if (!origin) return null;
+    
+    // Check if origin is in allowed list
+    if (allowedOrigins.includes(origin)) {
+      return origin;
+    }
+    
+    // Reject disallowed origins
+    logger.warn("CORS rejected origin", { origin });
+    return null;
+  },
   allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   allowHeaders: ["Content-Type", "x-api-key"],
 }));
 
+// Security Headers Middleware
+app.use("*", async (c, next) => {
+  await next();
+  
+  // Set security headers
+  c.header("X-Content-Type-Options", "nosniff");
+  c.header("X-Frame-Options", "DENY");
+  c.header("X-XSS-Protection", "1; mode=block");
+  c.header("Referrer-Policy", "strict-origin-when-cross-origin");
+  
+  // Only add HSTS if using HTTPS
+  const proto = c.req.header("x-forwarded-proto") || "http";
+  if (proto === "https") {
+    c.header("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
+  }
+});
+
+// Rate Limiting Middleware
 app.use("*", async (c, next) => {
   if (c.req.method === "GET" || c.req.method === "HEAD" || c.req.method === "OPTIONS") {
     return readRateLimit()(c, next);

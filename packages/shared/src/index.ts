@@ -9,3 +9,4 @@ export * from "./utils/binary.js";
 export * from "./services/events.js";
 export * from "./retry.js";
 export * from "./sentry.js";
+export * from "./sanitize.js";
