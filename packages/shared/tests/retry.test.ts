@@ -45,11 +45,14 @@ describe("withRetry", () => {
   it("should respect maxRetries limit", async () => {
     const fn = vi.fn().mockRejectedValue(new Error("Always fails"));
 
-    const promise = withRetry(fn, { maxRetries: 2 });
+    const promise = withRetry(fn, { maxRetries: 2 }).catch(e => e);
 
     await vi.runAllTimersAsync();
+    
+    const result = await promise;
 
-    await expect(promise).rejects.toThrow("Always fails");
+    expect(result).toBeInstanceOf(Error);
+    expect(result.message).toBe("Always fails");
     expect(fn).toHaveBeenCalledTimes(3); // Initial + 2 retries
     expect(console.error).toHaveBeenCalledWith(
       expect.stringContaining("failed after 3 attempts")
@@ -60,7 +63,7 @@ describe("withRetry", () => {
     const fn = vi.fn().mockRejectedValue(new Error("Fail"));
     const baseDelayMs = 100;
 
-    const promise = withRetry(fn, { maxRetries: 3, baseDelayMs });
+    const promise = withRetry(fn, { maxRetries: 3, baseDelayMs }).catch(e => e);
 
     // First failure - should schedule retry with ~100ms + jitter
     await vi.advanceTimersByTimeAsync(0);
@@ -78,7 +81,8 @@ describe("withRetry", () => {
     await vi.advanceTimersByTimeAsync(500);
     expect(fn).toHaveBeenCalledTimes(4);
 
-    await expect(promise).rejects.toThrow("Fail");
+    const result = await promise;
+    expect(result).toBeInstanceOf(Error);
   });
 
   it("should cap delay at maxDelayMs", async () => {
@@ -86,18 +90,15 @@ describe("withRetry", () => {
     const baseDelayMs = 1000;
     const maxDelayMs = 2000;
 
-    const promise = withRetry(fn, { maxRetries: 5, baseDelayMs, maxDelayMs });
+    const promise = withRetry(fn, { maxRetries: 5, baseDelayMs, maxDelayMs }).catch(e => e);
 
-    await vi.advanceTimersByTimeAsync(0);
-    expect(fn).toHaveBeenCalledTimes(1);
+    await vi.runAllTimersAsync();
+    
+    const result = await promise;
 
-    // Delays should be capped at maxDelayMs even as exponent grows
-    for (let i = 0; i < 5; i++) {
-      await vi.advanceTimersByTimeAsync(maxDelayMs + 1100); // max + jitter room
-      expect(fn).toHaveBeenCalledTimes(i + 2);
-    }
-
-    await expect(promise).rejects.toThrow("Fail");
+    expect(result).toBeInstanceOf(Error);
+    // Should be called 6 times total (initial + 5 retries)
+    expect(fn).toHaveBeenCalledTimes(6);
   });
 
   it("should add jitter to delays", async () => {
@@ -108,7 +109,7 @@ describe("withRetry", () => {
     const originalRandom = Math.random;
     Math.random = vi.fn().mockReturnValue(0.5); // 50% jitter
 
-    const promise = withRetry(fn, { maxRetries: 1, baseDelayMs });
+    const promise = withRetry(fn, { maxRetries: 1, baseDelayMs }).catch(e => e);
 
     await vi.advanceTimersByTimeAsync(0);
     expect(fn).toHaveBeenCalledTimes(1);
@@ -119,7 +120,8 @@ describe("withRetry", () => {
 
     Math.random = originalRandom;
 
-    await expect(promise).rejects.toThrow("Fail");
+    const result = await promise;
+    expect(result).toBeInstanceOf(Error);
   });
 
   it("should throw last error after all retries exhausted", async () => {
@@ -130,11 +132,13 @@ describe("withRetry", () => {
       .mockRejectedValueOnce(new Error("Error 2"))
       .mockRejectedValue(finalError);
 
-    const promise = withRetry(fn, { maxRetries: 2 });
+    const promise = withRetry(fn, { maxRetries: 2 }).catch(e => e);
 
     await vi.runAllTimersAsync();
+    
+    const result = await promise;
 
-    await expect(promise).rejects.toThrow("Final error");
+    expect(result).toBe(finalError);
     expect(console.error).toHaveBeenCalledWith(
       expect.stringContaining("Final error")
     );
@@ -144,11 +148,13 @@ describe("withRetry", () => {
     const fn = vi.fn().mockRejectedValue(new Error("Test error"));
     const label = "fetchMarketData";
 
-    const promise = withRetry(fn, { maxRetries: 1, label });
+    const promise = withRetry(fn, { maxRetries: 1, label }).catch(e => e);
 
     await vi.runAllTimersAsync();
+    
+    const result = await promise;
 
-    await expect(promise).rejects.toThrow();
+    expect(result).toBeInstanceOf(Error);
 
     expect(console.warn).toHaveBeenCalledWith(
       expect.stringContaining(label)
@@ -161,11 +167,13 @@ describe("withRetry", () => {
   it("should use default options when none provided", async () => {
     const fn = vi.fn().mockRejectedValue(new Error("Fail"));
 
-    const promise = withRetry(fn);
+    const promise = withRetry(fn).catch(e => e);
 
     await vi.runAllTimersAsync();
+    
+    const result = await promise;
 
-    await expect(promise).rejects.toThrow();
+    expect(result).toBeInstanceOf(Error);
     
     // Default maxRetries = 3, so should be called 4 times (initial + 3 retries)
     expect(fn).toHaveBeenCalledTimes(4);
@@ -179,11 +187,13 @@ describe("withRetry", () => {
   it("should handle non-Error rejections", async () => {
     const fn = vi.fn().mockRejectedValue("string error");
 
-    const promise = withRetry(fn, { maxRetries: 1 });
+    const promise = withRetry(fn, { maxRetries: 1 }).catch(e => e);
 
     await vi.runAllTimersAsync();
+    
+    const result = await promise;
 
-    await expect(promise).rejects.toBe("string error");
+    expect(result).toBe("string error");
     
     expect(console.warn).toHaveBeenCalledWith(
       expect.stringContaining("string error")

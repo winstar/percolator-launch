@@ -161,13 +161,14 @@ describe("logger", () => {
     const outputs = consoleLogSpy.mock.calls.map(call => call[0]);
     
     outputs.forEach(output => {
-      // Find the level string (should be between timestamp and service)
-      const match = output.match(/\] (\w+)\s+\[/);
+      // Find the level string WITH padding (between timestamp ] and service [)
+      // Format: "] LEVEL [service]" where LEVEL is exactly 5 chars with padding
+      const match = output.match(/\d{4}-\d{2}-\d{2}T[\d:.]+Z\] (.{5}) \[test\]/);
       expect(match).toBeTruthy();
       
       if (match) {
-        const level = match[1];
-        expect(level.length).toBe(5); // DEBUG, INFO, WARN, ERROR all padded to 5
+        const levelWithPadding = match[1];
+        expect(levelWithPadding.length).toBe(5); // "DEBUG", "INFO ", "WARN ", "ERROR"
       }
     });
   });
