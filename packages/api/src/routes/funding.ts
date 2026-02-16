@@ -20,6 +20,47 @@ export function fundingRoutes(): Hono {
   const app = new Hono();
 
   /**
+   * GET /funding/global
+   * 
+   * Returns current funding rates for all markets.
+   * NOTE: This must come BEFORE /funding/:slab to avoid :slab matching "global"
+   */
+  app.get("/funding/global", async (c) => {
+    try {
+      const { data: allStats, error } = await getSupabase()
+        .from("market_stats")
+        .select("slab_address, funding_rate, net_lp_pos");
+
+      if (error) throw error;
+
+      const SLOTS_PER_HOUR = 9000;
+      const SLOTS_PER_DAY = 216000;
+
+      const markets = (allStats ?? []).map((stats) => {
+        const rateBps = Number(stats.funding_rate ?? 0);
+        return {
+          slabAddress: stats.slab_address,
+          currentRateBpsPerSlot: rateBps,
+          hourlyRatePercent: Number(((rateBps / 10000.0) * SLOTS_PER_HOUR).toFixed(6)),
+          dailyRatePercent: Number(((rateBps / 10000.0) * SLOTS_PER_DAY).toFixed(4)),
+          netLpPosition: stats.net_lp_pos ?? "0",
+        };
+      });
+
+      return c.json({
+        count: markets.length,
+        markets,
+      });
+    } catch (err) {
+      console.error(`[Funding API] Error fetching global funding data:`, err);
+      return c.json({ 
+        error: "Failed to fetch global funding data",
+        details: err instanceof Error ? err.message : String(err)
+      }, 500);
+    }
+  });
+
+  /**
    * GET /funding/:slab
    * 
    * Returns current funding rate data and 24h history for a market.
@@ -160,46 +201,6 @@ export function fundingRoutes(): Hono {
       console.error(`[Funding API] Error fetching funding history for ${slab}:`, err);
       return c.json({ 
         error: "Failed to fetch funding history",
-        details: err instanceof Error ? err.message : String(err)
-      }, 500);
-    }
-  });
-
-  /**
-   * GET /funding/global
-   * 
-   * Returns current funding rates for all markets.
-   */
-  app.get("/funding/global", async (c) => {
-    try {
-      const { data: allStats, error } = await getSupabase()
-        .from("market_stats")
-        .select("slab_address, funding_rate, net_lp_pos");
-
-      if (error) throw error;
-
-      const SLOTS_PER_HOUR = 9000;
-      const SLOTS_PER_DAY = 216000;
-
-      const markets = (allStats ?? []).map((stats) => {
-        const rateBps = Number(stats.funding_rate ?? 0);
-        return {
-          slabAddress: stats.slab_address,
-          currentRateBpsPerSlot: rateBps,
-          hourlyRatePercent: Number(((rateBps / 10000.0) * SLOTS_PER_HOUR).toFixed(6)),
-          dailyRatePercent: Number(((rateBps / 10000.0) * SLOTS_PER_DAY).toFixed(4)),
-          netLpPosition: stats.net_lp_pos ?? "0",
-        };
-      });
-
-      return c.json({
-        count: markets.length,
-        markets,
-      });
-    } catch (err) {
-      console.error(`[Funding API] Error fetching global funding data:`, err);
-      return c.json({ 
-        error: "Failed to fetch global funding data",
         details: err instanceof Error ? err.message : String(err)
       }, 500);
     }
