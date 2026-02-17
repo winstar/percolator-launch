@@ -45,6 +45,16 @@ app.use("*", cors({
     if (allowedOrigins.includes(origin)) {
       return origin;
     }
+
+    // Support wildcard patterns (e.g. *.vercel.app)
+    for (const allowed of allowedOrigins) {
+      if (allowed.startsWith("https://*.")) {
+        const suffix = allowed.slice("https://*".length); // e.g. ".vercel.app"
+        if (origin.startsWith("https://") && origin.endsWith(suffix)) {
+          return origin;
+        }
+      }
+    }
     
     // Reject disallowed origins
     logger.warn("CORS rejected origin", { origin });
