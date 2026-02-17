@@ -84,7 +84,7 @@ function HowItWorks() {
 export default function Home() {
   const [stats, setStats] = useState({ markets: 0, volume: 0, insurance: 0 });
   const [statsLoaded, setStatsLoaded] = useState(false);
-  const [featured, setFeatured] = useState<{ slab_address: string; symbol: string | null; volume_24h: number; last_price: number | null; open_interest: number }[]>([]);
+  const [featured, setFeatured] = useState<{ slab_address: string; symbol: string | null; volume_24h: number; last_price: number | null; total_open_interest: number }[]>([]);
   const heroRef = useRef<HTMLDivElement>(null);
   const prefersReduced = usePrefersReducedMotion();
   const [scrollY, setScrollY] = useState(0);
@@ -117,7 +117,7 @@ export default function Home() {
   useEffect(() => {
     async function loadStats() {
       try {
-        const { data } = await getSupabase().from("markets_with_stats").select("slab_address, symbol, volume_24h, insurance_balance, last_price, open_interest") as { data: { slab_address: string; symbol: string | null; volume_24h: number | null; insurance_balance: number | null; last_price: number | null; open_interest: number | null }[] | null };
+        const { data } = await getSupabase().from("markets_with_stats").select("slab_address, symbol, volume_24h, insurance_balance, last_price, total_open_interest") as { data: { slab_address: string; symbol: string | null; volume_24h: number | null; insurance_balance: number | null; last_price: number | null; total_open_interest: number | null }[] | null };
         if (data) {
           setStats({
             markets: data.length,
@@ -131,7 +131,7 @@ export default function Home() {
             symbol: m.symbol,
             volume_24h: m.volume_24h || 0,
             last_price: m.last_price,
-            open_interest: m.open_interest || 0,
+            total_open_interest: m.total_open_interest || 0,
           })));
         }
       } catch (err) {
@@ -441,7 +441,7 @@ export default function Home() {
                       {m.volume_24h >= 1000 ? `$${(m.volume_24h / 1000).toFixed(1)}k` : `$${m.volume_24h}`}
                     </div>
                     <div className="text-right text-[12px] text-[var(--text-secondary)]">
-                      {m.open_interest >= 1000 ? `$${(m.open_interest / 1000).toFixed(1)}k` : `$${m.open_interest}`}
+                      {m.total_open_interest >= 1000 ? `$${(m.total_open_interest / 1000).toFixed(1)}k` : `$${m.total_open_interest}`}
                     </div>
                     <div className="text-right text-[11px] text-[var(--long)]">LIVE</div>
                   </Link>
