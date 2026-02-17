@@ -146,4 +146,46 @@ describe("config", () => {
 
     expect(config.rpcUrl).toContain("devnet.helius-rpc.com");
   });
+
+  it("should correctly parse allProgramIds defaults when ALL_PROGRAM_IDS is not set", async () => {
+    delete process.env.ALL_PROGRAM_IDS;
+    delete process.env.NODE_ENV;
+
+    const { config } = await import("../src/config.js");
+
+    // Default program IDs must be an array of 3 known program addresses
+    expect(Array.isArray(config.allProgramIds)).toBe(true);
+    expect(config.allProgramIds).toHaveLength(3);
+    expect(config.allProgramIds[0]).toBe("FxfD37s1AZTeWfFQps9Zpebi2dNQ9QSSDtfMKdbsfKrD");
+    expect(config.allProgramIds[1]).toBe("FwfBKZXbYr4vTK23bMFkbgKq3npJ3MSDxEaKmq9Aj4Qn");
+    expect(config.allProgramIds[2]).toBe("g9msRSV3sJmmE3r5Twn9HuBsxzuuRGTjKCVTKudm9in");
+  });
+
+  it("should reject invalid NODE_ENV values with a clear validation error", async () => {
+    // NODE_ENV is validated against an allowlist: "development" | "production" | "test"
+    // Values like "staging", "ci", "qa" are not valid and should throw
+    for (const invalidEnv of ["staging", "ci", "qa", "review", "PRODUCTION", "Dev"]) {
+      vi.resetModules();
+      process.env.NODE_ENV = invalidEnv;
+      delete process.env.RPC_URL;
+      delete process.env.SUPABASE_URL;
+
+      await expect(async () => {
+        await import("../src/config.js");
+      }).rejects.toThrow("Environment validation failed");
+    }
+  });
+
+  it("should accept valid NODE_ENV values without error", async () => {
+    for (const validEnv of ["development", "test"]) {
+      vi.resetModules();
+      process.env.NODE_ENV = validEnv;
+      delete process.env.RPC_URL;
+      delete process.env.SUPABASE_URL;
+
+      // Valid NODE_ENV values should not throw in non-production mode
+      const { config } = await import("../src/config.js");
+      expect(config.rpcUrl).toContain("devnet.helius-rpc.com");
+    }
+  });
 });

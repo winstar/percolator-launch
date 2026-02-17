@@ -376,6 +376,82 @@ describe("stats routes", () => {
       expect(data.totalOpenInterest).toBe("5000000000");
     });
 
+    it("should return response with all expected shape fields", async () => {
+      // Explicitly verify the response contract includes all required fields
+      mockSupabase.from.mockImplementation((table: string) => {
+        if (table === "markets") {
+          let callsMarkets = 0;
+          return {
+            select: vi.fn().mockImplementation(() => {
+              callsMarkets++;
+              if (callsMarkets === 1) return Promise.resolve({ count: 5, error: null });
+              return Promise.resolve({ data: [{ deployer: "D1" }], error: null });
+            }),
+          };
+        } else if (table === "market_stats") {
+          return {
+            select: vi.fn().mockResolvedValue({
+              data: [{ volume_24h: "100000", total_open_interest: "500000" }],
+              error: null,
+            }),
+          };
+        } else if (table === "trades") {
+          return {
+            select: vi.fn(() => ({
+              gte: vi.fn().mockResolvedValue({ count: 10, error: null }),
+            })),
+          };
+        }
+        return mockSupabase;
+      });
+
+      // Override with proper multi-call behavior
+      let marketsCalls = 0;
+      mockSupabase.from.mockImplementation((table: string) => {
+        if (table === "markets") {
+          marketsCalls++;
+          if (marketsCalls === 1) {
+            return { select: vi.fn().mockResolvedValue({ count: 5, error: null }) };
+          }
+          return { select: vi.fn().mockResolvedValue({ data: [{ deployer: "D1" }], error: null }) };
+        } else if (table === "market_stats") {
+          return {
+            select: vi.fn().mockResolvedValue({
+              data: [{ volume_24h: "100000", total_open_interest: "500000" }],
+              error: null,
+            }),
+          };
+        } else if (table === "trades") {
+          return {
+            select: vi.fn(() => ({
+              gte: vi.fn().mockResolvedValue({ count: 10, error: null }),
+            })),
+          };
+        }
+        return mockSupabase;
+      });
+
+      const app = statsRoutes();
+      const res = await app.request("/stats");
+
+      expect(res.status).toBe(200);
+      const data = await res.json();
+
+      // All required top-level fields must be present
+      expect(data).toHaveProperty("totalMarkets");
+      expect(data).toHaveProperty("volume24h");          // "volume" field
+      expect(data).toHaveProperty("totalOpenInterest");  // "open_interest" field
+      expect(data).toHaveProperty("uniqueDeployers");
+      expect(data).toHaveProperty("trades24h");
+
+      // Types should be correct
+      expect(typeof data.totalMarkets).toBe("number");
+      expect(typeof data.volume24h).toBe("string");          // BigInt serialized as string
+      expect(typeof data.totalOpenInterest).toBe("string");  // BigInt serialized as string
+      expect(typeof data.uniqueDeployers).toBe("number");
+      expect(typeof data.trades24h).toBe("number");
+    });
+
     it("should handle database errors", async () => {
       mockSupabase.from.mockImplementation((table: string) => {
         return {

@@ -162,6 +162,89 @@ describe("markets routes", () => {
     });
   });
 
+  describe("GET /markets — response body shape", () => {
+    it("should return array with all required frontend fields", async () => {
+      const mockMarketsWithStats = [
+        {
+          slab_address: "33333333333333333333333333333333",
+          mint_address: "Mint3333333333333333333333333333",
+          symbol: "SOL-PERP",
+          name: "Solana Perpetual",
+          decimals: 9,
+          deployer: "Deployer33333333333333333333333333",
+          oracle_authority: "Oracle333333333333333333333333333",
+          initial_price_e6: 100000000,
+          max_leverage: 10,
+          trading_fee_bps: 5,
+          lp_collateral: "500000000",
+          matcher_context: null,
+          status: "active",
+          logo_url: null,
+          created_at: "2025-06-01T00:00:00Z",
+          updated_at: "2025-06-01T00:00:00Z",
+          total_open_interest: "2000000000",
+          total_accounts: 50,
+          last_crank_slot: 987654321,
+          last_price: 100000000,
+          mark_price: 100000000,
+          index_price: 100000000,
+          funding_rate: 3,
+          net_lp_pos: "500000",
+        },
+      ];
+
+      mockSupabase.from.mockImplementation((table: string) => {
+        if (table === "markets_with_stats") {
+          return {
+            select: vi.fn().mockResolvedValue({ data: mockMarketsWithStats, error: null }),
+          };
+        }
+        return mockSupabase;
+      });
+
+      const app = marketRoutes();
+      const res = await app.request("/markets");
+
+      expect(res.status).toBe(200);
+      const data = await res.json();
+      expect(Array.isArray(data.markets)).toBe(true);
+
+      const market = data.markets[0];
+      // Core identity fields
+      expect(market).toHaveProperty("slabAddress", "33333333333333333333333333333333");
+      expect(market).toHaveProperty("mintAddress", "Mint3333333333333333333333333333");
+      expect(market).toHaveProperty("symbol", "SOL-PERP");
+      expect(market).toHaveProperty("name", "Solana Perpetual");
+      expect(market).toHaveProperty("decimals", 9);
+      expect(market).toHaveProperty("deployer");
+      expect(market).toHaveProperty("oracleAuthority");
+      expect(market).toHaveProperty("status", "active");
+      // Stats fields
+      expect(market).toHaveProperty("totalOpenInterest", "2000000000");
+      expect(market).toHaveProperty("totalAccounts", 50);
+      expect(market).toHaveProperty("lastPrice", 100000000);
+      expect(market).toHaveProperty("markPrice", 100000000);
+      expect(market).toHaveProperty("fundingRate", 3);
+    });
+
+    it("should return 400 for malformed slab address in /:slab route", async () => {
+      const app = marketRoutes();
+      // All /:slab routes should reject garbage inputs
+      const malformed = [
+        "/markets/not-a-valid-key",
+        "/markets/OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO0", // contains invalid base58 chars
+        "/markets/tooshort",
+      ];
+
+      for (const path of malformed) {
+        const res = await app.request(path);
+        expect(res.status).toBe(400);
+        const body = await res.json();
+        expect(body.error).toBe("Invalid slab address");
+      }
+    });
+  });
+
   describe("GET /markets/stats", () => {
     it("should return all market stats", async () => {
       const mockStats = [

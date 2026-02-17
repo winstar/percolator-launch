@@ -82,4 +82,26 @@ describe("validateSlab middleware", () => {
     const data = await res.json();
     expect(data).toEqual({ error: "Invalid slab address" });
   });
+
+  it("should reject extremely long input (DoS prevention)", async () => {
+    // An attacker may send a very long string to cause slow processing or regex backtracking
+    const longInput = "a".repeat(10_000);
+    const res = await app.request(`/markets/${longInput}`);
+
+    // Should quickly reject with 400 (no hang/timeout)
+    expect(res.status).toBe(400);
+    const data = await res.json();
+    expect(data).toEqual({ error: "Invalid slab address" });
+  });
+
+  it("should reject input containing null bytes", async () => {
+    // Null bytes can cause issues in some validators and should be rejected
+    // URL-encode null byte as %00 so the HTTP request is well-formed
+    const withNullByte = "1111111111111111111111%001111111111";
+    const res = await app.request(`/markets/${withNullByte}`);
+
+    expect(res.status).toBe(400);
+    const data = await res.json();
+    expect(data).toEqual({ error: "Invalid slab address" });
+  });
 });

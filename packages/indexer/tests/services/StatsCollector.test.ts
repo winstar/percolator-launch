@@ -150,17 +150,49 @@ describe('StatsCollector', () => {
       );
     });
 
-    it('should stop timer cleanly', () => {
+    it('should stop timer cleanly', async () => {
+      const markets = new Map([[SLAB1, makeMockMarket(SLAB1)]]);
+      vi.mocked(mockMarketProvider.getMarkets).mockReturnValue(markets);
+      mockGetAccountInfo.mockResolvedValue({ data: new Uint8Array(2048) });
+      mockGetMultipleAccountsInfo.mockResolvedValue([{ data: new Uint8Array(2048) }]);
+      setupParseMocks();
+
       statsCollector.start();
+
+      // Advance past initial delay to trigger first collect
+      await vi.advanceTimersByTimeAsync(10_500);
+      const callCountAfterFirstCollect = vi.mocked(shared.upsertMarketStats).mock.calls.length;
+      expect(callCountAfterFirstCollect).toBeGreaterThan(0);
+
+      // Stop the collector
       statsCollector.stop();
-      // No errors
-      expect(true).toBe(true);
+
+      // Advance time by 2 full intervals — no further calls should happen
+      await vi.advanceTimersByTimeAsync(60_000);
+
+      expect(vi.mocked(shared.upsertMarketStats).mock.calls.length).toBe(callCountAfterFirstCollect);
     });
 
-    it('should not start twice', () => {
+    it('should not start twice', async () => {
+      const markets = new Map([[SLAB1, makeMockMarket(SLAB1)]]);
+      vi.mocked(mockMarketProvider.getMarkets).mockReturnValue(markets);
+      mockGetAccountInfo.mockResolvedValue({ data: new Uint8Array(2048) });
+      mockGetMultipleAccountsInfo.mockResolvedValue([{ data: new Uint8Array(2048) }]);
+      setupParseMocks();
+
       statsCollector.start();
-      statsCollector.start(); // no-op
-      expect(true).toBe(true);
+      statsCollector.start(); // second call should be a no-op
+
+      // Advance past initial delay
+      await vi.advanceTimersByTimeAsync(10_500);
+      const callsAfterInitial = vi.mocked(shared.upsertMarketStats).mock.calls.length;
+
+      // Advance by exactly one more interval (30s)
+      await vi.advanceTimersByTimeAsync(30_000);
+      const callsAfterOneInterval = vi.mocked(shared.upsertMarketStats).mock.calls.length;
+
+      // With double-started timers we'd get 2 extra calls; with single timer we get 1
+      expect(callsAfterOneInterval).toBe(callsAfterInitial + 1);
     });
   });
 

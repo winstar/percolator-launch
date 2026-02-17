@@ -113,6 +113,40 @@ describe("auth middleware", () => {
     expect(res.status).toBe(401);
   });
 
+  it("should reject empty string as x-api-key header", async () => {
+    process.env.API_AUTH_KEY = "secret-key-123";
+
+    const app = new Hono();
+    app.post("/test", requireApiKey(), (c) => c.json({ success: true }));
+
+    // An empty string header is falsy → treated as missing → 401
+    const res = await app.request("/test", {
+      method: "POST",
+      headers: { "x-api-key": "" },
+    });
+
+    expect(res.status).toBe(401);
+    const data = await res.json();
+    expect(data.error).toBe("Unauthorized: invalid or missing x-api-key");
+  });
+
+  it("should reject whitespace-only x-api-key", async () => {
+    process.env.API_AUTH_KEY = "secret-key-123";
+
+    const app = new Hono();
+    app.post("/test", requireApiKey(), (c) => c.json({ success: true }));
+
+    // A whitespace-only key is truthy but won't match the expected key → 401
+    const res = await app.request("/test", {
+      method: "POST",
+      headers: { "x-api-key": "   " },
+    });
+
+    expect(res.status).toBe(401);
+    const data = await res.json();
+    expect(data.error).toBe("Unauthorized: invalid or missing x-api-key");
+  });
+
   it("should handle API key with spaces (exact match, no trim)", async () => {
     process.env.API_AUTH_KEY = "secret-key-123";
 

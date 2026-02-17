@@ -253,6 +253,79 @@ describe('OracleService', () => {
     });
   });
 
+  describe('historical price deviation check', () => {
+    it('should reject price with >30% deviation from last known price', async () => {
+      // Seed history with $1.00 for SLAB_HISTDEV
+      vi.mocked(fetch)
+        .mockResolvedValueOnce({
+          json: async () => ({ pairs: [{ priceUsd: '1.00', liquidity: { usd: 100000 } }] }),
+        } as any)
+        .mockResolvedValueOnce({
+          json: async () => ({ data: { MINT_HISTDEV_A: { price: '1.00' } } }),
+        } as any);
+
+      const price1 = await oracleService.fetchPrice('MINT_HISTDEV_A', 'SLAB_HISTDEV');
+      expect(price1?.priceE6).toBe(1_000_000n);
+
+      // Use a different mint to bypass the 10s DexScreener cache,
+      // but the SAME slabAddress so the history is shared.
+      // Both sources return $1.50 (50% above history) — passes cross-source check
+      // but fails the >30% historical deviation check.
+      vi.mocked(fetch)
+        .mockResolvedValueOnce({
+          json: async () => ({ pairs: [{ priceUsd: '1.50', liquidity: { usd: 100000 } }] }),
+        } as any)
+        .mockResolvedValueOnce({
+          json: async () => ({ data: { MINT_HISTDEV_B: { price: '1.50' } } }),
+        } as any);
+
+      const price2 = await oracleService.fetchPrice('MINT_HISTDEV_B', 'SLAB_HISTDEV');
+      expect(price2).toBeNull(); // Rejected: 50% historical deviation > 30% threshold
+    });
+
+    it('should accept price within 30% of last known price', async () => {
+      // Seed history with $1.00 for SLAB_HISTDEV2
+      vi.mocked(fetch)
+        .mockResolvedValueOnce({
+          json: async () => ({ pairs: [{ priceUsd: '1.00', liquidity: { usd: 100000 } }] }),
+        } as any)
+        .mockResolvedValueOnce({
+          json: async () => ({ data: { MINT_HISTDEV2_A: { price: '1.00' } } }),
+        } as any);
+
+      const price1 = await oracleService.fetchPrice('MINT_HISTDEV2_A', 'SLAB_HISTDEV2');
+      expect(price1?.priceE6).toBe(1_000_000n);
+
+      // New price = $1.20 (20% above history) — within 30% threshold → accepted
+      vi.mocked(fetch)
+        .mockResolvedValueOnce({
+          json: async () => ({ pairs: [{ priceUsd: '1.20', liquidity: { usd: 100000 } }] }),
+        } as any)
+        .mockResolvedValueOnce({
+          json: async () => ({ data: { MINT_HISTDEV2_B: { price: '1.20' } } }),
+        } as any);
+
+      const price2 = await oracleService.fetchPrice('MINT_HISTDEV2_B', 'SLAB_HISTDEV2');
+      expect(price2).not.toBeNull();
+      expect(price2?.priceE6).toBe(1_200_000n);
+    });
+
+    it('should skip historical check when no prior history exists', async () => {
+      // First call for a brand-new slab → no history → no deviation check → accepted
+      vi.mocked(fetch)
+        .mockResolvedValueOnce({
+          json: async () => ({ pairs: [{ priceUsd: '9999.00', liquidity: { usd: 100000 } }] }),
+        } as any)
+        .mockResolvedValueOnce({
+          json: async () => ({ data: { MINT_HISTDEV3: { price: '9999.00' } } }),
+        } as any);
+
+      const price = await oracleService.fetchPrice('MINT_HISTDEV3', 'SLAB_HISTDEV3_FRESH');
+      expect(price).not.toBeNull();
+      expect(price?.priceE6).toBe(9_999_000_000n);
+    });
+  });
+
   describe('rate limiting', () => {
     it('should respect rate limit for pushPrice', async () => {
       const mockMarketConfig: any = {

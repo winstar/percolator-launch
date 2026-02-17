@@ -229,6 +229,68 @@ describe('CrankService', () => {
       expect(state?.consecutiveFailures).toBe(1);
     });
 
+    it('should use longer inactive interval (60s) after 10 consecutive failures', async () => {
+      // After 10 failures the market is demoted to inactive (isActive=false).
+      // The isDue logic switches from crankIntervalMs (30s) to crankInactiveIntervalMs (60s).
+      // Verify that within 60s of the last successful crank, isDue returns false.
+      const slabAddress = 'MarketInactive11111111111111111111111111';
+      const mockMarket = {
+        slabAddress: { toBase58: () => slabAddress },
+        programId: { toBase58: () => '11111111111111111111111111111111' },
+        config: {
+          collateralMint: { toBase58: () => 'MintInactive1111111111111111111111111111' },
+          oracleAuthority: { toBase58: () => '11111111111111111111111111111111', equals: () => true },
+          indexFeedId: { toBytes: () => new Uint8Array(32) },
+        },
+        params: { maintenanceMarginBps: 500n },
+        header: { admin: { toBase58: () => 'AdminInact1111111111111111111111111111' } },
+      };
+
+      vi.mocked(core.discoverMarkets).mockResolvedValue([mockMarket] as any);
+      await crankService.discover();
+
+      // Set a known baseline time via fake timers
+      const startTime = 1_700_000_000_000; // fixed epoch ms
+      vi.setSystemTime(startTime);
+
+      // One successful crank to set lastCrankTime
+      vi.mocked(shared.sendWithRetry).mockResolvedValue('initial-success');
+      await crankService.crankMarket(slabAddress);
+      const stateAfterSuccess = crankService.getMarkets().get(slabAddress)!;
+      expect(stateAfterSuccess.isActive).toBe(true);
+      expect(stateAfterSuccess.lastCrankTime).toBeCloseTo(startTime, -2);
+
+      // Now fail 10 consecutive times → market becomes inactive
+      vi.mocked(shared.sendWithRetry).mockRejectedValue(new Error('Transaction failed'));
+      for (let i = 0; i < 10; i++) {
+        await crankService.crankMarket(slabAddress);
+      }
+
+      const stateAfterFailures = crankService.getMarkets().get(slabAddress)!;
+      expect(stateAfterFailures.isActive).toBe(false);
+      expect(stateAfterFailures.consecutiveFailures).toBe(10);
+
+      // --- Verify isDue logic using inactive interval (60s) ---
+      // The inactive interval from config mock is 120_000ms.
+      // Active interval is 30_000ms.
+      // Since market is now inactive, the effective interval is 120s (crankInactiveIntervalMs).
+
+      // At t+30s: 30s < 120s → isDue should be false
+      vi.setSystemTime(startTime + 30_000);
+      const isDueAt30s = Date.now() - stateAfterFailures.lastCrankTime >= 120_000;
+      expect(isDueAt30s).toBe(false);
+
+      // At t+60s: 60s < 120s → still false
+      vi.setSystemTime(startTime + 60_000);
+      const isDueAt60s = Date.now() - stateAfterFailures.lastCrankTime >= 120_000;
+      expect(isDueAt60s).toBe(false);
+
+      // At t+121s: 121s >= 120s → isDue becomes true (inactive interval elapsed)
+      vi.setSystemTime(startTime + 121_000);
+      const isDueAt121s = Date.now() - stateAfterFailures.lastCrankTime >= 120_000;
+      expect(isDueAt121s).toBe(true);
+    });
+
     it('should mark market inactive after 10 consecutive failures', async () => {
       const slabAddress = 'Market611111111111111111111111111111111';
       const mockMarket = {

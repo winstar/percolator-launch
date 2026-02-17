@@ -73,8 +73,20 @@ describe("trades routes", () => {
   describe("GET /markets/:slab/trades", () => {
     it("should return recent trades for a market", async () => {
       const mockTrades = [
-        { id: "1", price: 50000, size: 100, timestamp: "2025-01-01T00:00:00Z" },
-        { id: "2", price: 50100, size: 200, timestamp: "2025-01-01T00:01:00Z" },
+        {
+          tx_signature: "sig1abc111111111111111111111111111111111111111111111",
+          side: "buy",
+          size: 100,
+          price: 50000,
+          timestamp: "2025-01-01T00:00:00Z",
+        },
+        {
+          tx_signature: "sig2abc222222222222222222222222222222222222222222222",
+          side: "sell",
+          size: 200,
+          price: 50100,
+          timestamp: "2025-01-01T00:01:00Z",
+        },
       ];
 
       vi.mocked(getRecentTrades).mockResolvedValue(mockTrades);
@@ -86,6 +98,52 @@ describe("trades routes", () => {
       const data = await res.json();
       expect(data.trades).toHaveLength(2);
       expect(getRecentTrades).toHaveBeenCalledWith("11111111111111111111111111111111", 50);
+    });
+
+    it("should return trade objects with all required fields", async () => {
+      const mockTrades = [
+        {
+          tx_signature: "sigABC111111111111111111111111111111111111111111111",
+          side: "buy",
+          size: 500,
+          price: 48000,
+          timestamp: "2025-03-01T12:00:00Z",
+        },
+      ];
+
+      vi.mocked(getRecentTrades).mockResolvedValue(mockTrades);
+
+      const app = tradeRoutes();
+      const res = await app.request("/markets/11111111111111111111111111111111/trades");
+
+      expect(res.status).toBe(200);
+      const data = await res.json();
+      expect(data.trades).toHaveLength(1);
+
+      const trade = data.trades[0];
+      expect(trade).toHaveProperty("tx_signature");
+      expect(trade).toHaveProperty("side");
+      expect(trade).toHaveProperty("size");
+      expect(trade).toHaveProperty("price");
+      expect(trade).toHaveProperty("timestamp");
+      expect(typeof trade.tx_signature).toBe("string");
+      expect(["buy", "sell"]).toContain(trade.side);
+      expect(typeof trade.size).toBe("number");
+      expect(typeof trade.price).toBe("number");
+    });
+
+    it("should return empty array (not null) when no trades exist", async () => {
+      vi.mocked(getRecentTrades).mockResolvedValue([]);
+
+      const app = tradeRoutes();
+      const res = await app.request("/markets/11111111111111111111111111111111/trades");
+
+      expect(res.status).toBe(200);
+      const data = await res.json();
+      expect(data.trades).toBeDefined();
+      expect(Array.isArray(data.trades)).toBe(true);
+      expect(data.trades).toHaveLength(0);
+      expect(data.trades).not.toBeNull();
     });
 
     it("should respect limit parameter", async () => {
