@@ -56,7 +56,7 @@ export const FundingRateChart: FC<{ slabAddress: string }> = ({ slabAddress }) =
         setHistory(data.history ?? []);
       } catch {
         // Fallback to mock
-        setHistory(MOCK_HISTORY);
+        setHistory([]);
       } finally {
         setLoading(false);
       }

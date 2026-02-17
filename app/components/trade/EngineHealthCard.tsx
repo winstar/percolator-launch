@@ -62,7 +62,7 @@ export const EngineHealthCard: FC = () => {
 
   const metrics = [
     { label: "Crank Age", value: formatSlotAge(engine.currentSlot ?? 0n, engine.lastCrankSlot ?? 0n) },
-    { label: "Current Slot", value: (engine.currentSlot ?? 0n).toLocaleString() },
+    { label: "Current Slot", value: Number(engine.currentSlot ?? 0n).toLocaleString() },
     { label: "Liquidations", value: (engine.lifetimeLiquidations ?? 0n).toLocaleString() },
     { label: "Force Closes", value: (engine.lifetimeForceCloses ?? 0n).toLocaleString() },
     { label: "Net LP Pos", value: netLpPosDisplay },

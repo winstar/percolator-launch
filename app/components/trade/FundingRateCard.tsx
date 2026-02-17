@@ -74,7 +74,7 @@ export const FundingRateCard: FC<{ slabAddress: string }> = ({ slabAddress }) =>
         // Fallback to on-chain data when API unavailable
         if (engine && fundingRate !== null) {
           const rate = Number(fundingRate);
-          const hourly = (rate * 9000) / 100; // bps/slot × slots/hr / 100 = %/hr
+          const hourly = (rate * 9000) / 10000; // bps/slot × slots/hr / 10000 = %/hr
           const apr = hourly * 24 * 365;
           const netLp = engine.netLpPos ?? 0n;
           setFundingData({
@@ -144,7 +144,7 @@ export const FundingRateCard: FC<{ slabAddress: string }> = ({ slabAddress }) =>
     // Calculate estimated 24h funding
     // hourlyRate * 24 * positionSize (in tokens)
     const positionTokens = Number(absPosition) / 1e6;
-    const estimated24h = fundingData.hourlyRatePercent * 24 * positionTokens;
+    const estimated24h = (fundingData.hourlyRatePercent / 100) * 24 * positionTokens;
 
     return {
       positionDirection: isLong ? "LONG" : "SHORT",
@@ -233,7 +233,7 @@ export const FundingRateCard: FC<{ slabAddress: string }> = ({ slabAddress }) =>
                 Your Est. Funding (24h)
               </span>
               <span className={`text-sm font-bold ${fundingColor}`} style={{ fontFamily: "var(--font-mono)" }}>
-                {fundingSign}${estimatedFunding24h.toFixed(2)}
+                {fundingSign}{estimatedFunding24h.toFixed(4)} tokens
               </span>
             </div>
             <div className="mt-1 text-[9px] text-[var(--text-dim)]">

@@ -86,7 +86,7 @@ export const WarmupProgress: FC<{
       } catch (err) {
         setError(err instanceof Error ? err.message : "Unknown error");
         // Fallback to mock data on error (for demo)
-        setWarmupData(MOCK_WARMUP);
+        setWarmupData(null);
       } finally {
         setLoading(false);
       }

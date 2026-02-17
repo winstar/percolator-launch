@@ -77,9 +77,9 @@ export const InsuranceDashboard: FC<{ slabAddress: string }> = ({
         const balanceNum = Number(BigInt(balance));
         const riskNum = Number(BigInt(totalRisk));
         const coverageRatio = riskNum > 0 ? balanceNum / riskNum : 0;
-        const historicalBalance = (data.historicalBalance ?? data.history ?? []).map((h: { timestamp: string | number; balance: number }) => ({
+        const historicalBalance = (data.historicalBalance ?? data.history ?? []).map((h: { timestamp: string | number; balance: string | number }) => ({
           timestamp: typeof h.timestamp === "string" ? new Date(h.timestamp).getTime() : h.timestamp,
-          balance: h.balance,
+          balance: typeof h.balance === "string" ? Number(BigInt(h.balance)) / 1e6 : h.balance,
         }));
         setInsuranceData({
           balance,
@@ -277,7 +277,7 @@ export const InsuranceDashboard: FC<{ slabAddress: string }> = ({
               </div>
               <div className="mt-1 flex justify-between text-[9px] text-[var(--text-dim)]">
                 <span>7d ago</span>
-                <span className="text-[var(--long)]">+{insuranceData.historicalBalance[0].balance > 0 ? ((insuranceData.historicalBalance[insuranceData.historicalBalance.length - 1].balance / insuranceData.historicalBalance[0].balance - 1) * 100).toFixed(1) : "0.0"}%</span>
+                <span className="text-[var(--long)]">+{insuranceData.historicalBalance.length > 1 && insuranceData.historicalBalance[0].balance > 0 ? ((insuranceData.historicalBalance[insuranceData.historicalBalance.length - 1].balance / insuranceData.historicalBalance[0].balance - 1) * 100).toFixed(1) : "0.0"}%</span>
               </div>
             </>
           ) : (

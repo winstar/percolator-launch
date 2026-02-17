@@ -69,7 +69,9 @@ export function useWithdraw(slabAddress: string) {
             if (resp.ok) {
               const prices = await resp.json();
               const entry = prices[slabAddress];
-              if (entry?.priceE6) priceE6 = BigInt(entry.priceE6);
+              if (entry?.priceE6) {
+                try { priceE6 = BigInt(entry.priceE6); } catch { /* keep existing price */ }
+              }
             }
           } catch { /* use existing */ }
           if (priceE6 <= 0n) priceE6 = 1_000_000n;

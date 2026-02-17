@@ -121,8 +121,8 @@ export default function Home() {
         if (data) {
           setStats({
             markets: data.length,
-            volume: data.reduce((s, m) => s + (m.volume_24h || 0), 0),
-            insurance: data.reduce((s, m) => s + (m.insurance_balance || 0), 0),
+            volume: data.reduce((s, m) => s + Number(m.volume_24h || 0), 0),
+            insurance: data.reduce((s, m) => s + Number(m.insurance_balance || 0), 0),
           });
           setStatsLoaded(true);
           const sorted = [...data].sort((a, b) => (b.volume_24h || 0) - (a.volume_24h || 0)).slice(0, 5);
