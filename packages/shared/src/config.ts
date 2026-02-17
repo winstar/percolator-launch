@@ -23,7 +23,7 @@ export const config = {
   crankIntervalMs: env.CRANK_INTERVAL_MS ?? 30_000,
   crankInactiveIntervalMs: env.CRANK_INACTIVE_INTERVAL_MS ?? 60_000,
   /** BH4: Reduced to 60s to catch markets created/deleted within smaller window */
-  discoveryIntervalMs: env.DISCOVERY_INTERVAL_MS ?? 60_000,
+  discoveryIntervalMs: env.DISCOVERY_INTERVAL_MS ?? 300_000,
   /** Helius webhook secret for auth validation */
   webhookSecret: env.HELIUS_WEBHOOK_SECRET ?? "",
   /** Public URL for webhook registration (e.g. Railway URL) */
