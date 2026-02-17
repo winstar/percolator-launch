@@ -159,9 +159,9 @@ export function useLivePrice(): PriceState {
 
     connect();
 
-    // Also fetch 24h stats via REST
-    if (WS_URL) {
-      fetch(`${WS_URL.replace("ws://", "http://").replace("wss://", "https://")}/prices/${slabAddr}`)
+    // Also fetch 24h stats via REST — use Next.js proxy to avoid CORS issues
+    if (slabAddr) {
+      fetch(`/api/prices/${slabAddr}`)
         .then((r) => { if (!r.ok) throw new Error("not found"); return r.json(); })
         .then((json: { stats?: { change24h?: number; high24h?: string; low24h?: string } }) => {
           if (json.stats && mountedRef.current) {

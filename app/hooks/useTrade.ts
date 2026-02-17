@@ -80,7 +80,7 @@ export function useTrade(slabAddress: string) {
           // Fetch current price from backend or use last known
           let priceE6 = mktConfig.authorityPriceE6 ?? 1_000_000n;
           try {
-            const resp = await fetch(`${getBackendUrl()}/prices/markets`);
+            const resp = await fetch(`/api/prices/markets`);
             if (resp.ok) {
               const prices = await resp.json();
               const entry = prices[slabAddress];

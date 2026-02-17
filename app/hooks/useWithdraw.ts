@@ -66,7 +66,7 @@ export function useWithdraw(slabAddress: string) {
         if (userIsOracleAuth) {
           let priceE6 = mktConfig.authorityPriceE6 ?? 1_000_000n;
           try {
-            const resp = await fetch(`${getBackendUrl()}/prices/markets`);
+            const resp = await fetch(`/api/prices/markets`);
             if (resp.ok) {
               const prices = await resp.json();
               const entry = prices[slabAddress];

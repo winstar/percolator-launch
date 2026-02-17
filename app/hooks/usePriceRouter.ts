@@ -21,8 +21,8 @@ export interface PriceRouterState {
   error: string | null;
 }
 
-import { getBackendUrl } from "@/lib/config";
-const API_BASE = getBackendUrl();
+// Use Next.js proxy to avoid CORS — /api/oracle/* is rewritten to the backend
+const API_BASE = "";
 
 /**
  * Auto-discover the best oracle source for a given token mint.
