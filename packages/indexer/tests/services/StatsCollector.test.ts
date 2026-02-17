@@ -3,6 +3,7 @@ import { PublicKey } from '@solana/web3.js';
 
 // Mock external dependencies
 const mockGetAccountInfo = vi.fn();
+const mockGetMultipleAccountsInfo = vi.fn();
 
 vi.mock('@percolator/core', () => ({
   parseEngine: vi.fn(),
@@ -20,7 +21,7 @@ vi.mock('@percolator/shared', () => ({
   })),
   getConnection: vi.fn(() => ({
     getAccountInfo: mockGetAccountInfo,
-    getMultipleAccountsInfo: vi.fn(async () => []),
+    getMultipleAccountsInfo: mockGetMultipleAccountsInfo,
   })),
   upsertMarketStats: vi.fn(),
   insertOraclePrice: vi.fn(),
@@ -133,6 +134,7 @@ describe('StatsCollector', () => {
       const markets = new Map([[SLAB1, makeMockMarket(SLAB1)]]);
       vi.mocked(mockMarketProvider.getMarkets).mockReturnValue(markets);
       mockGetAccountInfo.mockResolvedValue({ data: new Uint8Array(2048) });
+      mockGetMultipleAccountsInfo.mockResolvedValue([{ data: new Uint8Array(2048) }]);
       setupParseMocks();
 
       statsCollector.start();
@@ -167,6 +169,7 @@ describe('StatsCollector', () => {
       const markets = new Map([[SLAB1, makeMockMarket(SLAB1)]]);
       vi.mocked(mockMarketProvider.getMarkets).mockReturnValue(markets);
       mockGetAccountInfo.mockResolvedValue({ data: new Uint8Array(2048) });
+      mockGetMultipleAccountsInfo.mockResolvedValue([{ data: new Uint8Array(2048) }]);
       setupParseMocks();
 
       statsCollector.start();
@@ -187,6 +190,7 @@ describe('StatsCollector', () => {
       const markets = new Map([[SLAB1, makeMockMarket(SLAB1)]]);
       vi.mocked(mockMarketProvider.getMarkets).mockReturnValue(markets);
       mockGetAccountInfo.mockResolvedValue({ data: new Uint8Array(2048) });
+      mockGetMultipleAccountsInfo.mockResolvedValue([{ data: new Uint8Array(2048) }]);
       setupParseMocks();
 
       statsCollector.start();
@@ -204,6 +208,7 @@ describe('StatsCollector', () => {
       const markets = new Map([[SLAB1, makeMockMarket(SLAB1)]]);
       vi.mocked(mockMarketProvider.getMarkets).mockReturnValue(markets);
       mockGetAccountInfo.mockResolvedValue({ data: new Uint8Array(2048) });
+      mockGetMultipleAccountsInfo.mockResolvedValue([{ data: new Uint8Array(2048) }]);
       setupParseMocks();
 
       const baseTime = Date.now();
@@ -231,9 +236,9 @@ describe('StatsCollector', () => {
         [SLAB2, makeMockMarket(SLAB2)],
       ]);
       vi.mocked(mockMarketProvider.getMarkets).mockReturnValue(markets);
-      mockGetAccountInfo
-        .mockRejectedValueOnce(new Error('RPC error'))
-        .mockResolvedValueOnce({ data: new Uint8Array(2048) });
+      // getMultipleAccountsInfo returns both in one batch — first null (error), second valid
+      mockGetMultipleAccountsInfo.mockResolvedValue([null, { data: new Uint8Array(2048) }]);
+      mockGetAccountInfo.mockResolvedValue({ data: new Uint8Array(2048) });
       setupParseMocks();
 
       statsCollector.start();
@@ -249,6 +254,7 @@ describe('StatsCollector', () => {
       const markets = new Map([[SLAB1, makeMockMarket(SLAB1)]]);
       vi.mocked(mockMarketProvider.getMarkets).mockReturnValue(markets);
       mockGetAccountInfo.mockResolvedValue({ data: new Uint8Array(100) });
+      mockGetMultipleAccountsInfo.mockResolvedValue([{ data: new Uint8Array(100) }]);
       vi.mocked(core.parseEngine).mockImplementation(() => { throw new Error('Parse error'); });
 
       statsCollector.start();
