@@ -130,7 +130,7 @@ function CopyButton({ text }: { text: string }) {
 /* ── Main inner page ──────────────────────────────────────── */
 
 function TradePageInner({ slab }: { slab: string }) {
-  const { engine, config, accounts, loading: slabLoading, error: slabError } = useSlabState();
+  const { engine, config, header, accounts, loading: slabLoading, error: slabError } = useSlabState();
   const tokenMeta = useTokenMeta(config?.collateralMint ?? null);
   const { priceUsd } = useLivePrice();
   const health = engine ? computeMarketHealth(engine) : null;
@@ -245,13 +245,13 @@ function TradePageInner({ slab }: { slab: string }) {
             {shortAddress}
             <CopyButton text={slab} />
           </span>
-          {config?.admin && (
+          {header?.admin && (
             <span className={`text-[9px] font-medium uppercase tracking-[0.12em] px-1.5 py-0.5 rounded-sm border ${
-              config.admin.toBase58() === "11111111111111111111111111111111"
+              header.admin.toBase58() === "11111111111111111111111111111111"
                 ? "border-[var(--long)]/30 bg-[var(--long)]/5 text-[var(--long)]"
                 : "border-[var(--warning)]/30 bg-[var(--warning)]/5 text-[var(--warning)]"
             }`}>
-              {config.admin.toBase58() === "11111111111111111111111111111111" ? "✅ Admin Renounced" : "⚠️ Admin Active"}
+              {header.admin.toBase58() === "11111111111111111111111111111111" ? "✅ Admin Renounced" : "⚠️ Admin Active"}
             </span>
           )}
           <ShareButton
@@ -278,13 +278,13 @@ function TradePageInner({ slab }: { slab: string }) {
               <CopyButton text={slab} />
             </span>
             {health && <HealthBadge level={health.level} />}
-            {config?.admin && (
+            {header?.admin && (
               <span className={`text-[9px] font-medium uppercase tracking-[0.12em] px-1.5 py-0.5 rounded-sm border ${
-                config.admin.toBase58() === "11111111111111111111111111111111"
+                header.admin.toBase58() === "11111111111111111111111111111111"
                   ? "border-[var(--long)]/30 bg-[var(--long)]/5 text-[var(--long)]"
                   : "border-[var(--warning)]/30 bg-[var(--warning)]/5 text-[var(--warning)]"
               }`}>
-                {config.admin.toBase58() === "11111111111111111111111111111111" ? "✅ Admin Renounced" : "⚠️ Admin Active"}
+                {header.admin.toBase58() === "11111111111111111111111111111111" ? "✅ Admin Renounced" : "⚠️ Admin Active"}
               </span>
             )}
             <ShareButton
