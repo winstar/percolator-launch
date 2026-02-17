@@ -3,10 +3,9 @@ import { requireAuth, UNAUTHORIZED } from "@/lib/api-auth";
 import { Connection, PublicKey } from "@solana/web3.js";
 import { parseHeader } from "@percolator/core";
 import { getServiceClient } from "@/lib/supabase";
-
-export const dynamic = "force-dynamic";
 import { getConfig } from "@/lib/config";
 import * as Sentry from "@sentry/nextjs";
+
 export const dynamic = "force-dynamic";
 
 // GET /api/markets — list all active markets with stats
