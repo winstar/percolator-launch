@@ -70,7 +70,25 @@ export const InsuranceDashboard: FC<{ slabAddress: string }> = ({
         const res = await fetch(`/api/insurance/${slabAddress}`);
         if (!res.ok) throw new Error("Failed to fetch insurance data");
         const data = await res.json();
-        setInsuranceData(data);
+        // Map API response shape to InsuranceData interface
+        const balance = data.balance ?? data.currentBalance ?? "0";
+        const feeRevenue = data.feeRevenue ?? "0";
+        const totalRisk = data.totalRisk ?? data.totalOpenInterest ?? "0";
+        const balanceNum = Number(BigInt(balance));
+        const riskNum = Number(BigInt(totalRisk));
+        const coverageRatio = riskNum > 0 ? balanceNum / riskNum : 0;
+        const historicalBalance = (data.historicalBalance ?? data.history ?? []).map((h: { timestamp: string | number; balance: string | number }) => ({
+          timestamp: typeof h.timestamp === "string" ? new Date(h.timestamp).getTime() : h.timestamp,
+          balance: typeof h.balance === "string" ? Number(BigInt(h.balance)) / 1e6 : h.balance,
+        }));
+        setInsuranceData({
+          balance,
+          feeRevenue,
+          totalRisk,
+          coverageRatio,
+          dailyAccumulationRate: data.dailyAccumulationRate ?? 0,
+          historicalBalance,
+        });
         setError(null);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Unknown error");
@@ -79,7 +97,7 @@ export const InsuranceDashboard: FC<{ slabAddress: string }> = ({
           const balance = engine.insuranceFund?.balance ?? 0n;
           const feeRev = engine.insuranceFund?.feeRevenue ?? 0n;
           const totalOi = engine.totalOpenInterest ?? 0n;
-          const ratio = totalOi > 0n ? Number(balance * 10000n / totalOi) / 100 : 0;
+          const ratio = totalOi > 0n ? Number(balance * 10000n / totalOi) / 10000 : 0;
           setInsuranceData({
             balance: balance.toString(),
             feeRevenue: feeRev.toString(),
@@ -101,9 +119,9 @@ export const InsuranceDashboard: FC<{ slabAddress: string }> = ({
 
   // Calculate health status
   const healthStatus = useMemo(() => {
-    if (!insuranceData) return { color: "text-[var(--text-muted)]", dotColor: "bg-[var(--text-muted)]", label: "Unknown" };
+    if (!insuranceData) return { color: "text-[var(--text-muted)]", dotColor: "bg-[var(--text-muted)]", label: "Unknown", borderColor: "border-[var(--border)]", bgColor: "bg-transparent" };
 
-    const ratio = insuranceData.coverageRatio;
+    const ratio = insuranceData.coverageRatio ?? 0;
 
     if (ratio >= 5) {
       return {
@@ -224,7 +242,7 @@ export const InsuranceDashboard: FC<{ slabAddress: string }> = ({
                 <div className="text-[11px] font-medium text-[var(--text)]">
                   Health: <span className={healthStatus.color}>{healthStatus.label}</span>
                 </div>
-                {insuranceData.coverageRatio != null && (
+                {insuranceData.coverageRatio != null && typeof insuranceData.coverageRatio === "number" && (
                   <div className="text-[10px] text-[var(--text-dim)]">
                     Coverage Ratio: {insuranceData.coverageRatio.toFixed(1)}x total risk
                   </div>
@@ -259,7 +277,7 @@ export const InsuranceDashboard: FC<{ slabAddress: string }> = ({
               </div>
               <div className="mt-1 flex justify-between text-[9px] text-[var(--text-dim)]">
                 <span>7d ago</span>
-                <span className="text-[var(--long)]">+{insuranceData.historicalBalance[0].balance > 0 ? ((insuranceData.historicalBalance[insuranceData.historicalBalance.length - 1].balance / insuranceData.historicalBalance[0].balance - 1) * 100).toFixed(1) : "0.0"}%</span>
+                <span className="text-[var(--long)]">+{insuranceData.historicalBalance.length > 1 && insuranceData.historicalBalance[0].balance > 0 ? ((insuranceData.historicalBalance[insuranceData.historicalBalance.length - 1].balance / insuranceData.historicalBalance[0].balance - 1) * 100).toFixed(1) : "0.0"}%</span>
               </div>
             </>
           ) : (

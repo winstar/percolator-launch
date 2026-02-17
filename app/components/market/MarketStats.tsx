@@ -24,7 +24,7 @@ export const MarketStats: FC = () => {
     { label: "Vault Balance", value: formatTokenAmount(engine.vault) },
     { label: "Trading Fee", value: formatBps(params.tradingFeeBps) },
     { label: "Maintenance Margin", value: formatBps(params.maintenanceMarginBps) },
-    { label: "Accounts", value: engine.numUsedAccounts.toString() },
+    { label: "Accounts", value: (engine.numUsedAccounts ?? 0).toString() },
   ];
 
   return (

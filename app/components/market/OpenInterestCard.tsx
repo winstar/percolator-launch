@@ -42,7 +42,7 @@ function formatUsdAmount(amountE6: string | bigint): string {
 }
 
 function formatSignedUsdAmount(amountE6: string): string {
-  const num = BigInt(amountE6);
+  const num = BigInt(amountE6 ?? "0");
   const usd = Number(num) / 1e6;
   const formatted = Math.abs(usd).toLocaleString(undefined, {
     minimumFractionDigits: 0,
@@ -116,9 +116,9 @@ export const OpenInterestCard: FC<{ slabAddress: string }> = ({
         };
       }
 
-      const totalNum = Number(BigInt(oiData.totalOi));
-      const longNum = Number(BigInt(oiData.longOi));
-      const shortNum = Number(BigInt(oiData.shortOi));
+      const totalNum = Number(BigInt(oiData.totalOi ?? "0"));
+      const longNum = Number(BigInt(oiData.longOi ?? "0"));
+      const shortNum = Number(BigInt(oiData.shortOi ?? "0"));
 
       const longPercent = totalNum > 0 ? (longNum / totalNum) * 100 : 50;
       const shortPercent = totalNum > 0 ? (shortNum / totalNum) * 100 : 50;
@@ -187,7 +187,7 @@ export const OpenInterestCard: FC<{ slabAddress: string }> = ({
   const longOiUsd = formatUsdAmount(oiData.longOi);
   const shortOiUsd = formatUsdAmount(oiData.shortOi);
   const lpNetUsd = formatSignedUsdAmount(oiData.netLpPosition);
-  const lpDirection = BigInt(oiData.netLpPosition) >= 0n ? "long" : "short";
+  const lpDirection = BigInt(oiData.netLpPosition ?? "0") >= 0n ? "long" : "short";
 
   return (
     <div className="rounded-none border border-[var(--border)]/50 bg-[var(--bg)]/80 p-3">

@@ -3,7 +3,6 @@
 import { useCallback, useRef, useState } from "react";
 import { PublicKey } from "@solana/web3.js";
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
-import { getBackendUrl } from "@/lib/config";
 import {
   encodeWithdrawCollateral,
   encodeKeeperCrank,
@@ -66,11 +65,13 @@ export function useWithdraw(slabAddress: string) {
         if (userIsOracleAuth) {
           let priceE6 = mktConfig.authorityPriceE6 ?? 1_000_000n;
           try {
-            const resp = await fetch(`${getBackendUrl()}/prices/markets`);
+            const resp = await fetch(`/api/prices/markets`);
             if (resp.ok) {
               const prices = await resp.json();
               const entry = prices[slabAddress];
-              if (entry?.priceE6) priceE6 = BigInt(entry.priceE6);
+              if (entry?.priceE6) {
+                try { priceE6 = BigInt(entry.priceE6); } catch { /* keep existing price */ }
+              }
             }
           } catch { /* use existing */ }
           if (priceE6 <= 0n) priceE6 = 1_000_000n;

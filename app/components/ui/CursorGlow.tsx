@@ -11,8 +11,8 @@ export function CursorGlow() {
 
     // Check for reduced motion
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-    // Skip on mobile
-    if (window.innerWidth < 768) return;
+    // Skip on devices without precise pointer (mobile/touch devices)
+    if (!window.matchMedia("(pointer: fine)").matches) return;
 
     let raf: number;
     let mouseX = -500;

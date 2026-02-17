@@ -18,7 +18,6 @@ import {
 } from "@percolator/core";
 import { sendTx } from "@/lib/tx";
 import { useSlabState } from "@/components/providers/SlabProvider";
-import { getBackendUrl } from "@/lib/config";
 
 export function useTrade(slabAddress: string) {
   const { connection } = useConnection();
@@ -80,11 +79,13 @@ export function useTrade(slabAddress: string) {
           // Fetch current price from backend or use last known
           let priceE6 = mktConfig.authorityPriceE6 ?? 1_000_000n;
           try {
-            const resp = await fetch(`${getBackendUrl()}/prices/markets`);
+            const resp = await fetch(`/api/prices/markets`);
             if (resp.ok) {
               const prices = await resp.json();
               const entry = prices[slabAddress];
-              if (entry?.priceE6) priceE6 = BigInt(entry.priceE6);
+              if (entry?.priceE6) {
+                try { priceE6 = BigInt(entry.priceE6); } catch { /* keep existing price */ }
+              }
             }
           } catch { /* use existing price */ }
           if (priceE6 <= 0n) priceE6 = 1_000_000n;

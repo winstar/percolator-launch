@@ -70,11 +70,29 @@ export function usePortfolio(): PortfolioData {
         let pnlSum = 0n;
         let depositSum = 0n;
 
-        // For each market, fetch full slab to find user accounts
-        for (const market of markets) {
+        // Batch fetch all slab accounts using getMultipleAccountsInfo
+        const slabAddresses = markets.map((m) => m.slabAddress);
+        let slabAccountsInfo: (import("@solana/web3.js").AccountInfo<Buffer> | null)[] = [];
+        
+        try {
+          slabAccountsInfo = await connection.getMultipleAccountsInfo(slabAddresses);
+        } catch (error) {
+          console.error("[usePortfolio] Failed to batch fetch slabs:", error);
+          // Fall back to sequential fetching if batch fails
+          slabAccountsInfo = [];
+        }
+        
+        // Process each slab to find user accounts
+        for (let i = 0; i < markets.length; i++) {
+          const market = markets[i];
+          const accountInfo = slabAccountsInfo[i];
+          
+          if (!accountInfo || !accountInfo.data) {
+            continue; // Skip markets with no data
+          }
+          
           try {
-            const slabData = await fetchSlab(connection, market.slabAddress);
-            const accounts = parseAllAccounts(slabData);
+            const accounts = parseAllAccounts(accountInfo.data);
 
             for (const { idx, account } of accounts) {
               if (account.kind === AccountKind.User && account.owner.toBase58() === pkStr) {
@@ -90,7 +108,7 @@ export function usePortfolio(): PortfolioData {
               }
             }
           } catch {
-            // Skip markets that fail to load
+            // Skip markets that fail to parse
           }
         }
 

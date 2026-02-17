@@ -1,61 +1,72 @@
-name: PR Check
+name: PR Check (Build & Fast Tests)
 
 on:
   pull_request:
     branches: [main]
-    paths:
-      - 'app/**'
-      - 'packages/**'
+
+# Cancel in-progress runs on same PR
+concurrency:
+  group: pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
 
 jobs:
-  typecheck:
-    name: TypeScript Check
+  build-and-test:
+    name: Build & Fast Tests
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: pnpm/action-setup@v2
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
         with:
           version: 9
-
-      - uses: actions/setup-node@v4
+          
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: pnpm
-
-      - name: Install root deps
+          
+      - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Install app deps
-        run: cd app && pnpm install --frozen-lockfile
-
+      # Build core FIRST — @percolator/api, keeper, indexer, and shared all
+      # declare "@percolator/core": "workspace:*" as a dependency.
+      # Without this step TypeScript cannot resolve @percolator/core imports
+      # and the subsequent package builds fail with TS2307.
       - name: Build core package
-        run: cd packages/core && pnpm run build
-
-      - name: TypeScript check
-        run: cd app && npx tsc --noEmit
-
-  lint:
-    name: ESLint
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: pnpm/action-setup@v2
-        with:
-          version: 9
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: pnpm
-
-      - name: Install root deps
-        run: pnpm install --frozen-lockfile
-
-      - name: Install app deps
-        run: cd app && pnpm install --frozen-lockfile
-
-      - name: Lint
-        run: cd app && npx next lint --quiet
-        continue-on-error: true  # Don't block PRs on lint warnings initially
+        run: pnpm --filter @percolator/core build
+        
+      - name: Build shared package
+        run: pnpm --filter @percolator/shared build
+        
+      - name: Build API
+        run: pnpm --filter @percolator/api build
+        
+      - name: Build keeper
+        run: pnpm --filter @percolator/keeper build
+        
+      - name: Build indexer
+        run: pnpm --filter @percolator/indexer build
+        
+      - name: Test shared package
+        run: pnpm --filter @percolator/shared test
+        
+      - name: Test API
+        run: pnpm --filter @percolator/api test
+        
+      - name: Test keeper
+        run: pnpm --filter @percolator/keeper test
+        
+      - name: Test indexer
+        run: pnpm --filter @percolator/indexer test
+        
+      - name: Build frontend
+        run: cd app && npx next build
+        env:
+          NEXT_PUBLIC_API_URL: http://localhost:4000
+          NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: dummy

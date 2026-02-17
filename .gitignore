@@ -36,14 +36,16 @@ lerna-debug.log*
 # Local env files
 .env
 .env*.local
+.env.local
 .env.test
 
 # Vercel
 .vercel
+.env.vercel
+.env.vercel.preview
 
 # Turbo
 .turbo
-.env.vercel.preview
 
 # Supabase CLI temp files
 supabase/.temp/

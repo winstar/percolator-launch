@@ -21,7 +21,7 @@ function generateMockHistory(): FundingHistoryPoint[] {
     const slot = 123456789 - i * 9000; // ~9000 slots per hour
     // Simulate oscillating funding rate
     const rateBpsPerSlot = Math.sin(i * 0.5) * 3 + Math.random() * 2 - 1;
-    const hourlyRatePercent = (rateBpsPerSlot * 9000) / 100; // Convert to hourly %
+    const hourlyRatePercent = (rateBpsPerSlot * 9000) / 100; // bps/slot × slots/hr / 100 = %/hr
     
     points.push({ slot, rateBpsPerSlot, timestamp, hourlyRatePercent });
   }
@@ -56,7 +56,7 @@ export const FundingRateChart: FC<{ slabAddress: string }> = ({ slabAddress }) =
         setHistory(data.history ?? []);
       } catch {
         // Fallback to mock
-        setHistory(MOCK_HISTORY);
+        setHistory([]);
       } finally {
         setLoading(false);
       }

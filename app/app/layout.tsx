@@ -19,23 +19,26 @@ const outfit = Outfit({ variable: "--font-outfit", subsets: ["latin"], weight: [
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://percolatorlaunch.com"),
-  title: "Percolator — Perpetual Futures for Any Token",
-  description: "Deploy a perpetual futures market on Solana in one click. No smart contract. No permission. Up to 20x leverage on any SPL token.",
+  title: "Percolator | Permissionless Perpetual Markets on Solana",
+  description: "Launch and trade perpetual futures for any Solana token. Fully on-chain, permissionless, transparent.",
+  keywords: ["Solana", "perpetual futures", "DeFi", "trading", "perps", "on-chain"],
   icons: {
     icon: '/icon.png',
     apple: '/icon.png',
   },
   openGraph: {
     url: "https://percolatorlaunch.com",
-    title: "Percolator — Perpetual Futures for Any Token",
-    description: "Deploy a perpetual futures market on Solana in one click. No smart contract. No permission. Up to 20x leverage on any SPL token.",
+    title: "Percolator — Permissionless Perps on Solana",
+    description: "Launch and trade perpetual futures for any Solana token.",
     type: "website",
     locale: "en_US",
+    images: [{ url: "/og-image.png", width: 1200, height: 630 }],
   },
   twitter: {
     card: "summary_large_image",
-    title: "Percolator — Perpetual Futures for Any Token",
-    description: "Deploy a perpetual futures market on Solana in one click. No smart contract. No permission. Up to 20x leverage on any SPL token.",
+    title: "Percolator — Permissionless Perps on Solana",
+    description: "Launch and trade perpetual futures for any Solana token.",
+    images: ["/og-image.png"],
   },
 };
 

@@ -130,7 +130,7 @@ function CopyButton({ text }: { text: string }) {
 /* ── Main inner page ──────────────────────────────────────── */
 
 function TradePageInner({ slab }: { slab: string }) {
-  const { engine, config, accounts, loading: slabLoading, error: slabError } = useSlabState();
+  const { engine, config, header, accounts, loading: slabLoading, error: slabError } = useSlabState();
   const tokenMeta = useTokenMeta(config?.collateralMint ?? null);
   const { priceUsd } = useLivePrice();
   const health = engine ? computeMarketHealth(engine) : null;
@@ -152,10 +152,28 @@ function TradePageInner({ slab }: { slab: string }) {
     return () => { cancelled = true; };
   }, [slab]);
 
-  // Dynamic page title
+  // Dynamic page title and meta tags
   useEffect(() => {
-    document.title = `${symbol}/USD — Percolator`;
-  }, [symbol]);
+    document.title = `Trade ${symbol} | Percolator`;
+    
+    // Update meta description
+    const metaDesc = document.querySelector('meta[name="description"]');
+    if (metaDesc) {
+      const priceText = priceUsd != null ? `Current price: $${priceUsd.toFixed(2)}` : "";
+      metaDesc.setAttribute("content", `Trade ${symbol} perpetual futures on Percolator. ${priceText}`);
+    }
+
+    // Update OG tags dynamically
+    const ogTitle = document.querySelector('meta[property="og:title"]');
+    if (ogTitle) ogTitle.setAttribute("content", `Trade ${symbol} | Percolator`);
+    
+    const ogDesc = document.querySelector('meta[property="og:description"]');
+    if (ogDesc) {
+      const priceText = priceUsd != null ? `Current price: $${priceUsd.toFixed(2)}` : "";
+      ogDesc.setAttribute("content", `Trade ${symbol} perpetual futures on Percolator. ${priceText}`);
+    }
+    
+  }, [symbol, priceUsd]);
 
   const priceDisplay = priceUsd != null
     ? `$${priceUsd < 0.01 ? priceUsd.toFixed(6) : priceUsd < 1 ? priceUsd.toFixed(4) : priceUsd.toFixed(2)}`
@@ -222,11 +240,20 @@ function TradePageInner({ slab }: { slab: string }) {
             )}
           </div>
         </div>
-        <div className="mt-1 flex items-center gap-2">
+        <div className="mt-1 flex items-center gap-2 flex-wrap">
           <span className="flex items-center text-[10px] text-[var(--text-dim)]" style={{ fontFamily: "var(--font-mono)" }}>
             {shortAddress}
             <CopyButton text={slab} />
           </span>
+          {header?.admin && (
+            <span className={`text-[9px] font-medium uppercase tracking-[0.12em] px-1.5 py-0.5 rounded-sm border ${
+              header.admin.toBase58() === "11111111111111111111111111111111"
+                ? "border-[var(--long)]/30 bg-[var(--long)]/5 text-[var(--long)]"
+                : "border-[var(--warning)]/30 bg-[var(--warning)]/5 text-[var(--warning)]"
+            }`}>
+              {header.admin.toBase58() === "11111111111111111111111111111111" ? "✅ Admin Renounced" : "⚠️ Admin Active"}
+            </span>
+          )}
           <ShareButton
             slabAddress={slab}
             marketName={symbol}
@@ -251,6 +278,15 @@ function TradePageInner({ slab }: { slab: string }) {
               <CopyButton text={slab} />
             </span>
             {health && <HealthBadge level={health.level} />}
+            {header?.admin && (
+              <span className={`text-[9px] font-medium uppercase tracking-[0.12em] px-1.5 py-0.5 rounded-sm border ${
+                header.admin.toBase58() === "11111111111111111111111111111111"
+                  ? "border-[var(--long)]/30 bg-[var(--long)]/5 text-[var(--long)]"
+                  : "border-[var(--warning)]/30 bg-[var(--warning)]/5 text-[var(--warning)]"
+              }`}>
+                {header.admin.toBase58() === "11111111111111111111111111111111" ? "✅ Admin Renounced" : "⚠️ Admin Active"}
+              </span>
+            )}
             <ShareButton
               slabAddress={slab}
               marketName={symbol}

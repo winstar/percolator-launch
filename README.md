@@ -7,7 +7,7 @@ Built on [Percolator](https://github.com/aeyakovenko/percolator) by Anatoly Yako
 [![Live on Devnet](https://img.shields.io/badge/Devnet-Live-14F195?style=flat&logo=solana)](https://percolatorlaunch.com)
 [![PRs Merged](https://img.shields.io/badge/PRs-66%20merged-blue?style=flat)]()
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict-3178C6?style=flat&logo=typescript)](/)
-[![Tests](https://img.shields.io/badge/Tests-32%2F32%20passing-14F195?style=flat)]()
+[![Tests](https://img.shields.io/badge/Tests-365%2B%20passing-14F195?style=flat)]()
 
 ---
 
@@ -71,9 +71,11 @@ pnpm install
 cp app/.env.local.example app/.env.local
 # Edit with your keys (see Environment Variables section below)
 
-# Backend
-cp packages/server/.env.example packages/server/.env
-# Edit with Helius API key, crank wallet, etc.
+# Backend Services
+cp packages/api/.env.example packages/api/.env
+cp packages/keeper/.env.example packages/keeper/.env
+cp packages/indexer/.env.example packages/indexer/.env
+# Edit with Helius API key, crank wallet, Supabase credentials, etc.
 ```
 
 ### 3. Run Development
@@ -82,8 +84,10 @@ cp packages/server/.env.example packages/server/.env
 # Frontend (Next.js dev server)
 cd app && pnpm dev
 
-# Backend (Hono server — separate terminal)
-cd packages/server && pnpm dev
+# Backend Services (each in separate terminals)
+cd packages/api && pnpm dev        # REST API + WebSocket on :3001
+cd packages/keeper && pnpm dev     # Crank bot + liquidations
+cd packages/indexer && pnpm dev    # Trade indexer + market discovery
 ```
 
 ### 4. Build the Solana Program
@@ -110,12 +114,18 @@ cargo build-sbf
 │                     Frontend (Next.js)                    │
 │  Landing → Create Wizard → Trade → My Markets → Portfolio│
 └──────────────────────┬───────────────────────────────────┘
-                       │ RPC + WebSocket
+                       │ REST + WebSocket
 ┌──────────────────────▼───────────────────────────────────┐
-│                  Backend (Hono / Railway)                 │
-│  Crank Bot │ Oracle Service │ Liquidation │ Price Engine │
+│                       Backend Services                    │
+│  ┌────────────┬─────────────┬────────────────────────┐   │
+│  │ API        │ Keeper      │ Indexer                │   │
+│  │ (Hono)     │ (Cron Jobs) │ (Event Processing)     │   │
+│  │ REST API   │ Crank Bot   │ Trade Parsing          │   │
+│  │ WebSocket  │ Liquidation │ Market Discovery       │   │
+│  │ Swagger UI │ Oracle Push │ Position Tracking      │   │
+│  └────────────┴─────────────┴────────────────────────┘   │
 └──────────────────────┬───────────────────────────────────┘
-                       │ Solana RPC
+                       │ Solana RPC + Geyser
 ┌──────────────────────▼───────────────────────────────────┐
 │                Solana Programs (BPF)                      │
 │  Percolator Program (3 tiers) + Matcher (vAMM)           │
@@ -184,35 +194,50 @@ percolator-launch/
 │   │       │   └── pda.ts        # PDA derivation (vault, insurance mint, Pyth push oracle)
 │   │       └── validation.ts     # Input validators
 │   │
-│   └── server/                   # Backend API (Hono framework, deployed on Railway)
+│   ├── api/                      # REST API service (Hono framework, Railway)
+│   │   └── src/
+│   │       ├── index.ts          # Server entry, CORS, routes, Swagger UI
+│   │       ├── config.ts         # Environment-based configuration
+│   │       ├── routes/
+│   │       │   ├── markets.ts    # GET /markets, GET /markets/:slab
+│   │       │   ├── trades.ts     # GET /markets/:slab/trades
+│   │       │   ├── prices.ts     # GET /prices/:slab, WebSocket /prices/ws
+│   │       │   ├── funding.ts    # GET /funding/:slab, GET /funding/:slab/history
+│   │       │   ├── insurance.ts  # GET /insurance/:slab
+│   │       │   ├── stats.ts      # GET /stats/global, GET /stats/:slab
+│   │       │   └── health.ts     # GET /health
+│   │       ├── services/
+│   │       │   ├── PriceEngine.ts    # Helius Geyser WebSocket → live price streaming
+│   │       │   └── oracle.ts         # Oracle price fetcher (DexScreener → Jupiter)
+│   │       ├── middleware/
+│   │       │   ├── auth.ts           # API key authentication
+│   │       │   ├── rate-limit.ts     # Token-bucket rate limiter
+│   │       │   └── validateSlab.ts   # Slab address validation
+│   │       └── utils/
+│   │           ├── solana.ts         # Connection pool, sendWithRetry
+│   │           └── rpc-client.ts     # Rate-limited RPC with fallback
+│   │
+│   ├── keeper/                   # Cron services (keeper bot, Railway)
+│   │   └── src/
+│   │       ├── index.ts          # Service orchestrator
+│   │       ├── config.ts         # Environment configuration
+│   │       ├── crank.ts          # Auto-crank bot (all markets, batched)
+│   │       ├── liquidation.ts    # Liquidation scanner + executor
+│   │       ├── oracle-push.ts    # Oracle price pusher for admin markets
+│   │       └── utils/
+│   │           ├── solana.ts     # Keypair loading, transaction utilities
+│   │           └── priority-fee.ts   # Priority fee estimation
+│   │
+│   └── indexer/                  # Event indexing service (Railway + Supabase)
 │       └── src/
-│           ├── index.ts          # Server entry, CORS, routes, graceful shutdown
-│           ├── config.ts         # Environment-based configuration
-│           ├── routes/
-│           │   ├── markets.ts    # GET /markets, POST /markets
-│           │   ├── crank.ts      # GET /crank/status, POST /crank/:slab
-│           │   ├── oracle-router.ts  # GET /oracle/resolve/:mint
-│           │   ├── prices.ts     # GET /prices/:slab, WebSocket /prices/ws
-│           │   ├── insurance.ts  # GET /insurance/:slab
-│           │   └── health.ts     # GET /health
-│           ├── services/
-│           │   ├── crank.ts          # Auto-crank bot (all markets, batched, rate-limited)
-│           │   ├── oracle.ts         # Oracle price fetcher (DexScreener → Jupiter → fallback)
-│           │   ├── PriceEngine.ts    # Helius Geyser WebSocket → live price streaming
-│           │   ├── liquidation.ts    # Auto-liquidation scanner + executor (15s interval)
-│           │   ├── TradeIndexer.ts   # Parse crank txs → extract trades → Supabase
-│           │   ├── InsuranceLPService.ts # Insurance fund monitoring
-│           │   ├── lifecycle.ts      # Market state machine (Quick Launch flow)
-│           │   ├── vamm.ts           # vAMM matcher integration
-│           │   └── events.ts         # Internal event bus
-│           ├── middleware/
-│           │   ├── auth.ts           # API key authentication
-│           │   ├── rate-limit.ts     # Token-bucket rate limiter (10 req/s)
-│           │   └── validateSlab.ts   # Slab address validation
+│           ├── index.ts          # Indexer entry point
+│           ├── config.ts         # Environment configuration
+│           ├── TradeIndexer.ts   # Parse crank txs → extract trades → Supabase
+│           ├── MarketDiscovery.ts # Discover new markets via getProgramAccounts
+│           ├── PositionTracker.ts # Track position changes → Supabase
 │           └── utils/
-│               ├── solana.ts         # Keypair loading, sendWithRetry, connection
-│               ├── rpc-client.ts     # Rate-limited RPC with fallback to public devnet
-│               └── priority-fee.ts   # Priority fee estimation
+│               ├── supabase.ts   # Supabase client with connection pooling
+│               └── solana.ts     # RPC utilities
 │
 ├── program/                      # Solana BPF program (Rust)
 │   ├── src/lib.rs                # All instruction handlers (Tags 0-28)
@@ -398,29 +423,32 @@ Full error enum: [`packages/core/src/abi/errors.ts`](./packages/core/src/abi/err
 
 ## Backend Services
 
-The backend runs on Railway and provides critical infrastructure:
+The backend is split into three microservices, all deployed on Railway:
 
-### Crank Bot (`services/crank.ts`)
-- Discovers all markets across 3 program tiers via `getProgramAccounts`
-- Cranks every market every 10 seconds (batches of 3, rate-limited)
-- Pushes oracle prices for markets where the crank wallet is the oracle authority
+### API Service (`packages/api/`)
+**REST API + WebSocket server** — provides all public data endpoints and live price streaming
+
+- Hono framework with Swagger UI at `/docs`
+- WebSocket price streaming via Helius Geyser
+- Rate limiting (10 req/s per client) + API key authentication
+- CORS allowlist for approved origins
+- Comprehensive REST endpoints (markets, trades, funding, insurance, stats)
+
+### Keeper Service (`packages/keeper/`)
+**Cron jobs** — automated market maintenance tasks
+
+- **Crank Bot:** Discovers all markets via `getProgramAccounts`, cranks every 10s (batched)
+- **Liquidation Scanner:** Scans for undercollateralized positions every 15s, auto-liquidates
+- **Oracle Pusher:** Pushes prices for admin-oracle markets where keeper wallet is authority
 - Handles 43+ markets concurrently with 0 failures
 
-### Liquidation Scanner (`services/liquidation.ts`)
-- Scans all markets every 15 seconds for undercollateralized positions
-- Sends multi-instruction tx: crank → liquidate (atomic)
-- Only pushes oracle price when crank wallet IS the oracle authority
+### Indexer Service (`packages/indexer/`)
+**Event processing** — listens to on-chain activity and indexes to Supabase
 
-### Price Engine (`services/PriceEngine.ts`)
-- Streams live prices via Helius Geyser WebSocket
-- Falls back to Jupiter polling when WebSocket disconnects
-- Broadcasts to all connected frontend clients
-
-### Trade Indexer (`services/TradeIndexer.ts`)
-- Listens for successful crank events
-- Parses on-chain transactions for TradeCpi (tag 10) and TradeNoCpi (tag 6)
-- Extracts trader, size, side, price from instruction data
-- Writes to Supabase `trades` table with deduplication
+- **Trade Indexer:** Parses crank txs → extracts TradeCpi/TradeNoCpi → writes to Supabase
+- **Market Discovery:** Auto-discovers new markets and registers them
+- **Position Tracker:** Monitors position changes and updates aggregated stats
+- Deduplication via transaction signature tracking
 
 ### API Routes
 
@@ -530,7 +558,7 @@ npx tsx tests/t7-market-pause.ts        # Pause/unpause enforcement (14/14 passi
 npx tsx tests/t8-trading-fee-update.ts  # Dynamic fee updates (8/8 passing)
 ```
 
-**Current status: 32/32 on-chain tests passing.**
+**Current status: 365+ tests passing** (32 on-chain integration + 333 unit tests across core, API, keeper, indexer packages).
 
 ### Test Wallet Setup
 
@@ -558,21 +586,37 @@ solana airdrop 2 --url devnet
 | `NEXT_PUBLIC_WS_URL` | No | `ws://localhost:3001` | Backend WebSocket URL for live prices |
 | `NEXT_PUBLIC_HELIUS_API_KEY` | No | — | Helius API key for higher rate limits |
 
-### Backend (`packages/server/.env`)
+### API Service (`packages/api/.env`)
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
 | `HELIUS_API_KEY` | Yes | — | Helius RPC + Geyser WebSocket key |
-| `CRANK_KEYPAIR` | Yes | — | Base58 or JSON array of crank wallet secret key |
-| `API_AUTH_KEY` | No | — | API key for mutations (if unset, all requests allowed) |
-| `SUPABASE_URL` | No | — | Supabase project URL (for trade indexer) |
-| `SUPABASE_KEY` | No | — | Supabase service role key |
+| `API_AUTH_KEY` | No | — | API key for protected endpoints (if unset, all requests allowed) |
 | `ALLOWED_ORIGINS` | No | `https://percolatorlaunch.com,http://localhost:3000` | CORS allowlist |
 | `PORT` | No | `3001` | Server listen port |
+| `FALLBACK_RPC_URL` | No | `https://api.devnet.solana.com` | Fallback RPC for read-only calls |
+| `ALL_PROGRAM_IDS` | No | All 3 devnet tiers | Comma-separated program IDs to scan |
+
+### Keeper Service (`packages/keeper/.env`)
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `HELIUS_API_KEY` | Yes | — | Helius RPC key for transaction submission |
+| `CRANK_KEYPAIR` | Yes | — | Base58 or JSON array of crank wallet secret key |
 | `CRANK_INTERVAL_MS` | No | `10000` | Crank cycle interval (ms) |
 | `CRANK_INACTIVE_INTERVAL_MS` | No | `60000` | Interval for markets with no activity |
+| `LIQUIDATION_INTERVAL_MS` | No | `15000` | Liquidation scan interval (ms) |
 | `ALL_PROGRAM_IDS` | No | All 3 devnet tiers | Comma-separated program IDs to scan |
-| `FALLBACK_RPC_URL` | No | `https://api.devnet.solana.com` | Fallback RPC for read-only calls on 429 |
+
+### Indexer Service (`packages/indexer/.env`)
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `HELIUS_API_KEY` | Yes | — | Helius RPC for transaction fetching |
+| `SUPABASE_URL` | Yes | — | Supabase project URL |
+| `SUPABASE_KEY` | Yes | — | Supabase service role key |
+| `ALL_PROGRAM_IDS` | No | All 3 devnet tiers | Comma-separated program IDs to index |
+| `INDEXER_INTERVAL_MS` | No | `5000` | Trade indexing interval (ms) |
 
 ---
 
@@ -581,13 +625,21 @@ solana airdrop 2 --url devnet
 ### Frontend — Vercel
 The frontend auto-deploys from `main` branch via Vercel. Set environment variables in the Vercel dashboard.
 
-### Backend — Railway
-The backend runs on Railway with a Dockerfile at `packages/server/Dockerfile`.
+### Backend Services — Railway
+All three backend services deploy to Railway independently:
 
 ```bash
-# Deploy via Railway CLI
-railway up
+# API service
+cd packages/api && railway up
+
+# Keeper service
+cd packages/keeper && railway up
+
+# Indexer service
+cd packages/indexer && railway up
 ```
+
+Each service has its own `Dockerfile` and can scale independently.
 
 ### Solana Programs
 Programs are deployed via `solana program deploy` with BPFLoaderUpgradeable (allows upgrades):
@@ -626,6 +678,7 @@ Detailed docs live in the [`docs/`](./docs/) directory:
 
 | Document | Description |
 |----------|-------------|
+| [`ARCHITECTURE.md`](./docs/ARCHITECTURE.md) | **Complete system architecture** — service breakdown, data flow, deployment |
 | [`BACKEND-ARCHITECTURE.md`](./docs/BACKEND-ARCHITECTURE.md) | Backend service architecture and data flow |
 | [`INSURANCE-LP-SPEC.md`](./docs/INSURANCE-LP-SPEC.md) | Insurance LP token system (VaR-based yield model) |
 | [`MAINNET-READINESS.md`](./docs/MAINNET-READINESS.md) | Mainnet deployment checklist |
@@ -635,6 +688,20 @@ Detailed docs live in the [`docs/`](./docs/) directory:
 | [`AUDIT-TRADE.md`](./AUDIT-TRADE.md) | Trade system audit (23 findings, all resolved) |
 | [`AUDIT-PAGES.md`](./AUDIT-PAGES.md) | Frontend pages audit (34 findings, all resolved) |
 | [`AUDIT-BACKEND.md`](./AUDIT-BACKEND.md) | Backend audit (15 findings, all resolved) |
+
+### API Documentation
+
+**Interactive Swagger UI**: Visit `http://localhost:3001/docs` when running the API service locally.
+
+The API service provides comprehensive REST endpoints for market data, trades, funding rates, and platform statistics. See [`packages/api/README.md`](./packages/api/README.md) for complete API documentation including:
+- All available endpoints with request/response schemas
+- Rate limiting and caching policies
+- WebSocket price streaming protocol
+- Environment configuration and deployment guide
+
+**Keeper Service**: See [`packages/keeper/README.md`](./packages/keeper/README.md) for cron job schedules and configuration.
+
+**Indexer Service**: See [`packages/indexer/README.md`](./packages/indexer/README.md) for event processing pipeline details.
 
 ---
 

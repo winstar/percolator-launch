@@ -10,6 +10,7 @@ import { ScrollReveal } from "@/components/ui/ScrollReveal";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { GradientText } from "@/components/ui/GradientText";
 import { usePrefersReducedMotion } from "@/hooks/usePrefersReducedMotion";
+import { ErrorBoundary } from "@/components/ui/ErrorBoundary";
 
 const HOW_STEPS = [
   {
@@ -50,9 +51,9 @@ function HowItWorks() {
         <ScrollReveal>
           <div className="grid grid-cols-1 gap-px overflow-hidden border border-[var(--border)] bg-[var(--border)] md:grid-cols-3">
             {HOW_STEPS.map((step, i) => (
-              <div
+              <article
                 key={step.number}
-                className="group relative bg-[var(--panel-bg)] p-5 transition-colors duration-200 hover:bg-[var(--bg-elevated)]"
+                className="group relative bg-[var(--panel-bg)] p-4 sm:p-5 transition-colors duration-200 hover:bg-[var(--bg-elevated)]"
               >
                 <div className="mb-4 flex items-start justify-between">
                   <div className="flex h-10 w-10 items-center justify-center border border-[var(--accent)]/15 bg-[var(--accent)]/[0.04] transition-colors duration-200 group-hover:border-[var(--accent)]/30 group-hover:bg-[var(--accent)]/[0.08]">
@@ -65,13 +66,13 @@ function HowItWorks() {
                   </span>
                 </div>
 
-                <h3 className="mb-2 text-[14px] font-semibold tracking-tight text-white">
+                <h3 className="mb-2 text-[13px] sm:text-[14px] font-semibold tracking-tight text-white">
                   {step.title}
                 </h3>
-                <p className="text-[12px] leading-relaxed text-[var(--text-secondary)]">{step.desc}</p>
+                <p className="text-[12px] sm:text-[12px] leading-relaxed text-[var(--text-secondary)]">{step.desc}</p>
 
                 <div className="absolute bottom-0 left-0 right-0 h-px bg-[var(--accent)]/0 transition-all duration-300 group-hover:bg-[var(--accent)]/30" />
-              </div>
+              </article>
             ))}
           </div>
         </ScrollReveal>
@@ -82,7 +83,8 @@ function HowItWorks() {
 
 export default function Home() {
   const [stats, setStats] = useState({ markets: 0, volume: 0, insurance: 0 });
-  const [featured, setFeatured] = useState<{ slab_address: string; symbol: string | null; volume_24h: number; last_price: number | null; open_interest: number }[]>([]);
+  const [statsLoaded, setStatsLoaded] = useState(false);
+  const [featured, setFeatured] = useState<{ slab_address: string; symbol: string | null; volume_24h: number; last_price: number | null; total_open_interest: number }[]>([]);
   const heroRef = useRef<HTMLDivElement>(null);
   const prefersReduced = usePrefersReducedMotion();
   const [scrollY, setScrollY] = useState(0);
@@ -115,24 +117,26 @@ export default function Home() {
   useEffect(() => {
     async function loadStats() {
       try {
-        const { data } = await getSupabase().from("markets_with_stats").select("slab_address, symbol, volume_24h, insurance_balance, last_price, open_interest") as { data: { slab_address: string; symbol: string | null; volume_24h: number | null; insurance_balance: number | null; last_price: number | null; open_interest: number | null }[] | null };
+        const { data } = await getSupabase().from("markets_with_stats").select("slab_address, symbol, volume_24h, insurance_balance, last_price, total_open_interest") as { data: { slab_address: string; symbol: string | null; volume_24h: number | null; insurance_balance: number | null; last_price: number | null; total_open_interest: number | null }[] | null };
         if (data) {
           setStats({
             markets: data.length,
-            volume: data.reduce((s, m) => s + (m.volume_24h || 0), 0),
-            insurance: data.reduce((s, m) => s + (m.insurance_balance || 0), 0),
+            volume: data.reduce((s, m) => s + Number(m.volume_24h || 0), 0),
+            insurance: data.reduce((s, m) => s + Number(m.insurance_balance || 0), 0),
           });
+          setStatsLoaded(true);
           const sorted = [...data].sort((a, b) => (b.volume_24h || 0) - (a.volume_24h || 0)).slice(0, 5);
           setFeatured(sorted.map((m) => ({
             slab_address: m.slab_address,
             symbol: m.symbol,
             volume_24h: m.volume_24h || 0,
             last_price: m.last_price,
-            open_interest: m.open_interest || 0,
+            total_open_interest: m.total_open_interest || 0,
           })));
         }
       } catch (err) {
         console.error("Failed to load market stats:", err);
+        setStatsLoaded(false);
       }
     }
     loadStats();
@@ -187,7 +191,7 @@ export default function Home() {
 
           {/* Primary headline */}
           <h1
-            className="hero-stagger mb-3 text-[clamp(2.5rem,7vw,5rem)] font-semibold leading-[0.92] tracking-[-0.03em] will-change-transform"
+            className="hero-stagger mb-3 text-[clamp(2rem,7vw,5rem)] font-semibold leading-[0.95] tracking-[-0.03em] will-change-transform"
             style={{ fontFamily: "var(--font-display)", opacity: prefersReduced ? 1 : 0 }}
           >
             <span className="block text-white/70">Perpetuals</span>
@@ -203,7 +207,7 @@ export default function Home() {
 
           {/* Subtitle */}
           <p
-            className="hero-stagger mx-auto mb-6 max-w-[480px] text-[13px] leading-relaxed text-[var(--text-secondary)]"
+            className="hero-stagger mx-auto mb-6 max-w-[480px] px-4 text-[14px] sm:text-[13px] leading-relaxed text-[var(--text-secondary)]"
             style={{ opacity: prefersReduced ? 1 : 0 }}
           >
             Deploy perpetual futures on any Solana token.{" "}
@@ -211,10 +215,11 @@ export default function Home() {
           </p>
 
           {/* CTAs */}
-          <div className="hero-stagger flex flex-col items-center justify-center gap-3 sm:flex-row sm:gap-3" style={{ opacity: prefersReduced ? 1 : 0 }}>
+          <div className="hero-stagger flex flex-col items-center justify-center gap-3 sm:flex-row sm:gap-3 w-full px-4 sm:w-auto sm:px-0" style={{ opacity: prefersReduced ? 1 : 0 }}>
             <Link
               href="/create"
-              className="group relative inline-flex items-center gap-2 border border-[var(--accent)]/50 bg-[var(--accent)]/[0.06] px-7 py-3 text-[11px] font-bold uppercase tracking-[0.15em] text-[var(--accent)] transition-all duration-200 hud-btn-corners hover:border-[var(--accent)] hover:bg-[var(--accent)]/[0.12] press"
+              className="group relative inline-flex items-center justify-center gap-2 border border-[var(--accent)]/50 bg-[var(--accent)]/[0.06] px-7 py-3.5 sm:py-3 text-[11px] font-bold uppercase tracking-[0.15em] text-[var(--accent)] transition-all duration-200 hud-btn-corners hover:border-[var(--accent)] hover:bg-[var(--accent)]/[0.12] press min-h-[44px] w-full sm:w-auto"
+              aria-label="Launch a new market"
             >
               <span className="relative z-10 flex items-center gap-2">
                 Launch Market
@@ -225,7 +230,8 @@ export default function Home() {
             </Link>
             <Link
               href="/markets"
-              className="relative inline-flex items-center border border-[var(--border)] bg-transparent px-7 py-3 text-[11px] font-medium uppercase tracking-[0.15em] text-[var(--text-muted)] transition-all duration-200 hover:border-[var(--text-muted)] hover:text-[var(--text-secondary)] press"
+              className="relative inline-flex items-center justify-center border border-[var(--border)] bg-transparent px-7 py-3.5 sm:py-3 text-[11px] font-medium uppercase tracking-[0.15em] text-[var(--text-muted)] transition-all duration-200 hover:border-[var(--text-muted)] hover:text-[var(--text-secondary)] press min-h-[44px] w-full sm:w-auto"
+              aria-label="Browse all markets"
             >
               Browse Markets
             </Link>
@@ -243,62 +249,67 @@ export default function Home() {
 
       {/* ═══════════════════════ STATS ═══════════════════════ */}
       {hasStats && (
-        <section className="relative py-16">
+        <ErrorBoundary label="Stats Section">
+          <section className="relative py-16">
+            <div className="mx-auto max-w-[1100px] px-6">
+              <ScrollReveal>
+                <div className="mb-10 text-center">
+                  <div className="mb-2 text-[10px] font-medium uppercase tracking-[0.25em] text-[var(--accent)]/60">
+                    // protocol metrics
+                  </div>
+                  <h2 className="text-xl font-medium tracking-[-0.01em] text-white sm:text-2xl" style={{ fontFamily: "var(--font-heading)" }}>
+                    Built <GradientText variant="muted">Different</GradientText>
+                  </h2>
+                </div>
+              </ScrollReveal>
+
+              <ScrollReveal stagger={0.08}>
+                <div className="grid grid-cols-2 gap-px overflow-hidden border border-[var(--border)] bg-[var(--border)] md:grid-cols-4">
+                  {[
+                    { label: "Markets Live", value: statsLoaded ? <AnimatedNumber value={stats.markets} decimals={0} /> : "—", color: "text-[var(--accent)]" },
+                    { label: "24h Volume", value: statsLoaded ? <AnimatedNumber value={stats.volume / 1000} prefix="$" suffix="k" decimals={0} /> : "—", color: "text-[var(--long)]" },
+                    { label: "Insurance Fund", value: statsLoaded ? <AnimatedNumber value={stats.insurance / 1000} prefix="$" suffix="k" decimals={0} /> : "—", color: "text-[var(--accent)]" },
+                    { label: "Access", value: "Open", color: "text-[var(--long)]" },
+                  ].map((stat) => (
+                    <div key={stat.label} className="bg-[var(--panel-bg)] p-4 sm:p-6 transition-colors duration-200 hover:bg-[var(--bg-elevated)]">
+                      <p className="mb-2 sm:mb-3 text-[9px] font-medium uppercase tracking-[0.2em] text-[var(--text-dim)]">{stat.label}</p>
+                      <p className={`text-xl sm:text-2xl md:text-3xl font-bold ${stat.color}`}>
+                        {stat.value}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </ScrollReveal>
+            </div>
+          </section>
+        </ErrorBoundary>
+      )}
+
+      {/* ═══════════════════════ HOW IT WORKS ═══════════════════════ */}
+      <ErrorBoundary label="How It Works Section">
+        <HowItWorks />
+      </ErrorBoundary>
+
+      {/* ═══════════════════════ FEATURES ═══════════════════════ */}
+      <ErrorBoundary label="Features Section">
+        <section className="relative overflow-hidden py-16">
           <div className="mx-auto max-w-[1100px] px-6">
             <ScrollReveal>
               <div className="mb-10 text-center">
                 <div className="mb-2 text-[10px] font-medium uppercase tracking-[0.25em] text-[var(--accent)]/60">
-                  // protocol metrics
+                  // architecture
                 </div>
                 <h2 className="text-xl font-medium tracking-[-0.01em] text-white sm:text-2xl" style={{ fontFamily: "var(--font-heading)" }}>
-                  Built <GradientText variant="muted">Different</GradientText>
+                  Purpose-Built <GradientText variant="muted">Infrastructure</GradientText>
                 </h2>
               </div>
             </ScrollReveal>
-
-            <ScrollReveal stagger={0.08}>
-              <div className="grid grid-cols-2 gap-px overflow-hidden border border-[var(--border)] bg-[var(--border)] md:grid-cols-4">
-                {[
-                  { label: "Markets Live", value: <AnimatedNumber value={stats.markets} decimals={0} />, color: "text-[var(--accent)]" },
-                  { label: "24h Volume", value: <AnimatedNumber value={stats.volume / 1000} prefix="$" suffix="k" decimals={0} />, color: "text-[var(--long)]" },
-                  { label: "Insurance Fund", value: <AnimatedNumber value={stats.insurance / 1000} prefix="$" suffix="k" decimals={0} />, color: "text-[var(--accent)]" },
-                  { label: "Access", value: "Open", color: "text-[var(--long)]" },
-                ].map((stat) => (
-                  <div key={stat.label} className="bg-[var(--panel-bg)] p-6 transition-colors duration-200 hover:bg-[var(--bg-elevated)]">
-                    <p className="mb-3 text-[9px] font-medium uppercase tracking-[0.2em] text-[var(--text-dim)]">{stat.label}</p>
-                    <p className={`text-2xl font-bold sm:text-3xl ${stat.color}`}>
-                      {stat.value}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            </ScrollReveal>
-          </div>
-        </section>
-      )}
-
-      {/* ═══════════════════════ HOW IT WORKS ═══════════════════════ */}
-      <HowItWorks />
-
-      {/* ═══════════════════════ FEATURES ═══════════════════════ */}
-      <section className="relative overflow-hidden py-16">
-        <div className="mx-auto max-w-[1100px] px-6">
-          <ScrollReveal>
-            <div className="mb-10 text-center">
-              <div className="mb-2 text-[10px] font-medium uppercase tracking-[0.25em] text-[var(--accent)]/60">
-                // architecture
-              </div>
-              <h2 className="text-xl font-medium tracking-[-0.01em] text-white sm:text-2xl" style={{ fontFamily: "var(--font-heading)" }}>
-                Purpose-Built <GradientText variant="muted">Infrastructure</GradientText>
-              </h2>
-            </div>
-          </ScrollReveal>
 
           {/* Hero feature — full width with terminal mockup */}
           <ScrollReveal>
             <div className="mb-px overflow-hidden border border-[var(--border)] bg-[var(--panel-bg)]">
               <div className="grid grid-cols-1 md:grid-cols-2">
-                <div className="p-5">
+                <div className="p-4 sm:p-5">
                   <div className="mb-4 flex items-center justify-between">
                     <div className="flex h-10 w-10 items-center justify-center border border-[var(--accent)]/15 bg-[var(--accent)]/[0.04]">
                       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className="text-[var(--accent)]">
@@ -365,7 +376,7 @@ export default function Home() {
                   tag: "NOVEL",
                 },
               ].map((f) => (
-                <div key={f.title} className="group relative h-full bg-[var(--panel-bg)] p-5 transition-colors duration-200 hover:bg-[var(--bg-elevated)]">
+                <article key={f.title} className="group relative h-full bg-[var(--panel-bg)] p-4 sm:p-5 transition-colors duration-200 hover:bg-[var(--bg-elevated)]">
                   <div className="mb-4 flex items-center justify-between">
                     <div className="flex h-10 w-10 items-center justify-center border border-[var(--accent)]/15 bg-[var(--accent)]/[0.04] transition-colors duration-200 group-hover:border-[var(--accent)]/30">
                       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className="text-[var(--accent)]">
@@ -376,18 +387,20 @@ export default function Home() {
                       {f.tag}
                     </span>
                   </div>
-                  <h3 className="mb-2 text-[14px] font-semibold tracking-tight text-white">{f.title}</h3>
+                  <h3 className="mb-2 text-[13px] sm:text-[14px] font-semibold tracking-tight text-white">{f.title}</h3>
                   <p className="text-[12px] leading-relaxed text-[var(--text-secondary)]">{f.desc}</p>
                   <div className="absolute bottom-0 left-0 right-0 h-px bg-[var(--accent)]/0 transition-all duration-300 group-hover:bg-[var(--accent)]/30" />
-                </div>
+                </article>
               ))}
             </div>
           </ScrollReveal>
         </div>
       </section>
+      </ErrorBoundary>
 
       {/* ═══════════════════════ FEATURED MARKETS ═══════════════════════ */}
       {hasMarkets && (
+        <ErrorBoundary label="Featured Markets Section">
         <section className="relative py-16">
           <div className="mx-auto max-w-[1100px] px-6">
             <ScrollReveal>
@@ -401,7 +414,7 @@ export default function Home() {
               </div>
 
               <div className="overflow-x-auto border border-[var(--border)] bg-[var(--panel-bg)]">
-                <div className="grid min-w-[480px] grid-cols-5 gap-4 border-b border-[var(--border)] bg-[var(--bg-surface)] px-5 py-3 text-[9px] font-medium uppercase tracking-[0.2em] text-[var(--text-dim)]">
+                <div className="grid min-w-[480px] grid-cols-5 gap-2 sm:gap-4 border-b border-[var(--border)] bg-[var(--bg-surface)] px-3 sm:px-5 py-3 text-[9px] font-medium uppercase tracking-[0.2em] text-[var(--text-dim)]">
                   <div>Token</div>
                   <div className="text-right">Price</div>
                   <div className="text-right">Volume</div>
@@ -412,7 +425,8 @@ export default function Home() {
                   <Link
                     key={m.slab_address}
                     href={`/trade/${m.slab_address}`}
-                    className="group relative grid min-w-[480px] grid-cols-5 gap-4 border-b border-[var(--border-subtle)] px-5 py-3.5 text-sm transition-all duration-150 last:border-b-0 hover:bg-[var(--accent)]/[0.03]"
+                    className="group relative grid min-w-[480px] grid-cols-5 gap-2 sm:gap-4 border-b border-[var(--border-subtle)] px-3 sm:px-5 py-3.5 text-sm transition-all duration-150 last:border-b-0 hover:bg-[var(--accent)]/[0.03] min-h-[48px]"
+                    aria-label={`Trade ${m.symbol ? `${m.symbol}/USD` : `market ${m.slab_address.slice(0, 6)}`}`}
                   >
                     <div className="absolute left-0 top-0 bottom-0 w-px bg-[var(--accent)] opacity-0 transition-opacity duration-150 group-hover:opacity-100" />
                     <div className="text-[13px] font-semibold text-white">
@@ -427,7 +441,7 @@ export default function Home() {
                       {m.volume_24h >= 1000 ? `$${(m.volume_24h / 1000).toFixed(1)}k` : `$${m.volume_24h}`}
                     </div>
                     <div className="text-right text-[12px] text-[var(--text-secondary)]">
-                      {m.open_interest >= 1000 ? `$${(m.open_interest / 1000).toFixed(1)}k` : `$${m.open_interest}`}
+                      {m.total_open_interest >= 1000 ? `$${(m.total_open_interest / 1000).toFixed(1)}k` : `$${m.total_open_interest}`}
                     </div>
                     <div className="text-right text-[11px] text-[var(--long)]">LIVE</div>
                   </Link>
@@ -448,6 +462,7 @@ export default function Home() {
             </ScrollReveal>
           </div>
         </section>
+        </ErrorBoundary>
       )}
 
       {/* ═══════════════════════ BOTTOM CTA ═══════════════════════ */}
@@ -468,7 +483,8 @@ export default function Home() {
             </p>
             <Link
               href="/create"
-              className="group inline-flex items-center gap-2.5 border border-[var(--accent)]/50 bg-[var(--accent)]/[0.06] px-10 py-4 text-[13px] font-bold uppercase tracking-[0.15em] text-[var(--accent)] transition-all duration-200 hud-btn-corners hover:border-[var(--accent)] hover:bg-[var(--accent)]/[0.12] press"
+              className="group inline-flex items-center justify-center gap-2.5 border border-[var(--accent)]/50 bg-[var(--accent)]/[0.06] px-8 sm:px-10 py-4 text-[12px] sm:text-[13px] font-bold uppercase tracking-[0.15em] text-[var(--accent)] transition-all duration-200 hud-btn-corners hover:border-[var(--accent)] hover:bg-[var(--accent)]/[0.12] press min-h-[48px]"
+              aria-label="Launch a new perpetual market"
             >
               <span className="relative z-10 flex items-center gap-2.5">
                 Launch Market

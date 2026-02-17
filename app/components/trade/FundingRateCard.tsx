@@ -74,7 +74,7 @@ export const FundingRateCard: FC<{ slabAddress: string }> = ({ slabAddress }) =>
         // Fallback to on-chain data when API unavailable
         if (engine && fundingRate !== null) {
           const rate = Number(fundingRate);
-          const hourly = (rate * 9000) / 100;
+          const hourly = (rate * 9000) / 10000; // bps/slot × slots/hr / 10000 = %/hr
           const apr = hourly * 24 * 365;
           const netLp = engine.netLpPos ?? 0n;
           setFundingData({
@@ -144,7 +144,7 @@ export const FundingRateCard: FC<{ slabAddress: string }> = ({ slabAddress }) =>
     // Calculate estimated 24h funding
     // hourlyRate * 24 * positionSize (in tokens)
     const positionTokens = Number(absPosition) / 1e6;
-    const estimated24h = fundingData.hourlyRatePercent * 24 * positionTokens;
+    const estimated24h = (fundingData.hourlyRatePercent / 100) * 24 * positionTokens;
 
     return {
       positionDirection: isLong ? "LONG" : "SHORT",
@@ -167,9 +167,10 @@ export const FundingRateCard: FC<{ slabAddress: string }> = ({ slabAddress }) =>
 
   if (!fundingData) return null;
 
-  const rateDisplay = fundingData.hourlyRatePercent >= 0 
-    ? `+${fundingData.hourlyRatePercent.toFixed(4)}%` 
-    : `${fundingData.hourlyRatePercent.toFixed(4)}%`;
+  const hourlyRatePercent = fundingData.hourlyRatePercent ?? 0;
+  const rateDisplay = hourlyRatePercent >= 0 
+    ? `+${hourlyRatePercent.toFixed(4)}%` 
+    : `${hourlyRatePercent.toFixed(4)}%`;
 
   const directionText = 
     fundingData.direction === "long_pays_short" ? "Longs pay shorts" :
@@ -200,7 +201,7 @@ export const FundingRateCard: FC<{ slabAddress: string }> = ({ slabAddress }) =>
           <div>
             <div
               className={`text-2xl font-bold ${
-                fundingData.hourlyRatePercent >= 0 ? "text-[var(--short)]" : "text-[var(--long)]"
+                hourlyRatePercent >= 0 ? "text-[var(--short)]" : "text-[var(--long)]"
               }`}
               style={{ fontFamily: "var(--font-mono)" }}
             >
@@ -210,8 +211,8 @@ export const FundingRateCard: FC<{ slabAddress: string }> = ({ slabAddress }) =>
           </div>
           <div className="text-right">
             <div className="text-xs text-[var(--text-secondary)]" style={{ fontFamily: "var(--font-mono)" }}>
-              {fundingData.aprPercent >= 0 ? "+" : ""}
-              {fundingData.aprPercent.toFixed(2)}% APR
+              {(fundingData.aprPercent ?? 0) >= 0 ? "+" : ""}
+              {(fundingData.aprPercent ?? 0).toFixed(2)}% APR
             </div>
           </div>
         </div>
@@ -232,7 +233,7 @@ export const FundingRateCard: FC<{ slabAddress: string }> = ({ slabAddress }) =>
                 Your Est. Funding (24h)
               </span>
               <span className={`text-sm font-bold ${fundingColor}`} style={{ fontFamily: "var(--font-mono)" }}>
-                {fundingSign}${estimatedFunding24h.toFixed(2)}
+                {fundingSign}{estimatedFunding24h.toFixed(4)} tokens
               </span>
             </div>
             <div className="mt-1 text-[9px] text-[var(--text-dim)]">

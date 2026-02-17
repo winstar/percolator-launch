@@ -13,6 +13,10 @@ import { defineConfig, devices } from '@playwright/test';
  */
 export default defineConfig({
   testDir: './e2e',
+
+  // Don't fail CI if the e2e/ directory doesn't exist yet
+  // (e.g. during active backend development phases)
+  passWithNoTests: true,
   
   // Run tests in serial (devnet state conflicts in parallel)
   fullyParallel: false,

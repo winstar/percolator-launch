@@ -1,3 +1,7 @@
+-- ⚠️ NOTE: This file is for reference only.
+-- The source of truth is the migrations in supabase/migrations/.
+-- Regenerate this file with: supabase db dump --schema public > supabase/schema.sql
+
 -- Percolator Launch — Market Registry Schema
 -- Run in Supabase SQL Editor
 

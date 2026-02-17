@@ -37,37 +37,42 @@ export const EngineHealthCard: FC = () => {
 
   const health = computeMarketHealth(engine);
 
-  const haircutDenom = engine.cTot + engine.pnlPosTot;
+  const cTot = engine.cTot ?? 0n;
+  const pnlPosTot = engine.pnlPosTot ?? 0n;
+  const netLpPos = engine.netLpPos ?? 0n;
+  const lpSumAbs = engine.lpSumAbs ?? 0n;
+
+  const haircutDenom = cTot + pnlPosTot;
   const haircutPct = haircutDenom > 0n
-    ? (Number(engine.pnlPosTot * 10000n / haircutDenom) / 100).toFixed(2) + "%"
+    ? (Number(pnlPosTot * 10000n / haircutDenom) / 100).toFixed(2) + "%"
     : "0%";
 
   const netLpPosDisplay = showUsd && priceUsd != null
-    ? formatNum((Number(engine.netLpPos < 0n ? -engine.netLpPos : engine.netLpPos) / 1e6) * priceUsd)
-    : formatTokenAmount(engine.netLpPos < 0n ? -engine.netLpPos : engine.netLpPos);
+    ? formatNum((Number(netLpPos < 0n ? -netLpPos : netLpPos) / 1e6) * priceUsd)
+    : formatTokenAmount(netLpPos < 0n ? -netLpPos : netLpPos);
   const lpSumAbsDisplay = showUsd && priceUsd != null
-    ? formatNum((Number(engine.lpSumAbs) / 1e6) * priceUsd)
-    : formatTokenAmount(engine.lpSumAbs);
+    ? formatNum((Number(lpSumAbs) / 1e6) * priceUsd)
+    : formatTokenAmount(lpSumAbs);
   const cTotDisplay = showUsd && priceUsd != null
-    ? formatNum((Number(engine.cTot) / 1e6) * priceUsd)
-    : formatTokenAmount(engine.cTot);
+    ? formatNum((Number(cTot) / 1e6) * priceUsd)
+    : formatTokenAmount(cTot);
   const pnlPosTotDisplay = showUsd && priceUsd != null
-    ? formatNum((Number(engine.pnlPosTot) / 1e6) * priceUsd)
-    : formatTokenAmount(engine.pnlPosTot);
+    ? formatNum((Number(pnlPosTot) / 1e6) * priceUsd)
+    : formatTokenAmount(pnlPosTot);
 
   const metrics = [
-    { label: "Crank Age", value: formatSlotAge(engine.currentSlot, engine.lastCrankSlot) },
-    { label: "Current Slot", value: engine.currentSlot.toLocaleString() },
-    { label: "Liquidations", value: engine.lifetimeLiquidations.toLocaleString() },
-    { label: "Force Closes", value: engine.lifetimeForceCloses.toLocaleString() },
+    { label: "Crank Age", value: formatSlotAge(engine.currentSlot ?? 0n, engine.lastCrankSlot ?? 0n) },
+    { label: "Current Slot", value: Number(engine.currentSlot ?? 0n).toLocaleString() },
+    { label: "Liquidations", value: (engine.lifetimeLiquidations ?? 0n).toLocaleString() },
+    { label: "Force Closes", value: (engine.lifetimeForceCloses ?? 0n).toLocaleString() },
     { label: "Net LP Pos", value: netLpPosDisplay },
     { label: "LP Sum |Pos|", value: lpSumAbsDisplay },
     { label: "Total Capital", value: cTotDisplay },
     { label: "Pos. PnL Tot", value: pnlPosTotDisplay },
     { label: "Haircut Ratio", value: haircutPct },
-    { label: "Liq/GC Cursor", value: `${engine.liqCursor}/${engine.gcCursor}` },
-    { label: "Crank Cursor", value: engine.crankCursor.toString() },
-    { label: "Sweep Start", value: engine.sweepStartIdx.toString() },
+    { label: "Liq/GC Cursor", value: `${engine.liqCursor ?? "—"}/${engine.gcCursor ?? "—"}` },
+    { label: "Crank Cursor", value: engine.crankCursor?.toString() ?? "—" },
+    { label: "Sweep Start", value: engine.sweepStartIdx?.toString() ?? "—" },
   ];
 
   return (

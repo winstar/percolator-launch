@@ -6,6 +6,7 @@ import { useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import { CreateMarketWizard } from "@/components/create/CreateMarketWizard";
 import { ScrollReveal } from "@/components/ui/ScrollReveal";
+import { ErrorBoundary } from "@/components/ui/ErrorBoundary";
 
 const WalletMultiButton = dynamic(
   () => import("@solana/wallet-adapter-react-ui").then((m) => m.WalletMultiButton),
@@ -78,11 +79,13 @@ function CreatePageInner() {
         )}
 
         {/* Main wizard container */}
-        <ScrollReveal delay={0.1}>
-          <div className="border border-[var(--border)] bg-[var(--panel-bg)]">
-            <CreateMarketWizard initialMint={initialMint} />
-          </div>
-        </ScrollReveal>
+        <ErrorBoundary label="Create Market Wizard">
+          <ScrollReveal delay={0.1}>
+            <div className="border border-[var(--border)] bg-[var(--panel-bg)]">
+              <CreateMarketWizard initialMint={initialMint} />
+            </div>
+          </ScrollReveal>
+        </ErrorBoundary>
       </div>
     </div>
   );

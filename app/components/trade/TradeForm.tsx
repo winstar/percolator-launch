@@ -12,8 +12,9 @@ import { useEngineState } from "@/hooks/useEngineState";
 import { useSlabState } from "@/components/providers/SlabProvider";
 import { useTokenMeta } from "@/hooks/useTokenMeta";
 import { useLivePrice } from "@/hooks/useLivePrice";
-import { AccountKind } from "@percolator/core";
+import { AccountKind, computePreTradeLiqPrice } from "@percolator/core";
 import { PreTradeSummary } from "@/components/trade/PreTradeSummary";
+import { TradeConfirmationModal } from "@/components/trade/TradeConfirmationModal";
 import { InfoIcon } from "@/components/ui/Tooltip";
 import { usePrefersReducedMotion } from "@/hooks/usePrefersReducedMotion";
 import { isMockMode } from "@/lib/mock-mode";
@@ -75,6 +76,7 @@ export const TradeForm: FC<{ slabAddress: string }> = ({ slabAddress }) => {
   const [lastSig, setLastSig] = useState<string | null>(null);
   const [tradePhase, setTradePhase] = useState<"idle" | "submitting" | "confirming">("idle");
   const [humanError, setHumanError] = useState<string | null>(null);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
 
   const longBtnRef = useRef<HTMLButtonElement>(null);
   const shortBtnRef = useRef<HTMLButtonElement>(null);
@@ -109,12 +111,9 @@ export const TradeForm: FC<{ slabAddress: string }> = ({ slabAddress }) => {
   const hasPosition = existingPosition !== 0n;
 
   const marginNative = marginInput ? parsePercToNative(marginInput, decimals) : 0n;
-  const positionSize = marginNative * BigInt(leverage);
-  
-  // C3: Defensive check for BigInt overflow
-  if (positionSize < 0n) {
-    throw new Error("Position size overflow detected");
-  }
+  // Defensive clamp: positionSize should never be negative, but guard anyway
+  const rawPositionSize = marginNative * BigInt(leverage);
+  const positionSize = rawPositionSize < 0n ? 0n : rawPositionSize;
   
   const exceedsMargin = marginNative > 0n && marginNative > capital;
 
@@ -195,18 +194,6 @@ export const TradeForm: FC<{ slabAddress: string }> = ({ slabAddress }) => {
     );
   }
 
-  // NOTE: LP validation disabled - matcher context check was too strict
-  // All current markets have LPs with default matcher context which is valid
-  // if (!hasValidLP) {
-  //   return (
-  //     <div className="relative rounded-none bg-[var(--bg)]/80 border border-[var(--border)]/50 p-4 text-center">
-  //       <p className="text-[var(--text-secondary)] text-xs">
-  //         No liquidity provider found for this market. Trading is not available until an LP initializes a vAMM.
-  //       </p>
-  //     </div>
-  //   );
-  // }
-
   if (lpUnderfunded) {
     return (
       <div className="relative rounded-none bg-[var(--bg)]/80 border border-[var(--border)]/50 p-4 text-center">
@@ -220,16 +207,91 @@ export const TradeForm: FC<{ slabAddress: string }> = ({ slabAddress }) => {
   }
 
   if (hasPosition) {
+    const isLong = existingPosition > 0n;
+    const closeDirection = isLong ? "short" : "long";
+    
+    const handleClosePosition = async () => {
+      if (mockMode) {
+        setTradePhase("submitting");
+        setTimeout(() => { setTradePhase("confirming"); }, 800);
+        setTimeout(() => setTradePhase("idle"), 2000);
+        return;
+      }
+      
+      if (!connected) {
+        setHumanError("Wallet disconnected. Please reconnect your wallet.");
+        return;
+      }
+      
+      setHumanError(null);
+      setTradePhase("submitting");
+      try {
+        // Close position by trading in opposite direction with same size
+        const closeSize = isLong ? -existingPosition : -existingPosition; // Flip sign
+        const sig = await withTransientRetry(
+          async () => trade({ lpIdx, userIdx: userAccount!.idx, size: closeSize }),
+          { maxRetries: 2, delayMs: 3000 },
+        );
+        setTradePhase("confirming");
+        setLastSig(sig ?? null);
+        setTimeout(() => setTradePhase("idle"), 2000);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        console.error("[TradeForm] close position error:", msg);
+        setHumanError(humanizeError(msg));
+        setTradePhase("idle");
+      }
+    };
+    
     return (
       <div className="relative rounded-none bg-[var(--bg)]/80 border border-[var(--border)]/50 p-4">
         <div className="rounded-none border border-[var(--warning)]/30 bg-[var(--warning)]/5 p-3 text-xs text-[var(--warning)]">
           <p className="font-medium text-[10px] uppercase tracking-[0.15em]">Position open</p>
-          <p className="mt-1 text-[10px] text-[var(--warning)]/60">
-            You have an open {existingPosition > 0n ? "LONG" : "SHORT"} of{" "}
+          <p className="mt-2 text-[10px] text-[var(--warning)]/70">
+            You have an open {isLong ? "LONG" : "SHORT"} of{" "}
             <span style={{ fontFamily: "var(--font-mono)" }}>{formatPerc(abs(existingPosition), decimals)}</span> {symbol}.
-            Close your position before opening a new one.
           </p>
         </div>
+        
+        <button
+          onClick={handleClosePosition}
+          disabled={tradePhase !== "idle" || loading || header?.paused}
+          className="mt-3 w-full rounded-none border border-[var(--accent)]/50 bg-[var(--accent)]/10 py-2.5 text-[11px] font-medium uppercase tracking-[0.1em] text-[var(--accent)] transition-all duration-150 hover:bg-[var(--accent)]/20 hover:border-[var(--accent)] active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100"
+        >
+          {tradePhase === "submitting" ? (
+            <span className="inline-flex items-center gap-2">
+              <svg className="h-3.5 w-3.5 animate-spin" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+              Closing…
+            </span>
+          ) : tradePhase === "confirming" ? (
+            <span className="inline-flex items-center gap-2">
+              <svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"/></svg>
+              Confirmed!
+            </span>
+          ) : (
+            "Close Position"
+          )}
+        </button>
+        
+        {humanError && (
+          <div className="mt-2 rounded-none border border-[var(--short)]/20 bg-[var(--short)]/5 px-3 py-2">
+            <p className="text-[10px] text-[var(--short)]">{humanError}</p>
+          </div>
+        )}
+        
+        {lastSig && (
+          <p className="mt-2 text-[10px] text-[var(--text-dim)]" style={{ fontFamily: "var(--font-mono)" }}>
+            Tx:{" "}
+            <a
+              href={`${explorerTxUrl(lastSig)}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-[var(--accent)] hover:underline"
+            >
+              {lastSig.slice(0, 16)}...
+            </a>
+          </p>
+        )}
       </div>
     );
   }
@@ -271,6 +333,34 @@ export const TradeForm: FC<{ slabAddress: string }> = ({ slabAddress }) => {
 
   return (
     <div className="relative rounded-none bg-[var(--bg)]/80 border border-[var(--border)]/50 p-3">
+
+      {/* Coin-margined warning badge */}
+      <div className="mb-3 rounded-none border border-[var(--warning)]/20 bg-[var(--warning)]/5 p-2.5">
+        <div className="flex items-start gap-2">
+          <span className="text-[var(--warning)] text-sm">⚠️</span>
+          <div className="flex-1">
+            <p className="text-[9px] font-bold uppercase tracking-[0.15em] text-[var(--warning)]">
+              Coin-Margined Market
+            </p>
+            <p className="mt-1 text-[9px] leading-relaxed text-[var(--text-secondary)]">
+              This market is margined in <strong>{symbol}</strong>, not USD. Your position value and liquidation risk are affected by {symbol} price movements in <em>both directions</em>:
+            </p>
+            <ul className="mt-1.5 space-y-0.5 text-[9px] text-[var(--text-secondary)]">
+              <li className="flex gap-1.5">
+                <span className="text-[var(--long)]">•</span>
+                <span><strong>Long:</strong> If {symbol} goes up, you profit twice (position + collateral value).</span>
+              </li>
+              <li className="flex gap-1.5">
+                <span className="text-[var(--short)]">•</span>
+                <span><strong>Short:</strong> If {symbol} goes down, you profit on position but lose collateral value.</span>
+              </li>
+            </ul>
+            <p className="mt-1.5 text-[9px] text-[var(--warning)]">
+              Effective USD leverage: <strong className="font-mono">{leverage > 0 ? `~${leverage * 2}x` : "—"}</strong> (nominal {leverage}x × 2 for coin exposure)
+            </p>
+          </div>
+        </div>
+      </div>
 
       {/* Market paused banner */}
       {header?.paused && (
@@ -331,9 +421,6 @@ export const TradeForm: FC<{ slabAddress: string }> = ({ slabAddress }) => {
             type="text"
             value={marginInput}
             onChange={(e) => setMarginInput(e.target.value.replace(/[^0-9.]/g, ""))}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") handleTrade();
-            }}
             placeholder="0.00"
             style={{ fontFamily: "var(--font-mono)" }}
             className={`w-full rounded-none border px-3 py-2 pr-14 text-sm text-[var(--text)] placeholder-[var(--text-muted)] focus:outline-none focus:ring-1 ${
@@ -423,7 +510,10 @@ export const TradeForm: FC<{ slabAddress: string }> = ({ slabAddress }) => {
 
       {/* Submit */}
       <button
-        onClick={handleTrade}
+        onClick={() => {
+          if (!marginInput || !userAccount || positionSize <= 0n || exceedsMargin || riskGateActive || header?.paused || tradePhase !== "idle" || loading) return;
+          setShowConfirmModal(true);
+        }}
         disabled={tradePhase !== "idle" || loading || !marginInput || positionSize <= 0n || exceedsMargin || riskGateActive || header?.paused}
         className={`w-full rounded-none py-2.5 text-[11px] font-medium uppercase tracking-[0.1em] text-white transition-all duration-150 hover:scale-[1.01] active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100 focus-visible:ring-1 focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--bg)] ${
           direction === "long"
@@ -445,9 +535,6 @@ export const TradeForm: FC<{ slabAddress: string }> = ({ slabAddress }) => {
           `${direction === "long" ? "Long" : "Short"} ${leverage}x`
         )}
       </button>
-      <p className="mt-1 text-center text-[9px] uppercase tracking-[0.15em] text-[var(--text-dim)]">
-        Press Enter to submit
-      </p>
 
       {humanError && (
         <div ref={errorRef} className="mt-2 rounded-none border border-[var(--short)]/20 bg-[var(--short)]/5 px-3 py-2">
@@ -467,6 +554,32 @@ export const TradeForm: FC<{ slabAddress: string }> = ({ slabAddress }) => {
             {lastSig.slice(0, 16)}...
           </a>
         </p>
+      )}
+
+      {/* Trade confirmation modal */}
+      {showConfirmModal && marginNative > 0n && positionSize > 0n && (
+        <TradeConfirmationModal
+          direction={direction}
+          positionSize={positionSize}
+          margin={marginNative}
+          leverage={leverage}
+          estimatedLiqPrice={computePreTradeLiqPrice(
+            priceUsd ? BigInt(Math.round(priceUsd * 1e6)) : 0n,
+            marginNative,
+            positionSize,
+            maintenanceMarginBps,
+            tradingFeeBps,
+            direction,
+          )}
+          tradingFee={(positionSize * tradingFeeBps) / 10000n}
+          symbol={symbol}
+          decimals={decimals}
+          onConfirm={() => {
+            setShowConfirmModal(false);
+            handleTrade();
+          }}
+          onCancel={() => setShowConfirmModal(false)}
+        />
       )}
     </div>
   );

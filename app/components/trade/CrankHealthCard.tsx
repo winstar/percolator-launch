@@ -32,8 +32,8 @@ export const CrankHealthCard: FC = () => {
     );
   }
 
-  const lastCrank = Number(engine.lastCrankSlot);
-  const maxStaleness = Number(engine.maxCrankStalenessSlots);
+  const lastCrank = Number(engine.lastCrankSlot ?? 0n);
+  const maxStaleness = Number(engine.maxCrankStalenessSlots ?? 0n);
   const slotsBehind = currentSlot ? currentSlot - lastCrank : 0;
   const secondsBehind = (slotsBehind * 0.4).toFixed(1);
   const stalenessRatio = maxStaleness > 0 ? slotsBehind / maxStaleness : 0;
@@ -96,7 +96,7 @@ export const CrankHealthCard: FC = () => {
             Lifetime Liquidations
           </span>
           <span className="text-sm font-bold text-[var(--text)] font-mono">
-            {Number(engine.lifetimeLiquidations).toLocaleString()}
+            {Number(engine.lifetimeLiquidations ?? 0n).toLocaleString()}
           </span>
         </div>
         <div className="flex flex-col">
@@ -104,7 +104,7 @@ export const CrankHealthCard: FC = () => {
             Force Closes
           </span>
           <span className="text-sm font-bold text-[var(--text)] font-mono">
-            {Number(engine.lifetimeForceCloses).toLocaleString()}
+            {Number(engine.lifetimeForceCloses ?? 0n).toLocaleString()}
           </span>
         </div>
       </div>

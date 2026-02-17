@@ -21,7 +21,8 @@ export interface PriceRouterState {
   error: string | null;
 }
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "https://percolator-api-production.up.railway.app";
+// Use Next.js proxy to avoid CORS — /api/oracle/* is rewritten to the backend
+const API_BASE = "";
 
 /**
  * Auto-discover the best oracle source for a given token mint.

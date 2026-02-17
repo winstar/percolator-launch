@@ -1,4 +1,5 @@
-export function formatTokenAmount(raw: bigint, decimals: number = 6): string {
+export function formatTokenAmount(raw: bigint | null | undefined, decimals: number = 6): string {
+  if (raw == null) return "0";
   const negative = raw < 0n;
   const abs = negative ? -raw : raw;
   const divisor = 10n ** BigInt(decimals);
@@ -18,7 +19,8 @@ export function formatBps(bps: bigint | number): string {
   return `${(n / 100).toFixed(2)}%`;
 }
 
-export function formatUsd(priceE6: bigint): string {
+export function formatUsd(priceE6: bigint | null | undefined): string {
+  if (priceE6 == null) return "$0.00";
   const val = Number(priceE6) / 1_000_000;
   return `$${val.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 6 })}`;
 }
@@ -27,7 +29,8 @@ export function shortenAddress(address: string, chars: number = 4): string {
   return `${address.slice(0, chars)}...${address.slice(-chars)}`;
 }
 
-export function formatSlotAge(currentSlot: bigint, targetSlot: bigint): string {
+export function formatSlotAge(currentSlot: bigint | null | undefined, targetSlot: bigint | null | undefined): string {
+  if (currentSlot == null || targetSlot == null) return "—";
   const diff = currentSlot - targetSlot;
   if (diff <= 0n) return "0s";
   const seconds = Number(diff) / 2.5;
@@ -46,7 +49,8 @@ export function formatI128Amount(raw: bigint, decimals: number = 6): string {
 }
 
 /** Format PnL with full precision and +/- prefix */
-export function formatPnl(raw: bigint, decimals: number = 6): string {
+export function formatPnl(raw: bigint | null | undefined, decimals: number = 6): string {
+  if (raw == null) return "0";
   const negative = raw < 0n;
   const abs = negative ? -raw : raw;
   const divisor = 10n ** BigInt(decimals);
@@ -73,7 +77,7 @@ export function formatPercent(value: number, decimals: number = 2): string {
 /** Format funding rate from per-slot bps to annualized % string. */
 export function formatFundingRate(bpsPerSlot: bigint): string {
   const slotsPerYear = 2.5 * 60 * 60 * 24 * 365;
-  const annualized = (Number(bpsPerSlot) * slotsPerYear) / 100;
+  const annualized = (Number(bpsPerSlot) * slotsPerYear) / 100; // bps/slot × slots/yr / 100 = %/yr
   const sign = annualized > 0 ? "+" : "";
   return `${sign}${annualized.toFixed(2)}%`;
 }

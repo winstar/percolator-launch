@@ -17,7 +17,9 @@
     "isolatedModules": true,
     "jsx": "react-jsx",
     "incremental": true,
-    "types": ["vitest/globals"],
+    "types": [
+      "vitest/globals"
+    ],
     "plugins": [
       {
         "name": "next"
@@ -34,7 +36,8 @@
     "**/*.ts",
     "**/*.tsx",
     ".next/types/**/*.ts",
-    ".next/dev/types/**/*.ts"
+    ".next/dev/types/**/*.ts",
+    ".next/dev/dev/types/**/*.ts"
   ],
   "exclude": [
     "node_modules",

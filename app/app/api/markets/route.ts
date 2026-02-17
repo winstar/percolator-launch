@@ -4,26 +4,42 @@ import { Connection, PublicKey } from "@solana/web3.js";
 import { parseHeader } from "@percolator/core";
 import { getServiceClient } from "@/lib/supabase";
 import { getConfig } from "@/lib/config";
+import * as Sentry from "@sentry/nextjs";
+
 export const dynamic = "force-dynamic";
 
 // GET /api/markets — list all active markets with stats
 export async function GET() {
-  const supabase = getServiceClient();
-  const { data, error } = await supabase
-    .from("markets_with_stats")
-    .select("*");
+  try {
+    const supabase = getServiceClient();
+    const { data, error } = await supabase
+      .from("markets_with_stats")
+      .select("*");
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    if (error) {
+      Sentry.captureException(error, {
+        tags: { endpoint: "/api/markets", method: "GET" },
+      });
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    return NextResponse.json({ markets: data });
+  } catch (error) {
+    Sentry.captureException(error, {
+      tags: { endpoint: "/api/markets", method: "GET" },
+    });
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 }
+    );
   }
-
-  return NextResponse.json({ markets: data });
 }
 
 // POST /api/markets — register a new market after deployment
 export async function POST(req: NextRequest) {
-  if (!requireAuth(req)) return UNAUTHORIZED;
-  const body = await req.json();
+  try {
+    if (!requireAuth(req)) return UNAUTHORIZED;
+    const body = await req.json();
 
   const {
     slab_address,
@@ -114,5 +130,14 @@ export async function POST(req: NextRequest) {
     last_price: initial_price_e6 ? initial_price_e6 / 1_000_000 : null,
   });
 
-  return NextResponse.json({ market }, { status: 201 });
+    return NextResponse.json({ market }, { status: 201 });
+  } catch (error) {
+    Sentry.captureException(error, {
+      tags: { endpoint: "/api/markets", method: "POST" },
+    });
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 }
+    );
+  }
 }

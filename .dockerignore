@@ -1,0 +1,74 @@
+# Dependencies
+node_modules
+npm-debug.log
+pnpm-debug.log
+yarn-error.log
+
+# Build outputs (will be built inside Docker)
+dist
+build
+.next
+out
+
+# Git
+.git
+.gitignore
+.github
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Documentation
+*.md
+!README.md
+docs
+
+# Frontend (not needed in backend images)
+app
+
+# Rust/Anchor (not needed in Node images)
+percolator
+program
+target
+Anchor.toml
+Cargo.lock
+Cargo.toml
+
+# Testing
+coverage
+.nyc_output
+e2e
+mocks
+tests
+*.test.ts
+*.spec.ts
+playwright.config.ts
+
+# Misc
+.keys
+services
+supabase
+scripts
+render-*.cjs
+render-*.mjs
+*.pdf
+*.html
+test-*.sh
+test-*.sql
+.vercel
+railway.json
+SIMULATION_STRUCTURE.txt
+SECURITY.md

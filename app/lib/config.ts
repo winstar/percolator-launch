@@ -1,8 +1,6 @@
 /**
- * ⚠️  SECURITY WARNING — NEXT_PUBLIC_HELIUS_API_KEY
- * The Helius RPC API key is exposed in the client bundle via the NEXT_PUBLIC_ prefix.
- * This is acceptable for devnet but MUST be replaced with a server-side RPC proxy
- * (e.g. /api/rpc) before mainnet launch. See SECURITY.md for details.
+ * RPC Configuration — uses server-side proxy by default, falls back to direct Helius for SSR.
+ * Client-side code should use /api/rpc proxy to avoid exposing API keys.
  */
 export type Network = "mainnet" | "devnet";
 
@@ -17,16 +15,30 @@ function getNetwork(): Network {
   return "devnet";
 }
 
+/** Get RPC URL — uses /api/rpc proxy on client, direct Helius on server */
+function getRpcUrl(network: Network): string {
+  // Client-side: use RPC proxy (API key stays server-side)
+  if (typeof window !== "undefined") {
+    return "/api/rpc";
+  }
+  
+  // Server-side: use direct Helius URL (for SSR/SSG)
+  const apiKey = process.env.HELIUS_API_KEY ?? process.env.NEXT_PUBLIC_HELIUS_API_KEY ?? "";
+  return network === "mainnet"
+    ? `https://mainnet.helius-rpc.com/?api-key=${apiKey}`
+    : `https://devnet.helius-rpc.com/?api-key=${apiKey}`;
+}
+
 const CONFIGS = {
   mainnet: {
-    rpcUrl: `https://mainnet.helius-rpc.com/?api-key=${process.env.NEXT_PUBLIC_HELIUS_API_KEY ?? ""}`,
+    get rpcUrl() { return getRpcUrl("mainnet"); },
     programId: "GM8zjJ8LTBMv9xEsverh6H6wLyevgMHEJXcEzyY3rY24",
     matcherProgramId: "DHP6DtwXP1yJsz8YzfoeigRFPB979gzmumkmCxDLSkUX",
     crankWallet: "",  // TODO: set mainnet crank wallet
     explorerUrl: "https://solscan.io",
   },
   devnet: {
-    rpcUrl: `https://devnet.helius-rpc.com/?api-key=${process.env.NEXT_PUBLIC_HELIUS_API_KEY ?? ""}`,
+    get rpcUrl() { return getRpcUrl("devnet"); },
     programId: "FxfD37s1AZTeWfFQps9Zpebi2dNQ9QSSDtfMKdbsfKrD",
     matcherProgramId: "4HcGCsyjAqnFua5ccuXyt8KRRQzKFbGTJkVChpS7Yfzy",
     crankWallet: "2JaSzRYrf44fPpQBtRJfnCEgThwCmvpFd3FCXi45VXxm",
@@ -63,9 +75,12 @@ export function setNetwork(network: Network) {
 // Removed eager eval: `export const config = getConfig()` broke SSG/SSR
 // when localStorage or env vars weren't available at module load time.
 
-/** Backend API URL — reads NEXT_PUBLIC_BACKEND_URL with Railway production as fallback */
+/** Backend API URL — reads NEXT_PUBLIC_API_URL with Railway production as fallback.
+ * This is the single source of truth for the backend URL across the entire frontend.
+ * Previously: NEXT_PUBLIC_BACKEND_URL, NEXT_PUBLIC_API_URL were used inconsistently.
+ */
 export function getBackendUrl(): string {
-  return process.env.NEXT_PUBLIC_BACKEND_URL ?? "https://percolator-api-production.up.railway.app";
+  return process.env.NEXT_PUBLIC_API_URL ?? process.env.NEXT_PUBLIC_BACKEND_URL ?? "https://percolator-api-production.up.railway.app";
 }
 
 /** Build an explorer URL for a transaction */

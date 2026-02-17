@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useMemo, useRef, Suspense } from "react";
+import type { Metadata } from "next";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useMarketDiscovery } from "@/hooks/useMarketDiscovery";
@@ -19,6 +20,7 @@ import { GlowButton } from "@/components/ui/GlowButton";
 import { useMultiTokenMeta } from "@/hooks/useMultiTokenMeta";
 import { useAllMarketStats } from "@/hooks/useAllMarketStats";
 import { MarketLogo } from "@/components/market/MarketLogo";
+import { ErrorBoundary } from "@/components/ui/ErrorBoundary";
 
 function formatNum(n: number | null | undefined): string {
   if (n === null || n === undefined) return "\u2014";
@@ -75,8 +77,17 @@ const MOCK_MARKETS: MergedMarket[] = [
   mockMarket("2qVfA7g3bKfc7WJBb6RvTa5rJFmB8itu4C88Rdg1xN8z", "HZ1JovNiVvGrGNiiYvEozEVgZ58xaU3RKwX8eACQBCt3", "PYTH", "Pyth Network", 10, true, 0.312, 95_000, 5_000_000_000n, 12_000_000_000n, 1_200_000_000n),
 ];
 
+// Note: This is a client component, so we set metadata via document.title
+// For static metadata export, we'd need a separate server component wrapper
+
 function MarketsPageInner() {
-  useEffect(() => { document.title = "Markets — Percolator"; }, []);
+  useEffect(() => { 
+    document.title = "Markets — Percolator"; 
+    const metaDesc = document.querySelector('meta[name="description"]');
+    if (metaDesc) {
+      metaDesc.setAttribute("content", "Browse and trade perpetual futures markets on Solana. Fully on-chain, permissionless.");
+    }
+  }, []);
   const router = useRouter();
   const searchParams = useSearchParams();
   const { markets: discovered, loading: discoveryLoading } = useMarketDiscovery();
@@ -260,7 +271,7 @@ function MarketsPageInner() {
               </h1>
               <p className="mt-2 text-[13px] text-[var(--text-secondary)]">perpetual futures, pick your poison.</p>
             </div>
-            <Link href="/create">
+            <Link href="/create" aria-label="Launch a new market">
               <GlowButton size="sm">+ launch market</GlowButton>
             </Link>
           </div>
@@ -278,13 +289,15 @@ function MarketsPageInner() {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="search token, address, or mint..."
-                className="w-full rounded-sm border border-[var(--border)] bg-[var(--bg-elevated)] py-2.5 pl-10 pr-4 text-sm text-[var(--text)] placeholder-[var(--text-dim)] focus:border-[var(--accent)]/40 focus:outline-none"
+                className="w-full rounded-sm border border-[var(--border)] bg-[var(--bg-elevated)] py-2.5 pl-10 pr-4 text-sm text-[var(--text)] placeholder-[var(--text-dim)] focus:border-[var(--accent)]/40 focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/20"
+                aria-label="Search markets"
               />
               {hasSearch && (
                 <button
                   onClick={clearSearch}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-dim)] hover:text-[var(--text-secondary)]"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-dim)] hover:text-[var(--text-secondary)] p-1 min-h-[44px] min-w-[44px] flex items-center justify-center"
                   title="Clear search"
+                  aria-label="Clear search"
                 >
                   <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -292,7 +305,7 @@ function MarketsPageInner() {
                 </button>
               )}
             </div>
-            <div className="relative flex gap-1 rounded-sm border border-[var(--border)] bg-[var(--bg-elevated)] p-1">
+            <div className="relative flex gap-1 rounded-sm border border-[var(--border)] bg-[var(--bg-elevated)] p-1" role="group" aria-label="Sort markets">
               {([
                 { key: "volume" as SortKey, label: "volume" },
                 { key: "oi" as SortKey, label: "OI" },
@@ -303,11 +316,13 @@ function MarketsPageInner() {
                   key={opt.key}
                   onClick={() => setSortBy(opt.key)}
                   className={[
-                    "rounded-sm px-3 py-1.5 text-[11px] font-medium transition-all duration-200",
+                    "rounded-sm px-3 py-2 sm:py-1.5 text-[11px] font-medium transition-all duration-200 min-h-[40px]",
                     sortBy === opt.key
                       ? "bg-[var(--accent)]/10 text-[var(--accent)]"
                       : "text-[var(--text-dim)] hover:text-[var(--text-secondary)]",
                   ].join(" ")}
+                  aria-pressed={sortBy === opt.key}
+                  aria-label={`Sort by ${opt.label}`}
                 >
                   {opt.label}
                 </button>
@@ -320,33 +335,37 @@ function MarketsPageInner() {
             <span className="text-[10px] font-medium uppercase tracking-[0.15em] text-[var(--text-dim)]">filter:</span>
 
             {/* USD/Token toggle */}
-            <div className="flex gap-1 rounded-sm border border-[var(--border)] bg-[var(--bg-elevated)] p-0.5">
+            <div className="flex gap-1 rounded-sm border border-[var(--border)] bg-[var(--bg-elevated)] p-0.5" role="group" aria-label="Display currency">
               <button
                 onClick={() => setShowUsd(false)}
                 className={[
-                  "rounded-sm px-2.5 py-1 text-[10px] font-medium transition-all duration-200",
+                  "rounded-sm px-2.5 py-1.5 sm:py-1 text-[10px] font-medium transition-all duration-200 min-h-[40px]",
                   !showUsd
                     ? "bg-[var(--accent)]/10 text-[var(--accent)]"
                     : "text-[var(--text-dim)] hover:text-[var(--text-secondary)]",
                 ].join(" ")}
+                aria-pressed={!showUsd}
+                aria-label="Display in tokens"
               >
                 tokens
               </button>
               <button
                 onClick={() => setShowUsd(true)}
                 className={[
-                  "rounded-sm px-2.5 py-1 text-[10px] font-medium transition-all duration-200",
+                  "rounded-sm px-2.5 py-1.5 sm:py-1 text-[10px] font-medium transition-all duration-200 min-h-[40px]",
                   showUsd
                     ? "bg-[var(--accent)]/10 text-[var(--accent)]"
                     : "text-[var(--text-dim)] hover:text-[var(--text-secondary)]",
                 ].join(" ")}
+                aria-pressed={showUsd}
+                aria-label="Display in USD"
               >
                 usd
               </button>
             </div>
 
             {/* Leverage filter */}
-            <div className="flex gap-1 rounded-sm border border-[var(--border)] bg-[var(--bg-elevated)] p-0.5">
+            <div className="flex gap-1 rounded-sm border border-[var(--border)] bg-[var(--bg-elevated)] p-0.5" role="group" aria-label="Filter by leverage">
               {([
                 { key: "all" as LeverageFilter, label: "all" },
                 { key: "5x" as LeverageFilter, label: "5x+" },
@@ -357,11 +376,13 @@ function MarketsPageInner() {
                   key={opt.key}
                   onClick={() => setLeverageFilter(opt.key)}
                   className={[
-                    "rounded-sm px-2.5 py-1 text-[10px] font-medium transition-all duration-200",
+                    "rounded-sm px-2.5 py-1.5 sm:py-1 text-[10px] font-medium transition-all duration-200 min-h-[40px]",
                     leverageFilter === opt.key
                       ? "bg-[var(--accent)]/10 text-[var(--accent)]"
                       : "text-[var(--text-dim)] hover:text-[var(--text-secondary)]",
                   ].join(" ")}
+                  aria-pressed={leverageFilter === opt.key}
+                  aria-label={`Filter leverage ${opt.label}`}
                 >
                   {opt.label}
                 </button>
@@ -369,7 +390,7 @@ function MarketsPageInner() {
             </div>
 
             {/* Oracle filter */}
-            <div className="flex gap-1 rounded-sm border border-[var(--border)] bg-[var(--bg-elevated)] p-0.5">
+            <div className="flex gap-1 rounded-sm border border-[var(--border)] bg-[var(--bg-elevated)] p-0.5" role="group" aria-label="Filter by oracle type">
               {([
                 { key: "all" as OracleFilter, label: "all oracles" },
                 { key: "live" as OracleFilter, label: "live feed" },
@@ -379,11 +400,13 @@ function MarketsPageInner() {
                   key={opt.key}
                   onClick={() => setOracleFilter(opt.key)}
                   className={[
-                    "rounded-sm px-2.5 py-1 text-[10px] font-medium transition-all duration-200",
+                    "rounded-sm px-2.5 py-1.5 sm:py-1 text-[10px] font-medium transition-all duration-200 min-h-[40px]",
                     oracleFilter === opt.key
                       ? "bg-[var(--accent)]/10 text-[var(--accent)]"
                       : "text-[var(--text-dim)] hover:text-[var(--text-secondary)]",
                   ].join(" ")}
+                  aria-pressed={oracleFilter === opt.key}
+                  aria-label={`Filter oracle ${opt.label}`}
                 >
                   {opt.label}
                 </button>
@@ -408,14 +431,15 @@ function MarketsPageInner() {
         </ScrollReveal>
 
         {/* Table */}
-        <ScrollReveal delay={0.2}>
-          {loading ? (
-            <div className="space-y-2">
-              {[1, 2, 3, 4, 5].map((i) => (
-                <ShimmerSkeleton key={i} className="h-[52px]" />
-              ))}
-            </div>
-          ) : filtered.length === 0 ? (
+        <ErrorBoundary label="Markets Table">
+          <ScrollReveal delay={0.2}>
+            {loading ? (
+              <div className="space-y-2">
+                {[1, 2, 3, 4, 5].map((i) => (
+                  <ShimmerSkeleton key={i} className="h-[52px]" />
+                ))}
+              </div>
+            ) : filtered.length === 0 ? (
             <div className="rounded-sm border border-[var(--border)] bg-[var(--panel-bg)] p-16 text-center">
               {hasSearch || hasActiveFilters ? (
                 <>
@@ -519,7 +543,8 @@ function MarketsPageInner() {
               )}
             </>
           )}
-        </ScrollReveal>
+          </ScrollReveal>
+        </ErrorBoundary>
       </div>
     </div>
   );

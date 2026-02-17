@@ -1,0 +1,35 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: packages/api/Dockerfile
+    ports:
+      - "4000:4000"
+    env_file: .env
+    restart: unless-stopped
+    depends_on:
+      - indexer
+    networks:
+      - percolator
+
+  indexer:
+    build:
+      context: .
+      dockerfile: packages/indexer/Dockerfile
+    env_file: .env
+    restart: unless-stopped
+    networks:
+      - percolator
+
+  keeper:
+    build:
+      context: .
+      dockerfile: packages/keeper/Dockerfile
+    env_file: .env
+    restart: unless-stopped
+    networks:
+      - percolator
+
+networks:
+  percolator:
+    driver: bridge
