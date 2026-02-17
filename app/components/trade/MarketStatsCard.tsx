@@ -38,12 +38,14 @@ export const MarketStatsCard: FC = () => {
     );
   }
 
+  const totalOI = engine.totalOpenInterest ?? 0n;
+  const vault = engine.vault ?? 0n;
   const oiDisplay = showUsd && priceUsd != null
-    ? formatNum((Number(engine.totalOpenInterest) / 1e6) * priceUsd)
-    : formatTokenAmount(engine.totalOpenInterest);
+    ? formatNum((Number(totalOI) / 1e6) * priceUsd)
+    : formatTokenAmount(totalOI);
   const vaultDisplay = showUsd && priceUsd != null
-    ? formatNum((Number(engine.vault) / 1e6) * priceUsd)
-    : formatTokenAmount(engine.vault);
+    ? formatNum((Number(vault) / 1e6) * priceUsd)
+    : formatTokenAmount(vault);
 
   const stats = [
     { label: `${symbol} Price`, value: formatUsd(livePriceE6 ?? config.lastEffectivePriceE6) },
@@ -51,7 +53,7 @@ export const MarketStatsCard: FC = () => {
     { label: "Vault", value: vaultDisplay },
     { label: "Trading Fee", value: formatBps(params.tradingFeeBps) },
     { label: "Init. Margin", value: formatBps(params.initialMarginBps) },
-    { label: "Accounts", value: engine.numUsedAccounts.toString() },
+    { label: "Accounts", value: (engine.numUsedAccounts ?? 0).toString() },
   ];
 
   return (

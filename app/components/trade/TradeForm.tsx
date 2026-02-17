@@ -111,12 +111,9 @@ export const TradeForm: FC<{ slabAddress: string }> = ({ slabAddress }) => {
   const hasPosition = existingPosition !== 0n;
 
   const marginNative = marginInput ? parsePercToNative(marginInput, decimals) : 0n;
-  const positionSize = marginNative * BigInt(leverage);
-  
-  // C3: Defensive check for BigInt overflow
-  if (positionSize < 0n) {
-    throw new Error("Position size overflow detected");
-  }
+  // Defensive clamp: positionSize should never be negative, but guard anyway
+  const rawPositionSize = marginNative * BigInt(leverage);
+  const positionSize = rawPositionSize < 0n ? 0n : rawPositionSize;
   
   const exceedsMargin = marginNative > 0n && marginNative > capital;
 

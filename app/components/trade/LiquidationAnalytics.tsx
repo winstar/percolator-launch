@@ -23,12 +23,12 @@ export const LiquidationAnalytics: FC = () => {
     );
   }
 
-  const lifetimeLiquidations = Number(engine.lifetimeLiquidations);
-  const lifetimeForceCloses = Number(engine.lifetimeForceCloses);
+  const lifetimeLiquidations = Number(engine.lifetimeLiquidations ?? 0n);
+  const lifetimeForceCloses = Number(engine.lifetimeForceCloses ?? 0n);
   const insuranceBalance = Number(engine.insuranceFund?.balance ?? 0n);
-  const totalOI = Number(engine.totalOpenInterest);
-  const liqFeeBps = params ? Number(params.liquidationFeeBps) : 0;
-  const bufferBps = params ? Number(params.liquidationBufferBps) : 0;
+  const totalOI = Number(engine.totalOpenInterest ?? 0n);
+  const liqFeeBps = params ? Number(params.liquidationFeeBps ?? 0n) : 0;
+  const bufferBps = params ? Number(params.liquidationBufferBps ?? 0n) : 0;
 
   const coveragePercent = totalOI > 0 ? (insuranceBalance / totalOI) * 100 : Infinity;
 

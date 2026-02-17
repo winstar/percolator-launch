@@ -31,7 +31,7 @@ export const MarketBookCard: FC = () => {
   }
 
   const oraclePrice = livePriceE6 ?? config.lastEffectivePriceE6;
-  const feeBps = Number(params.tradingFeeBps);
+  const feeBps = Number(params.tradingFeeBps ?? 0n);
   const bestBid = oraclePrice > 0n ? Number(oraclePrice) * (1 - feeBps / 10000) : 0;
   const bestAsk = oraclePrice > 0n ? Number(oraclePrice) * (1 + feeBps / 10000) : 0;
   const lpTotalCapital = lps.reduce((sum, { account }) => sum + account.capital, 0n);

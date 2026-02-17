@@ -18,7 +18,6 @@ import {
 } from "@percolator/core";
 import { sendTx } from "@/lib/tx";
 import { useSlabState } from "@/components/providers/SlabProvider";
-import { getBackendUrl } from "@/lib/config";
 
 export function useTrade(slabAddress: string) {
   const { connection } = useConnection();

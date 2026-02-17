@@ -167,9 +167,10 @@ export const FundingRateCard: FC<{ slabAddress: string }> = ({ slabAddress }) =>
 
   if (!fundingData) return null;
 
-  const rateDisplay = fundingData.hourlyRatePercent >= 0 
-    ? `+${fundingData.hourlyRatePercent.toFixed(4)}%` 
-    : `${fundingData.hourlyRatePercent.toFixed(4)}%`;
+  const hourlyRatePercent = fundingData.hourlyRatePercent ?? 0;
+  const rateDisplay = hourlyRatePercent >= 0 
+    ? `+${hourlyRatePercent.toFixed(4)}%` 
+    : `${hourlyRatePercent.toFixed(4)}%`;
 
   const directionText = 
     fundingData.direction === "long_pays_short" ? "Longs pay shorts" :
@@ -200,7 +201,7 @@ export const FundingRateCard: FC<{ slabAddress: string }> = ({ slabAddress }) =>
           <div>
             <div
               className={`text-2xl font-bold ${
-                fundingData.hourlyRatePercent >= 0 ? "text-[var(--short)]" : "text-[var(--long)]"
+                hourlyRatePercent >= 0 ? "text-[var(--short)]" : "text-[var(--long)]"
               }`}
               style={{ fontFamily: "var(--font-mono)" }}
             >
@@ -210,8 +211,8 @@ export const FundingRateCard: FC<{ slabAddress: string }> = ({ slabAddress }) =>
           </div>
           <div className="text-right">
             <div className="text-xs text-[var(--text-secondary)]" style={{ fontFamily: "var(--font-mono)" }}>
-              {fundingData.aprPercent >= 0 ? "+" : ""}
-              {fundingData.aprPercent.toFixed(2)}% APR
+              {(fundingData.aprPercent ?? 0) >= 0 ? "+" : ""}
+              {(fundingData.aprPercent ?? 0).toFixed(2)}% APR
             </div>
           </div>
         </div>

@@ -3,7 +3,6 @@
 import { useCallback, useRef, useState } from "react";
 import { PublicKey } from "@solana/web3.js";
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
-import { getBackendUrl } from "@/lib/config";
 import {
   encodeWithdrawCollateral,
   encodeKeeperCrank,

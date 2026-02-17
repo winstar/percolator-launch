@@ -101,9 +101,9 @@ export const InsuranceDashboard: FC<{ slabAddress: string }> = ({
 
   // Calculate health status
   const healthStatus = useMemo(() => {
-    if (!insuranceData) return { color: "text-[var(--text-muted)]", dotColor: "bg-[var(--text-muted)]", label: "Unknown" };
+    if (!insuranceData) return { color: "text-[var(--text-muted)]", dotColor: "bg-[var(--text-muted)]", label: "Unknown", borderColor: "border-[var(--border)]", bgColor: "bg-transparent" };
 
-    const ratio = insuranceData.coverageRatio;
+    const ratio = insuranceData.coverageRatio ?? 0;
 
     if (ratio >= 5) {
       return {
@@ -224,7 +224,7 @@ export const InsuranceDashboard: FC<{ slabAddress: string }> = ({
                 <div className="text-[11px] font-medium text-[var(--text)]">
                   Health: <span className={healthStatus.color}>{healthStatus.label}</span>
                 </div>
-                {insuranceData.coverageRatio != null && (
+                {insuranceData.coverageRatio != null && typeof insuranceData.coverageRatio === "number" && (
                   <div className="text-[10px] text-[var(--text-dim)]">
                     Coverage Ratio: {insuranceData.coverageRatio.toFixed(1)}x total risk
                   </div>

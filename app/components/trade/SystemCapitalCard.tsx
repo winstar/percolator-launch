@@ -23,15 +23,15 @@ export const SystemCapitalCard: FC = () => {
     );
   }
 
-  const vault = Number(engine.vault);
-  const cTot = Number(engine.cTot);
-  const pnlPosTot = Number(engine.pnlPosTot);
+  const vault = Number(engine.vault ?? 0n);
+  const cTot = Number(engine.cTot ?? 0n);
+  const pnlPosTot = Number(engine.pnlPosTot ?? 0n);
   const insurance = Number(engine.insuranceFund?.balance ?? 0n);
-  const totalOI = Number(engine.totalOpenInterest);
-  const netLp = Number(engine.netLpPos);
-  const lpSum = Number(engine.lpSumAbs);
-  const lpMax = Number(engine.lpMaxAbs);
-  const accounts = engine.numUsedAccounts;
+  const totalOI = Number(engine.totalOpenInterest ?? 0n);
+  const netLp = Number(engine.netLpPos ?? 0n);
+  const lpSum = Number(engine.lpSumAbs ?? 0n);
+  const lpMax = Number(engine.lpMaxAbs ?? 0n);
+  const accounts = engine.numUsedAccounts ?? 0;
 
   // LP concentration: how much of total LP exposure is one whale
   const lpConcentration = lpSum > 0 ? (lpMax / lpSum) * 100 : 0;

@@ -56,9 +56,9 @@ export const AccountsCard: FC = () => {
       }
       const computedPnl = account.positionSize !== 0n && oraclePrice > 0n
         ? computeMarkPnl(account.positionSize, account.entryPrice, oraclePrice)
-        : account.pnl;
+        : (account.pnl ?? 0n);
       const marginPct = liqHealthPct;
-      return { idx, kind: account.kind, owner: account.owner.toBase58(), direction, positionSize: account.positionSize, entryPrice: account.entryPrice, liqPrice, liqHealthPct, pnl: computedPnl, capital: account.capital, marginPct };
+      return { idx, kind: account.kind, owner: account.owner.toBase58(), direction, positionSize: account.positionSize ?? 0n, entryPrice: account.entryPrice ?? 0n, liqPrice, liqHealthPct, pnl: computedPnl, capital: account.capital ?? 0n, marginPct };
     });
   }, [accounts, maintBps, oraclePrice]);
 
