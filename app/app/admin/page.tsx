@@ -31,6 +31,37 @@ interface BugReport {
   updated_at: string;
 }
 
+interface MarketStat {
+  slab_address: string;
+  symbol: string | null;
+  total_open_interest: number | null;
+  open_interest_long: number | null;
+  open_interest_short: number | null;
+  volume_24h: number | null;
+  last_price: number | null;
+  price_change_24h: number | null;
+  trade_count_24h: number | null;
+}
+
+interface HealthCheck {
+  status: "ok" | "error";
+  latencyMs?: number;
+  error?: string;
+}
+
+interface PlatformHealth {
+  status: "healthy" | "degraded" | "unknown";
+  checks: Record<string, HealthCheck>;
+}
+
+interface PlatformStats {
+  totalMarkets: number;
+  totalVolume24h: number;
+  totalOpenInterest: number;
+  trades24h: number;
+  health: PlatformHealth;
+}
+
 type StatusFilter = "all" | "open" | "investigating" | "fixed" | "unpaid" | "paid" | "wont_fix" | "duplicate" | "invalid";
 type SeverityFilter = "all" | "critical" | "high" | "medium" | "low";
 
@@ -81,6 +112,12 @@ function truncateId(id: string) {
   return id.slice(0, 8);
 }
 
+function formatCompact(value: number): string {
+  if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(2)}M`;
+  if (value >= 1_000) return `$${(value / 1_000).toFixed(1)}K`;
+  return `$${value.toFixed(2)}`;
+}
+
 export default function AdminDashboard() {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
@@ -91,6 +128,8 @@ export default function AdminDashboard() {
   const [selectedBug, setSelectedBug] = useState<BugReport | null>(null);
   const [adminNotes, setAdminNotes] = useState("");
   const [saving, setSaving] = useState(false);
+  const [platformStats, setPlatformStats] = useState<PlatformStats | null>(null);
+  const [statsLoading, setStatsLoading] = useState(false);
 
   // Auth check + admin whitelist
   useEffect(() => {
@@ -124,9 +163,47 @@ export default function AdminDashboard() {
     if (data) setBugs(data as BugReport[]);
   }, []);
 
+  // Fetch platform stats from Supabase + health API
+  const fetchPlatformStats = useCallback(async () => {
+    setStatsLoading(true);
+    try {
+      const [marketsRes, healthRes] = await Promise.all([
+        getAuthClient()
+          .from("markets_with_stats")
+          .select("slab_address, total_open_interest, open_interest_long, open_interest_short, volume_24h, trade_count_24h"),
+        fetch("/api/health").then((r) => r.json()).catch(() => ({ status: "unknown", checks: {} })),
+      ]);
+
+      const markets = (marketsRes.data ?? []) as MarketStat[];
+      const totalMarkets = markets.length;
+      const totalVolume24h = markets.reduce((sum, m) => sum + (m.volume_24h ?? 0), 0);
+      const totalOpenInterest = markets.reduce(
+        (sum, m) => sum + ((m.open_interest_long ?? 0) + (m.open_interest_short ?? 0)),
+        0
+      );
+      const trades24h = markets.reduce((sum, m) => sum + (m.trade_count_24h ?? 0), 0);
+
+      setPlatformStats({
+        totalMarkets,
+        totalVolume24h,
+        totalOpenInterest,
+        trades24h,
+        health: {
+          status: healthRes.status ?? "unknown",
+          checks: healthRes.checks ?? {},
+        },
+      });
+    } finally {
+      setStatsLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
-    if (user) fetchBugs();
-  }, [user, fetchBugs]);
+    if (user) {
+      fetchBugs();
+      fetchPlatformStats();
+    }
+  }, [user, fetchBugs, fetchPlatformStats]);
 
   // Update bug status
   const updateStatus = async (bugId: string, newStatus: string) => {
@@ -168,14 +245,21 @@ export default function AdminDashboard() {
     return true;
   });
 
-  // Stats
-  const stats = {
+  // Bug stats
+  const bugStats = {
     total: bugs.length,
     open: bugs.filter((b) => b.status === "open").length,
     unpaid: bugs.filter((b) => b.status === "unpaid").length,
     paid: bugs.filter((b) => b.status === "paid").length,
     critical: bugs.filter((b) => b.severity === "critical" && b.status === "open").length,
   };
+
+  const healthColor =
+    platformStats?.health.status === "healthy"
+      ? "var(--long)"
+      : platformStats?.health.status === "degraded"
+      ? "var(--warning)"
+      : "var(--text-muted)";
 
   if (loading) {
     return (
@@ -193,10 +277,10 @@ export default function AdminDashboard() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <div className={`${labelStyle} mb-1`}>Admin Dashboard</div>
-          <h1 className="text-xl font-bold text-white">Bug Bounties</h1>
+          <h1 className="text-xl font-bold text-white">Percolator Admin</h1>
         </div>
         <div className="flex items-center gap-3">
-          <span className="text-[11px] text-[var(--text-muted)]">{user?.email}</span>
+          <span className="hidden sm:inline text-[11px] text-[var(--text-muted)]">{user?.email}</span>
           <button
             onClick={signOut}
             className="rounded-none border border-[var(--border)] px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.15em] text-[var(--text-secondary)] hover:text-white hover:border-[var(--border-hover)] transition-colors"
@@ -206,22 +290,75 @@ export default function AdminDashboard() {
         </div>
       </div>
 
-      {/* Stats Row */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
-        {[
-          { label: "Total", value: stats.total, color: "var(--text)" },
-          { label: "Open", value: stats.open, color: "var(--warning)" },
-          { label: "Critical Open", value: stats.critical, color: "var(--short)" },
-          { label: "Unpaid", value: stats.unpaid, color: "#FF6B35" },
-          { label: "Paid", value: stats.paid, color: "var(--long)" },
-        ].map((s) => (
-          <div key={s.label} className={`${card} p-4`}>
-            <div className={labelStyle}>{s.label}</div>
-            <div className="text-2xl font-bold mt-1" style={{ color: s.color }}>
-              {s.value}
+      {/* Platform Stats */}
+      <div className="mb-6">
+        <div className={`${labelStyle} mb-3`}>Platform Stats</div>
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+          <div className={`${card} p-4`}>
+            <div className={labelStyle}>Markets</div>
+            <div className="text-2xl font-bold mt-1 text-[var(--text)]">
+              {statsLoading ? "—" : (platformStats?.totalMarkets ?? "—")}
             </div>
           </div>
-        ))}
+          <div className={`${card} p-4`}>
+            <div className={labelStyle}>24h Volume</div>
+            <div className="text-2xl font-bold mt-1 text-[var(--accent)]">
+              {statsLoading ? "—" : platformStats ? formatCompact(platformStats.totalVolume24h) : "—"}
+            </div>
+          </div>
+          <div className={`${card} p-4`}>
+            <div className={labelStyle}>Open Interest</div>
+            <div className="text-2xl font-bold mt-1 text-[var(--cyan)]">
+              {statsLoading ? "—" : platformStats ? formatCompact(platformStats.totalOpenInterest) : "—"}
+            </div>
+          </div>
+          <div className={`${card} p-4`}>
+            <div className={labelStyle}>24h Trades</div>
+            <div className="text-2xl font-bold mt-1 text-[var(--text-secondary)]">
+              {statsLoading ? "—" : (platformStats?.trades24h ?? "—")}
+            </div>
+          </div>
+          <div className={`${card} p-4 col-span-2 md:col-span-1`}>
+            <div className={labelStyle}>System Health</div>
+            <div className="text-lg font-bold mt-1 capitalize" style={{ color: healthColor }}>
+              {statsLoading ? "—" : (platformStats?.health.status ?? "—")}
+            </div>
+            {!statsLoading && platformStats && (
+              <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
+                {Object.entries(platformStats.health.checks).map(([name, check]) => (
+                  <span key={name} className="text-[10px] text-[var(--text-muted)]">
+                    <span
+                      className="inline-block w-[5px] h-[5px] rounded-full mr-1 mb-[1px]"
+                      style={{ backgroundColor: check.status === "ok" ? "var(--long)" : "var(--short)" }}
+                    />
+                    {name}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Bug Stats Row */}
+      <div className="mb-6">
+        <div className={`${labelStyle} mb-3`}>Bug Bounties</div>
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+          {[
+            { label: "Total", value: bugStats.total, color: "var(--text)" },
+            { label: "Open", value: bugStats.open, color: "var(--warning)" },
+            { label: "Critical Open", value: bugStats.critical, color: "var(--short)" },
+            { label: "Unpaid", value: bugStats.unpaid, color: "#FF6B35" },
+            { label: "Paid", value: bugStats.paid, color: "var(--long)" },
+          ].map((s) => (
+            <div key={s.label} className={`${card} p-4`}>
+              <div className={labelStyle}>{s.label}</div>
+              <div className="text-2xl font-bold mt-1" style={{ color: s.color }}>
+                {s.value}
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* Filters */}
@@ -257,7 +394,7 @@ export default function AdminDashboard() {
         </div>
         <div className="flex items-end">
           <button
-            onClick={fetchBugs}
+            onClick={() => { fetchBugs(); fetchPlatformStats(); }}
             className="rounded-none border border-[var(--border)] px-3 py-2 text-[10px] font-bold uppercase tracking-[0.15em] text-[var(--text-secondary)] hover:text-white hover:border-[var(--accent)] transition-colors"
           >
             Refresh
@@ -265,10 +402,10 @@ export default function AdminDashboard() {
         </div>
       </div>
 
-      {/* Main Content */}
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_400px] gap-4">
+      {/* Main Content — stacked on mobile, side-by-side on desktop */}
+      <div className="flex flex-col lg:flex-row gap-4">
         {/* Bug List */}
-        <div className={`${card} overflow-hidden`}>
+        <div className={`${card} overflow-hidden flex-1 min-w-0`}>
           <div className="border-b border-[var(--border)] px-4 py-3 flex items-center justify-between">
             <span className={labelStyle}>
               {filtered.length} Report{filtered.length !== 1 ? "s" : ""}
@@ -300,7 +437,7 @@ export default function AdminDashboard() {
                           {bug.title}
                         </span>
                       </div>
-                      <div className="flex items-center gap-3 text-[11px]">
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px]">
                         <span className="text-[var(--accent)]">@{bug.twitter_handle}</span>
                         <span className="text-[var(--text-dim)]">{truncateId(bug.id)}</span>
                         <TimeAgo date={bug.created_at} />
@@ -324,14 +461,14 @@ export default function AdminDashboard() {
           </div>
         </div>
 
-        {/* Detail Panel */}
-        <div className={`${card} p-4 h-fit sticky top-4`}>
+        {/* Detail Panel — scrollable, not sticky */}
+        <div className={`${card} lg:w-[400px] lg:shrink-0 overflow-y-auto max-h-[calc(100vh-200px)] lg:self-start`}>
           {!selectedBug ? (
-            <div className="text-center text-[var(--text-muted)] text-[12px] py-12">
+            <div className="text-center text-[var(--text-muted)] text-[12px] py-12 px-4">
               Select a bug report
             </div>
           ) : (
-            <div className="space-y-4">
+            <div className="p-4 space-y-4">
               {/* Title & Meta */}
               <div>
                 <div className="flex items-center gap-2 mb-2">
@@ -346,7 +483,7 @@ export default function AdminDashboard() {
                 <h2 className="text-[15px] font-bold text-white leading-tight mb-2">
                   {selectedBug.title}
                 </h2>
-                <div className="flex flex-wrap items-center gap-3 text-[11px]">
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px]">
                   <span className="text-[var(--accent)]">@{selectedBug.twitter_handle}</span>
                   <span className="text-[var(--text-dim)]">{truncateId(selectedBug.id)}</span>
                   <TimeAgo date={selectedBug.created_at} />
@@ -395,13 +532,13 @@ export default function AdminDashboard() {
                 <div>
                   <div className={`${labelStyle} mb-1`}>Wallets</div>
                   {selectedBug.bounty_wallet && (
-                    <div className="text-[11px] text-[var(--text-secondary)] mb-1">
+                    <div className="text-[11px] text-[var(--text-secondary)] mb-1 break-all">
                       <span className="text-[var(--text-muted)]">Bounty:</span>{" "}
                       <span className="font-mono">{selectedBug.bounty_wallet}</span>
                     </div>
                   )}
                   {selectedBug.transaction_wallet && (
-                    <div className="text-[11px] text-[var(--text-secondary)]">
+                    <div className="text-[11px] text-[var(--text-secondary)] break-all">
                       <span className="text-[var(--text-muted)]">Tx:</span>{" "}
                       <span className="font-mono">{selectedBug.transaction_wallet}</span>
                     </div>
@@ -411,7 +548,7 @@ export default function AdminDashboard() {
 
               {/* Browser / URL */}
               {(selectedBug.browser || selectedBug.page_url) && (
-                <div className="flex gap-4 text-[11px]">
+                <div className="flex flex-wrap gap-4 text-[11px]">
                   {selectedBug.browser && (
                     <div>
                       <span className="text-[var(--text-muted)]">Browser:</span>{" "}
@@ -419,13 +556,13 @@ export default function AdminDashboard() {
                     </div>
                   )}
                   {selectedBug.page_url && (
-                    <div>
+                    <div className="min-w-0">
                       <span className="text-[var(--text-muted)]">URL:</span>{" "}
                       <a
                         href={selectedBug.page_url}
                         target="_blank"
                         rel="noreferrer"
-                        className="text-[var(--accent)] hover:underline"
+                        className="text-[var(--accent)] hover:underline break-all"
                       >
                         {selectedBug.page_url}
                       </a>
