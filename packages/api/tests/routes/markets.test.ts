@@ -1,11 +1,27 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { PublicKey } from "@solana/web3.js";
 import { marketRoutes } from "../../src/routes/markets.js";
+import { clearCache } from "../../src/middleware/cache.js";
+import { clearDbCache } from "../../src/middleware/db-cache-fallback.js";
 
 // Mock dependencies
 vi.mock("@percolator/shared", () => ({
-  getConnection: vi.fn(),
   getSupabase: vi.fn(),
+  getConnection: vi.fn(),
+  createLogger: vi.fn(() => ({
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    debug: vi.fn(),
+  })),
+  sanitizeSlabAddress: vi.fn((addr: string) => addr),
+  sanitizePagination: vi.fn((p: any) => p),
+  sanitizeString: vi.fn((s: string) => s),
+  sendInfoAlert: vi.fn(),
+  sendCriticalAlert: vi.fn(),
+  sendWarningAlert: vi.fn(),
+  eventBus: { on: vi.fn(), emit: vi.fn(), off: vi.fn() },
+  config: { supabaseUrl: "http://test", supabaseKey: "test", rpcUrl: "http://test" },
 }));
 
 vi.mock("@percolator/core", () => ({
@@ -24,6 +40,9 @@ describe("markets routes", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    // Clear both caches to prevent cross-test cache pollution
+    clearCache();
+    clearDbCache();
 
     mockConnection = {};
     mockSupabase = {
@@ -39,7 +58,8 @@ describe("markets routes", () => {
 
   describe("GET /markets", () => {
     it("should return merged market and stats data", async () => {
-      const mockMarkets = [
+      // The route uses a single 'markets_with_stats' view that combines both tables
+      const mockMarketsWithStats = [
         {
           slab_address: "11111111111111111111111111111111",
           mint_address: "TokenMint111111111111111111111111",
@@ -57,12 +77,7 @@ describe("markets routes", () => {
           logo_url: null,
           created_at: "2025-01-01T00:00:00Z",
           updated_at: "2025-01-01T00:00:00Z",
-        },
-      ];
-
-      const mockStats = [
-        {
-          slab_address: "11111111111111111111111111111111",
+          // Stats from the view
           total_open_interest: "5000000000",
           total_accounts: 100,
           last_crank_slot: 123456789,
@@ -75,13 +90,9 @@ describe("markets routes", () => {
       ];
 
       mockSupabase.from.mockImplementation((table: string) => {
-        if (table === "markets") {
+        if (table === "markets_with_stats") {
           return {
-            select: vi.fn().mockResolvedValue({ data: mockMarkets, error: null }),
-          };
-        } else if (table === "market_stats") {
-          return {
-            select: vi.fn().mockResolvedValue({ data: mockStats, error: null }),
+            select: vi.fn().mockResolvedValue({ data: mockMarketsWithStats, error: null }),
           };
         }
         return mockSupabase;
@@ -99,8 +110,9 @@ describe("markets routes", () => {
       expect(data.markets[0].fundingRate).toBe(5);
     });
 
-    it("should handle markets without stats", async () => {
-      const mockMarkets = [
+    it("should handle markets without stats (null stats fields)", async () => {
+      // The view returns null for stats fields when no stats exist
+      const mockMarketsWithStats = [
         {
           slab_address: "22222222222222222222222222222222",
           symbol: "ETH-PERP",
@@ -118,17 +130,22 @@ describe("markets routes", () => {
           logo_url: null,
           created_at: "2025-01-01T00:00:00Z",
           updated_at: "2025-01-01T00:00:00Z",
+          // No stats — all null
+          total_open_interest: null,
+          total_accounts: null,
+          last_crank_slot: null,
+          last_price: null,
+          mark_price: null,
+          index_price: null,
+          funding_rate: null,
+          net_lp_pos: null,
         },
       ];
 
       mockSupabase.from.mockImplementation((table: string) => {
-        if (table === "markets") {
+        if (table === "markets_with_stats") {
           return {
-            select: vi.fn().mockResolvedValue({ data: mockMarkets, error: null }),
-          };
-        } else if (table === "market_stats") {
-          return {
-            select: vi.fn().mockResolvedValue({ data: [], error: null }),
+            select: vi.fn().mockResolvedValue({ data: mockMarketsWithStats, error: null }),
           };
         }
         return mockSupabase;

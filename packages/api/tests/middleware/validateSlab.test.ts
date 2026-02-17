@@ -1,5 +1,11 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { Hono } from "hono";
+
+vi.mock("@percolator/shared", () => ({
+  sanitizeSlabAddress: vi.fn((addr: string) => addr),
+  config: { supabaseUrl: "http://test", supabaseKey: "test", rpcUrl: "http://test" },
+}));
+
 import { validateSlab } from "../../src/middleware/validateSlab.js";
 
 describe("validateSlab middleware", () => {

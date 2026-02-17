@@ -17,6 +17,12 @@ vi.mock('@percolator/shared', () => ({
     programId: '11111111111111111111111111111111',
     crankKeypair: 'mock-keypair-path',
   },
+  createLogger: vi.fn(() => ({
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    debug: vi.fn(),
+  })),
   getConnection: vi.fn(() => ({
     getAccountInfo: vi.fn(),
   })),

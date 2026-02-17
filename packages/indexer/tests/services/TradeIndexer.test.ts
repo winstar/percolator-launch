@@ -12,6 +12,12 @@ vi.mock('@percolator/shared', () => ({
   config: {
     allProgramIds: ['FxfD37s1AZTeWfFQps9Zpebi2dNQ9QSSDtfMKdbsfKrD'],
   },
+  createLogger: vi.fn(() => ({
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    debug: vi.fn(),
+  })),
   getConnection: vi.fn(() => ({
     getSignaturesForAddress: mockGetSignaturesForAddress,
     getParsedTransaction: mockGetParsedTransaction,
@@ -46,6 +52,9 @@ vi.mock('@percolator/shared', () => ({
       side: isNegative ? 'short' as const : 'long' as const,
     };
   }),
+  withRetry: vi.fn(async (fn: any) => fn()),
+  addBreadcrumb: vi.fn(),
+  captureException: vi.fn(),
 }));
 
 import { TradeIndexerPolling } from '../../src/services/TradeIndexer.js';

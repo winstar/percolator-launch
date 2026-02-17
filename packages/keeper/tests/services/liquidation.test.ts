@@ -63,6 +63,13 @@ vi.mock('@percolator/shared', () => ({
   config: {
     crankKeypair: 'mock-keypair-path',
   },
+  createLogger: vi.fn(() => ({
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    debug: vi.fn(),
+  })),
+  sendWarningAlert: vi.fn(),
   getConnection: vi.fn(() => ({
     getAccountInfo: vi.fn(),
     getLatestBlockhash: vi.fn(async () => ({

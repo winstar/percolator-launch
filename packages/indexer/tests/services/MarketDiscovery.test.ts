@@ -9,6 +9,13 @@ vi.mock('@percolator/shared', () => ({
   config: {
     allProgramIds: ['11111111111111111111111111111111', 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA'],
   },
+  createLogger: vi.fn(() => ({
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    debug: vi.fn(),
+  })),
+  captureException: vi.fn(),
   getConnection: vi.fn(() => ({
     getProgramAccounts: vi.fn(),
   })),

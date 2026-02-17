@@ -1,5 +1,13 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { Hono } from "hono";
+
+vi.mock("@percolator/shared", () => ({
+  createLogger: vi.fn(() => ({
+    info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn(),
+  })),
+  config: { supabaseUrl: "http://test", supabaseKey: "test", rpcUrl: "http://test" },
+}));
+
 import { readRateLimit, writeRateLimit } from "../../src/middleware/rate-limit.js";
 
 describe("rate-limit middleware", () => {
@@ -12,9 +20,9 @@ describe("rate-limit middleware", () => {
     const app = new Hono();
     app.get("/test", readRateLimit(), (c) => c.json({ success: true }));
 
-    it("should allow requests within limit (60 GET/min)", async () => {
-      // Make 60 requests - all should pass
-      for (let i = 0; i < 60; i++) {
+    it("should allow requests within limit (100 GET/min)", async () => {
+      // Make 100 requests - all should pass
+      for (let i = 0; i < 100; i++) {
         const res = await app.request("/test", {
           headers: { "x-forwarded-for": "192.168.1.1" }
         });
@@ -23,8 +31,8 @@ describe("rate-limit middleware", () => {
     });
 
     it("should return 429 when exceeding read limit", async () => {
-      // Make 61 requests - the 61st should fail
-      for (let i = 0; i < 60; i++) {
+      // Make 100 requests - the 101st should fail
+      for (let i = 0; i < 100; i++) {
         await app.request("/test", {
           headers: { "x-forwarded-for": "192.168.1.2" }
         });
@@ -40,8 +48,8 @@ describe("rate-limit middleware", () => {
     });
 
     it("should have separate buckets for different IPs", async () => {
-      // Make 60 requests from IP1
-      for (let i = 0; i < 60; i++) {
+      // Make 100 requests from IP1
+      for (let i = 0; i < 100; i++) {
         const res = await app.request("/test", {
           headers: { "x-forwarded-for": "192.168.1.3" }
         });
@@ -62,8 +70,8 @@ describe("rate-limit middleware", () => {
       const freshApp = new Hono();
       freshApp.get("/test", readRateLimit(), (c) => c.json({ success: true }));
 
-      // Exhaust limit
-      for (let i = 0; i < 60; i++) {
+      // Exhaust limit (READ_LIMIT = 100)
+      for (let i = 0; i < 100; i++) {
         await freshApp.request("/test", {
           headers: { "x-forwarded-for": "192.168.1.5" }
         });

@@ -114,18 +114,24 @@ describe("config", () => {
     expect(config.allProgramIds).toEqual(["Prog1", " Prog2 ", " ", "Prog3"]);
   });
 
-  it("should throw error in production mode when RPC_URL is not set", async () => {
+  it("should throw error in production mode when required env vars are not set", async () => {
     process.env.NODE_ENV = "production";
     delete process.env.RPC_URL;
+    delete process.env.SUPABASE_URL;
+    delete process.env.SUPABASE_KEY;
+    delete process.env.SUPABASE_SERVICE_ROLE_KEY;
 
     await expect(async () => {
       await import("../src/config.js");
-    }).rejects.toThrow("RPC_URL must be explicitly set in production environment");
+    }).rejects.toThrow("Environment validation failed");
   });
 
-  it("should not throw error in production mode when RPC_URL is set", async () => {
+  it("should not throw error in production mode when all required env vars are set", async () => {
     process.env.NODE_ENV = "production";
     process.env.RPC_URL = "https://mainnet.solana.com";
+    process.env.SUPABASE_URL = "https://test.supabase.co";
+    process.env.SUPABASE_KEY = "test-key";
+    process.env.SUPABASE_SERVICE_ROLE_KEY = "test-service-key";
 
     const { config } = await import("../src/config.js");
 

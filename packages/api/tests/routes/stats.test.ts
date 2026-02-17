@@ -4,6 +4,21 @@ import { statsRoutes } from "../../src/routes/stats.js";
 // Mock @percolator/shared
 vi.mock("@percolator/shared", () => ({
   getSupabase: vi.fn(),
+  getConnection: vi.fn(),
+  createLogger: vi.fn(() => ({
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    debug: vi.fn(),
+  })),
+  sanitizeSlabAddress: vi.fn((addr: string) => addr),
+  sanitizePagination: vi.fn((p: any) => p),
+  sanitizeString: vi.fn((s: string) => s),
+  sendInfoAlert: vi.fn(),
+  sendCriticalAlert: vi.fn(),
+  sendWarningAlert: vi.fn(),
+  eventBus: { on: vi.fn(), emit: vi.fn(), off: vi.fn() },
+  config: { supabaseUrl: "http://test", supabaseKey: "test", rpcUrl: "http://test" },
 }));
 
 const { getSupabase } = await import("@percolator/shared");

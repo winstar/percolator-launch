@@ -1,11 +1,27 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { fundingRoutes } from "../../src/routes/funding.js";
+import { clearCache } from "../../src/middleware/cache.js";
 
 // Mock @percolator/shared
 vi.mock("@percolator/shared", () => ({
+  getSupabase: vi.fn(),
+  getConnection: vi.fn(),
   getFundingHistory: vi.fn(),
   getFundingHistorySince: vi.fn(),
-  getSupabase: vi.fn(),
+  createLogger: vi.fn(() => ({
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    debug: vi.fn(),
+  })),
+  sanitizeSlabAddress: vi.fn((addr: string) => addr),
+  sanitizePagination: vi.fn((p: any) => p),
+  sanitizeString: vi.fn((s: string) => s),
+  sendInfoAlert: vi.fn(),
+  sendCriticalAlert: vi.fn(),
+  sendWarningAlert: vi.fn(),
+  eventBus: { on: vi.fn(), emit: vi.fn(), off: vi.fn() },
+  config: { supabaseUrl: "http://test", supabaseKey: "test", rpcUrl: "http://test" },
 }));
 
 const { getFundingHistory, getFundingHistorySince, getSupabase } = 
@@ -16,6 +32,8 @@ describe("funding routes", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    // Clear the in-memory response cache so tests don't get cached responses
+    clearCache();
 
     mockSupabase = {
       from: vi.fn(() => mockSupabase),

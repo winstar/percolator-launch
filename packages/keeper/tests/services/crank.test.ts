@@ -30,6 +30,12 @@ vi.mock('@percolator/shared', () => ({
     allProgramIds: ['11111111111111111111111111111111', 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA'],
     crankKeypair: 'mock-keypair-path',
   },
+  createLogger: vi.fn(() => ({
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    debug: vi.fn(),
+  })),
   getConnection: vi.fn(() => ({
     getAccountInfo: vi.fn(),
   })),
@@ -42,6 +48,7 @@ vi.mock('@percolator/shared', () => ({
   })),
   sendWithRetry: vi.fn(async () => 'mock-signature-' + Date.now()),
   rateLimitedCall: vi.fn((fn) => fn()),
+  sendCriticalAlert: vi.fn(),
   eventBus: {
     publish: vi.fn(),
   },

@@ -12,8 +12,15 @@ vi.mock('@percolator/core', () => ({
 }));
 
 vi.mock('@percolator/shared', () => ({
+  createLogger: vi.fn(() => ({
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    debug: vi.fn(),
+  })),
   getConnection: vi.fn(() => ({
     getAccountInfo: mockGetAccountInfo,
+    getMultipleAccountsInfo: vi.fn(async () => []),
   })),
   upsertMarketStats: vi.fn(),
   insertOraclePrice: vi.fn(),
@@ -25,6 +32,9 @@ vi.mock('@percolator/shared', () => ({
       insert: vi.fn().mockResolvedValue({ error: null }),
     })),
   })),
+  withRetry: vi.fn(async (fn: any) => fn()),
+  addBreadcrumb: vi.fn(),
+  captureException: vi.fn(),
 }));
 
 import { StatsCollector } from '../../src/services/StatsCollector.js';
