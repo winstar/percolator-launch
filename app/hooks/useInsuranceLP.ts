@@ -154,15 +154,19 @@ export function useInsuranceLP() {
     }
   }, [slabState, lpMintInfo, connection, walletPubkeyStr]);
 
-  // H3: Auto-refresh every 10s — use ref to prevent infinite loop
+  // H3: Auto-refresh every 10s — use ref to avoid stale closure
+  const refreshStateRef = useRef(refreshState);
   useEffect(() => {
-    refreshState();
+    refreshStateRef.current = refreshState;
+  }, [refreshState]);
+  
+  useEffect(() => {
+    refreshStateRef.current();
     const interval = setInterval(() => {
-      refreshState();
+      refreshStateRef.current();
     }, 10_000);
     return () => clearInterval(interval);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Empty deps — refreshState captured at mount
+  }, []); // Empty deps safe now — ref always points to latest refreshState
 
   // Create insurance mint (admin only)
   const createMint = useCallback(async () => {

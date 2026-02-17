@@ -180,3 +180,65 @@ Potential improvements:
 - [ ] IP allowlist/blocklist
 - [ ] Request signing for write endpoints
 - [ ] Audit logging for sensitive operations
+
+---
+
+## 🐛 Responsible Disclosure
+
+We take security seriously and appreciate the work of security researchers who help keep Percolator Launch safe for everyone.
+
+### Reporting Vulnerabilities
+
+If you discover a security vulnerability, please report it to us responsibly:
+
+**📧 Email**: security@percolatorlaunch.com
+
+**What to include**:
+- Description of the vulnerability
+- Steps to reproduce the issue
+- Potential impact and severity
+- Any proof-of-concept code (if applicable)
+- Your name/handle (if you'd like credit)
+
+### Response Timeline
+
+We commit to:
+- **Initial response**: Within 48 hours of report
+- **Status update**: Within 7 days with assessment and timeline
+- **Resolution**: Security patches released as soon as possible (critical issues: <7 days, high: <14 days, medium: <30 days)
+- **Disclosure**: Public disclosure coordinated with reporter (typically 90 days after patch)
+
+### Bug Bounty Program
+
+**Current status**: No formal bug bounty program at this time.
+
+We recognize and appreciate security research contributions. While we don't currently offer monetary rewards, we will:
+- Publicly credit researchers in our security advisories (with permission)
+- Provide recognition in our documentation
+- Consider future bounty programs as the platform matures
+
+**Scope**:
+- ✅ Percolator Launch web application (frontend)
+- ✅ API service, Keeper service, Indexer service
+- ✅ On-chain Percolator programs (Solana BPF)
+- ❌ Third-party services (Supabase, Helius, Vercel, Railway)
+- ❌ Social engineering attacks
+- ❌ Physical attacks against infrastructure
+
+### Safe Harbor
+
+We will not pursue legal action against researchers who:
+- Act in good faith to report vulnerabilities
+- Avoid privacy violations, data destruction, or service disruption
+- Do not publicly disclose vulnerabilities before we've had reasonable time to respond
+- Follow responsible disclosure practices
+
+### Hall of Fame
+
+Security researchers who have helped improve Percolator Launch:
+
+*(No reports yet — be the first!)*
+
+---
+
+Thank you for helping keep Percolator Launch secure! 🙏

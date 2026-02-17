@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
+export const dynamic = "force-dynamic";
+
 /**
  * RPC proxy endpoint — forwards JSON-RPC requests to Helius while keeping the API key server-side.
  * This prevents exposing HELIUS_API_KEY in the client bundle.

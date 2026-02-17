@@ -112,6 +112,38 @@ export const PERCOLATOR_ERRORS: Record<number, ErrorInfo> = {
     name: "InvalidTokenProgram",
     hint: "Invalid token program. Ensure SPL Token program is accessible.",
   },
+  26: {
+    name: "InvalidConfigParam",
+    hint: "Invalid configuration parameter. Check that leverage, fees, and risk thresholds are within allowed ranges.",
+  },
+  27: {
+    name: "HyperpTradeNoCpiDisabled",
+    hint: "TradeNoCpi is disabled for this market. Use TradeCpi with LP matching instead.",
+  },
+  28: {
+    name: "InsuranceMintAlreadyExists",
+    hint: "Insurance LP mint already exists for this market. Cannot recreate.",
+  },
+  29: {
+    name: "InsuranceMintNotCreated",
+    hint: "Insurance LP mint has not been created yet. Run CreateInsuranceMint first.",
+  },
+  30: {
+    name: "InsuranceBelowThreshold",
+    hint: "Insurance fund balance is below the required threshold. Deposit more to insurance fund.",
+  },
+  31: {
+    name: "InsuranceZeroAmount",
+    hint: "Insurance deposit/withdrawal amount must be greater than zero.",
+  },
+  32: {
+    name: "InsuranceSupplyMismatch",
+    hint: "Insurance LP token supply doesn't match vault balance. This is an internal error - please report it.",
+  },
+  33: {
+    name: "MarketPaused",
+    hint: "This market is currently paused by the admin. Trading, deposits, and withdrawals are disabled.",
+  },
 };
 
 /**

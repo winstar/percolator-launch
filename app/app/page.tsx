@@ -83,6 +83,7 @@ function HowItWorks() {
 
 export default function Home() {
   const [stats, setStats] = useState({ markets: 0, volume: 0, insurance: 0 });
+  const [statsLoaded, setStatsLoaded] = useState(false);
   const [featured, setFeatured] = useState<{ slab_address: string; symbol: string | null; volume_24h: number; last_price: number | null; open_interest: number }[]>([]);
   const heroRef = useRef<HTMLDivElement>(null);
   const prefersReduced = usePrefersReducedMotion();
@@ -123,6 +124,7 @@ export default function Home() {
             volume: data.reduce((s, m) => s + (m.volume_24h || 0), 0),
             insurance: data.reduce((s, m) => s + (m.insurance_balance || 0), 0),
           });
+          setStatsLoaded(true);
           const sorted = [...data].sort((a, b) => (b.volume_24h || 0) - (a.volume_24h || 0)).slice(0, 5);
           setFeatured(sorted.map((m) => ({
             slab_address: m.slab_address,
@@ -134,6 +136,7 @@ export default function Home() {
         }
       } catch (err) {
         console.error("Failed to load market stats:", err);
+        setStatsLoaded(false);
       }
     }
     loadStats();
@@ -263,9 +266,9 @@ export default function Home() {
               <ScrollReveal stagger={0.08}>
                 <div className="grid grid-cols-2 gap-px overflow-hidden border border-[var(--border)] bg-[var(--border)] md:grid-cols-4">
                   {[
-                    { label: "Markets Live", value: <AnimatedNumber value={stats.markets} decimals={0} />, color: "text-[var(--accent)]" },
-                    { label: "24h Volume", value: <AnimatedNumber value={stats.volume / 1000} prefix="$" suffix="k" decimals={0} />, color: "text-[var(--long)]" },
-                    { label: "Insurance Fund", value: <AnimatedNumber value={stats.insurance / 1000} prefix="$" suffix="k" decimals={0} />, color: "text-[var(--accent)]" },
+                    { label: "Markets Live", value: statsLoaded ? <AnimatedNumber value={stats.markets} decimals={0} /> : "—", color: "text-[var(--accent)]" },
+                    { label: "24h Volume", value: statsLoaded ? <AnimatedNumber value={stats.volume / 1000} prefix="$" suffix="k" decimals={0} /> : "—", color: "text-[var(--long)]" },
+                    { label: "Insurance Fund", value: statsLoaded ? <AnimatedNumber value={stats.insurance / 1000} prefix="$" suffix="k" decimals={0} /> : "—", color: "text-[var(--accent)]" },
                     { label: "Access", value: "Open", color: "text-[var(--long)]" },
                   ].map((stat) => (
                     <div key={stat.label} className="bg-[var(--panel-bg)] p-4 sm:p-6 transition-colors duration-200 hover:bg-[var(--bg-elevated)]">

@@ -197,18 +197,6 @@ export const TradeForm: FC<{ slabAddress: string }> = ({ slabAddress }) => {
     );
   }
 
-  // NOTE: LP validation disabled - matcher context check was too strict
-  // All current markets have LPs with default matcher context which is valid
-  // if (!hasValidLP) {
-  //   return (
-  //     <div className="relative rounded-none bg-[var(--bg)]/80 border border-[var(--border)]/50 p-4 text-center">
-  //       <p className="text-[var(--text-secondary)] text-xs">
-  //         No liquidity provider found for this market. Trading is not available until an LP initializes a vAMM.
-  //       </p>
-  //     </div>
-  //   );
-  // }
-
   if (lpUnderfunded) {
     return (
       <div className="relative rounded-none bg-[var(--bg)]/80 border border-[var(--border)]/50 p-4 text-center">
@@ -348,6 +336,34 @@ export const TradeForm: FC<{ slabAddress: string }> = ({ slabAddress }) => {
 
   return (
     <div className="relative rounded-none bg-[var(--bg)]/80 border border-[var(--border)]/50 p-3">
+
+      {/* Coin-margined warning badge */}
+      <div className="mb-3 rounded-none border border-[var(--warning)]/20 bg-[var(--warning)]/5 p-2.5">
+        <div className="flex items-start gap-2">
+          <span className="text-[var(--warning)] text-sm">⚠️</span>
+          <div className="flex-1">
+            <p className="text-[9px] font-bold uppercase tracking-[0.15em] text-[var(--warning)]">
+              Coin-Margined Market
+            </p>
+            <p className="mt-1 text-[9px] leading-relaxed text-[var(--text-secondary)]">
+              This market is margined in <strong>{symbol}</strong>, not USD. Your position value and liquidation risk are affected by {symbol} price movements in <em>both directions</em>:
+            </p>
+            <ul className="mt-1.5 space-y-0.5 text-[9px] text-[var(--text-secondary)]">
+              <li className="flex gap-1.5">
+                <span className="text-[var(--long)]">•</span>
+                <span><strong>Long:</strong> If {symbol} goes up, you profit twice (position + collateral value).</span>
+              </li>
+              <li className="flex gap-1.5">
+                <span className="text-[var(--short)]">•</span>
+                <span><strong>Short:</strong> If {symbol} goes down, you profit on position but lose collateral value.</span>
+              </li>
+            </ul>
+            <p className="mt-1.5 text-[9px] text-[var(--warning)]">
+              Effective USD leverage: <strong className="font-mono">{leverage > 0 ? `~${leverage * 2}x` : "—"}</strong> (nominal {leverage}x × 2 for coin exposure)
+            </p>
+          </div>
+        </div>
+      </div>
 
       {/* Market paused banner */}
       {header?.paused && (

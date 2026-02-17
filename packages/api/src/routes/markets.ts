@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { PublicKey } from "@solana/web3.js";
 import { validateSlab } from "../middleware/validateSlab.js";
 import { cacheMiddleware } from "../middleware/cache.js";
+import { withDbCacheFallback } from "../middleware/db-cache-fallback.js";
 import { fetchSlab, parseHeader, parseConfig, parseEngine } from "@percolator/core";
 import { getConnection, getSupabase, createLogger, sanitizeSlabAddress } from "@percolator/shared";
 
@@ -12,47 +13,53 @@ export function marketRoutes(): Hono {
 
   // GET /markets — list all markets from Supabase (uses markets_with_stats view for performance)
   app.get("/markets", async (c) => {
-    try {
-      // Use the markets_with_stats view for a single optimized query
-      const { data, error } = await getSupabase()
-        .from("markets_with_stats")
-        .select("*");
+    const result = await withDbCacheFallback(
+      "markets:all",
+      async () => {
+        // Use the markets_with_stats view for a single optimized query
+        const { data, error } = await getSupabase()
+          .from("markets_with_stats")
+          .select("*");
 
-      if (error) throw error;
+        if (error) throw error;
 
-      const result = (data ?? []).map((m) => ({
-        slabAddress: m.slab_address,
-        mintAddress: m.mint_address,
-        symbol: m.symbol,
-        name: m.name,
-        decimals: m.decimals,
-        deployer: m.deployer,
-        oracleAuthority: m.oracle_authority,
-        initialPriceE6: m.initial_price_e6,
-        maxLeverage: m.max_leverage,
-        tradingFeeBps: m.trading_fee_bps,
-        lpCollateral: m.lp_collateral,
-        matcherContext: m.matcher_context,
-        status: m.status,
-        logoUrl: m.logo_url,
-        createdAt: m.created_at,
-        updatedAt: m.updated_at,
-        // Stats from the view
-        totalOpenInterest: m.total_open_interest ?? null,
-        totalAccounts: m.total_accounts ?? null,
-        lastCrankSlot: m.last_crank_slot ?? null,
-        lastPrice: m.last_price ?? null,
-        markPrice: m.mark_price ?? null,
-        indexPrice: m.index_price ?? null,
-        fundingRate: m.funding_rate ?? null,
-        netLpPos: m.net_lp_pos ?? null,
-      }));
-
-      return c.json({ markets: result });
-    } catch (err) {
-      logger.error("Error fetching markets", { error: err });
-      return c.json({ error: "Failed to fetch markets" }, 500);
+        return (data ?? []).map((m) => ({
+          slabAddress: m.slab_address,
+          mintAddress: m.mint_address,
+          symbol: m.symbol,
+          name: m.name,
+          decimals: m.decimals,
+          deployer: m.deployer,
+          oracleAuthority: m.oracle_authority,
+          initialPriceE6: m.initial_price_e6,
+          maxLeverage: m.max_leverage,
+          tradingFeeBps: m.trading_fee_bps,
+          lpCollateral: m.lp_collateral,
+          matcherContext: m.matcher_context,
+          status: m.status,
+          logoUrl: m.logo_url,
+          createdAt: m.created_at,
+          updatedAt: m.updated_at,
+          // Stats from the view
+          totalOpenInterest: m.total_open_interest ?? null,
+          totalAccounts: m.total_accounts ?? null,
+          lastCrankSlot: m.last_crank_slot ?? null,
+          lastPrice: m.last_price ?? null,
+          markPrice: m.mark_price ?? null,
+          indexPrice: m.index_price ?? null,
+          fundingRate: m.funding_rate ?? null,
+          netLpPos: m.net_lp_pos ?? null,
+        }));
+      },
+      c
+    );
+    
+    // If result is a Response (error case), return it directly
+    if (result instanceof Response) {
+      return result;
     }
+    
+    return c.json({ markets: result });
   });
 
   // GET /markets/stats — all market stats from DB

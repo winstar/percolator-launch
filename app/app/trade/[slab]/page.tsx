@@ -240,11 +240,20 @@ function TradePageInner({ slab }: { slab: string }) {
             )}
           </div>
         </div>
-        <div className="mt-1 flex items-center gap-2">
+        <div className="mt-1 flex items-center gap-2 flex-wrap">
           <span className="flex items-center text-[10px] text-[var(--text-dim)]" style={{ fontFamily: "var(--font-mono)" }}>
             {shortAddress}
             <CopyButton text={slab} />
           </span>
+          {config?.admin && (
+            <span className={`text-[9px] font-medium uppercase tracking-[0.12em] px-1.5 py-0.5 rounded-sm border ${
+              config.admin.toBase58() === "11111111111111111111111111111111"
+                ? "border-[var(--long)]/30 bg-[var(--long)]/5 text-[var(--long)]"
+                : "border-[var(--warning)]/30 bg-[var(--warning)]/5 text-[var(--warning)]"
+            }`}>
+              {config.admin.toBase58() === "11111111111111111111111111111111" ? "✅ Admin Renounced" : "⚠️ Admin Active"}
+            </span>
+          )}
           <ShareButton
             slabAddress={slab}
             marketName={symbol}
@@ -269,6 +278,15 @@ function TradePageInner({ slab }: { slab: string }) {
               <CopyButton text={slab} />
             </span>
             {health && <HealthBadge level={health.level} />}
+            {config?.admin && (
+              <span className={`text-[9px] font-medium uppercase tracking-[0.12em] px-1.5 py-0.5 rounded-sm border ${
+                config.admin.toBase58() === "11111111111111111111111111111111"
+                  ? "border-[var(--long)]/30 bg-[var(--long)]/5 text-[var(--long)]"
+                  : "border-[var(--warning)]/30 bg-[var(--warning)]/5 text-[var(--warning)]"
+              }`}>
+                {config.admin.toBase58() === "11111111111111111111111111111111" ? "✅ Admin Renounced" : "⚠️ Admin Active"}
+              </span>
+            )}
             <ShareButton
               slabAddress={slab}
               marketName={symbol}

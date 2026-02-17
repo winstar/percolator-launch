@@ -1,16 +1,14 @@
 /**
  * Mock mode utilities for dev-only UI testing.
  * Mock mode is active when:
- *   1. NODE_ENV === "development"
- *   2. NEXT_PUBLIC_MOCK_DATA === "true" (or not explicitly set — defaults to on in dev)
+ *   NEXT_PUBLIC_MOCK_MODE === "true" (explicit opt-in)
  *
- * This never activates in production builds.
+ * Previously: NODE_ENV === "development" was sufficient, which caused accidental
+ * mock data leaks when testing real markets in dev. Now requires explicit flag.
  */
 
 export function isMockMode(): boolean {
-  if (process.env.NODE_ENV !== "development") return false;
-  // Default to true in dev unless explicitly disabled
-  const flag = process.env.NEXT_PUBLIC_MOCK_DATA;
-  if (flag === "false" || flag === "0") return false;
-  return true;
+  // Explicit opt-in only — no defaults
+  const flag = process.env.NEXT_PUBLIC_MOCK_MODE;
+  return flag === "true" || flag === "1";
 }
