@@ -51,9 +51,9 @@ describe("config", () => {
     expect(config.heliusApiKey).toBe("");
     expect(config.fallbackRpcUrl).toBe("https://api.devnet.solana.com");
     expect(config.port).toBe(3001);
-    expect(config.crankIntervalMs).toBe(10_000);
+    expect(config.crankIntervalMs).toBe(30_000);
     expect(config.crankInactiveIntervalMs).toBe(60_000);
-    expect(config.discoveryIntervalMs).toBe(60_000);
+    expect(config.discoveryIntervalMs).toBe(300_000);
     expect(config.webhookSecret).toBe("");
     expect(config.webhookUrl).toBe("");
   });
