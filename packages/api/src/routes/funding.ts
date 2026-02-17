@@ -45,8 +45,8 @@ export function fundingRoutes(): Hono {
         return {
           slabAddress: stats.slab_address,
           currentRateBpsPerSlot: rateBps,
-          hourlyRatePercent: Number(((rateBps * SLOTS_PER_HOUR) / 100).toFixed(6)),
-          dailyRatePercent: Number(((rateBps * SLOTS_PER_DAY) / 100).toFixed(4)),
+          hourlyRatePercent: Number(((rateBps / 10000.0) * SLOTS_PER_HOUR).toFixed(6)),
+          dailyRatePercent: Number(((rateBps / 10000.0) * SLOTS_PER_DAY).toFixed(4)),
           netLpPosition: stats.net_lp_pos ?? "0",
         };
       });
@@ -119,9 +119,9 @@ export function fundingRoutes(): Hono {
       const SLOTS_PER_YEAR = 78840000;
 
       const rateBps = Number(currentRateBpsPerSlot);
-      const hourlyRatePercent = (rateBps * SLOTS_PER_HOUR) / 100; // bps × slots / 100 = %
-      const dailyRatePercent = (rateBps * SLOTS_PER_DAY) / 100;
-      const annualizedPercent = (rateBps * SLOTS_PER_YEAR) / 100;
+      const hourlyRatePercent = (rateBps / 10000.0) * SLOTS_PER_HOUR;
+      const dailyRatePercent = (rateBps / 10000.0) * SLOTS_PER_DAY;
+      const annualizedPercent = (rateBps / 10000.0) * SLOTS_PER_YEAR;
 
       // Fetch 24h funding history
       const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
