@@ -74,7 +74,7 @@ export const FundingRateCard: FC<{ slabAddress: string }> = ({ slabAddress }) =>
         // Fallback to on-chain data when API unavailable
         if (engine && fundingRate !== null) {
           const rate = Number(fundingRate);
-          const hourly = (rate * 9000) / 100;
+          const hourly = (rate * 9000) / 100; // bps/slot × slots/hr / 100 = %/hr
           const apr = hourly * 24 * 365;
           const netLp = engine.netLpPos ?? 0n;
           setFundingData({

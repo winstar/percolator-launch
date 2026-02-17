@@ -12,7 +12,7 @@ import { useEngineState } from "@/hooks/useEngineState";
 import { useSlabState } from "@/components/providers/SlabProvider";
 import { useTokenMeta } from "@/hooks/useTokenMeta";
 import { useLivePrice } from "@/hooks/useLivePrice";
-import { AccountKind } from "@percolator/core";
+import { AccountKind, computePreTradeLiqPrice } from "@percolator/core";
 import { PreTradeSummary } from "@/components/trade/PreTradeSummary";
 import { TradeConfirmationModal } from "@/components/trade/TradeConfirmationModal";
 import { InfoIcon } from "@/components/ui/Tooltip";
@@ -563,23 +563,14 @@ export const TradeForm: FC<{ slabAddress: string }> = ({ slabAddress }) => {
           positionSize={positionSize}
           margin={marginNative}
           leverage={leverage}
-          estimatedLiqPrice={(() => {
-            // Liq when: margin + PnL = maintenance × position
-            // For longs: liq = entry × (1 - (1/leverage - maintenance))
-            // For shorts: liq = entry × (1 + (1/leverage - maintenance))
-            const maintenanceRatio = Number(maintenanceMarginBps) / 10000;
-            const initialMarginRatio = leverage > 0 ? 1 / leverage : 1;
-            const buffer = initialMarginRatio - maintenanceRatio; // distance to liquidation as ratio
-            if (buffer <= 0) return 0n; // already at or past liquidation
-            const currentPriceE6 = priceUsd ? BigInt(Math.round(priceUsd * 1e6)) : 0n;
-            const bufferBps = BigInt(Math.round(buffer * 10000));
-            
-            if (direction === "long") {
-              return currentPriceE6 - (currentPriceE6 * bufferBps) / 10000n;
-            } else {
-              return currentPriceE6 + (currentPriceE6 * bufferBps) / 10000n;
-            }
-          })()}
+          estimatedLiqPrice={computePreTradeLiqPrice(
+            priceUsd ? BigInt(Math.round(priceUsd * 1e6)) : 0n,
+            marginNative,
+            positionSize,
+            maintenanceMarginBps,
+            tradingFeeBps,
+            direction,
+          )}
           tradingFee={(positionSize * tradingFeeBps) / 10000n}
           symbol={symbol}
           decimals={decimals}

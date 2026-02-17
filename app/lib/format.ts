@@ -77,7 +77,7 @@ export function formatPercent(value: number, decimals: number = 2): string {
 /** Format funding rate from per-slot bps to annualized % string. */
 export function formatFundingRate(bpsPerSlot: bigint): string {
   const slotsPerYear = 2.5 * 60 * 60 * 24 * 365;
-  const annualized = (Number(bpsPerSlot) * slotsPerYear) / 100;
+  const annualized = (Number(bpsPerSlot) * slotsPerYear) / 100; // bps/slot × slots/yr / 100 = %/yr
   const sign = annualized > 0 ? "+" : "";
   return `${sign}${annualized.toFixed(2)}%`;
 }
