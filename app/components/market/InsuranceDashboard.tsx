@@ -70,7 +70,25 @@ export const InsuranceDashboard: FC<{ slabAddress: string }> = ({
         const res = await fetch(`/api/insurance/${slabAddress}`);
         if (!res.ok) throw new Error("Failed to fetch insurance data");
         const data = await res.json();
-        setInsuranceData(data);
+        // Map API response shape to InsuranceData interface
+        const balance = data.balance ?? data.currentBalance ?? "0";
+        const feeRevenue = data.feeRevenue ?? "0";
+        const totalRisk = data.totalRisk ?? data.totalOpenInterest ?? "0";
+        const balanceNum = Number(BigInt(balance));
+        const riskNum = Number(BigInt(totalRisk));
+        const coverageRatio = riskNum > 0 ? balanceNum / riskNum : 0;
+        const historicalBalance = (data.historicalBalance ?? data.history ?? []).map((h: { timestamp: string | number; balance: number }) => ({
+          timestamp: typeof h.timestamp === "string" ? new Date(h.timestamp).getTime() : h.timestamp,
+          balance: h.balance,
+        }));
+        setInsuranceData({
+          balance,
+          feeRevenue,
+          totalRisk,
+          coverageRatio,
+          dailyAccumulationRate: data.dailyAccumulationRate ?? 0,
+          historicalBalance,
+        });
         setError(null);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Unknown error");
@@ -79,7 +97,7 @@ export const InsuranceDashboard: FC<{ slabAddress: string }> = ({
           const balance = engine.insuranceFund?.balance ?? 0n;
           const feeRev = engine.insuranceFund?.feeRevenue ?? 0n;
           const totalOi = engine.totalOpenInterest ?? 0n;
-          const ratio = totalOi > 0n ? Number(balance * 10000n / totalOi) / 100 : 0;
+          const ratio = totalOi > 0n ? Number(balance * 10000n / totalOi) / 10000 : 0;
           setInsuranceData({
             balance: balance.toString(),
             feeRevenue: feeRev.toString(),

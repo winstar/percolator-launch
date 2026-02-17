@@ -564,16 +564,20 @@ export const TradeForm: FC<{ slabAddress: string }> = ({ slabAddress }) => {
           margin={marginNative}
           leverage={leverage}
           estimatedLiqPrice={(() => {
-            // Calculate estimated liquidation price
-            // For longs: liq_price = entry_price * (1 - maintenance_margin_ratio)
-            // For shorts: liq_price = entry_price * (1 + maintenance_margin_ratio)
+            // Liq when: margin + PnL = maintenance × position
+            // For longs: liq = entry × (1 - (1/leverage - maintenance))
+            // For shorts: liq = entry × (1 + (1/leverage - maintenance))
             const maintenanceRatio = Number(maintenanceMarginBps) / 10000;
+            const initialMarginRatio = leverage > 0 ? 1 / leverage : 1;
+            const buffer = initialMarginRatio - maintenanceRatio; // distance to liquidation as ratio
+            if (buffer <= 0) return 0n; // already at or past liquidation
             const currentPriceE6 = priceUsd ? BigInt(Math.round(priceUsd * 1e6)) : 0n;
+            const bufferBps = BigInt(Math.round(buffer * 10000));
             
             if (direction === "long") {
-              return currentPriceE6 - (currentPriceE6 * BigInt(Math.round(maintenanceRatio * 10000))) / 10000n;
+              return currentPriceE6 - (currentPriceE6 * bufferBps) / 10000n;
             } else {
-              return currentPriceE6 + (currentPriceE6 * BigInt(Math.round(maintenanceRatio * 10000))) / 10000n;
+              return currentPriceE6 + (currentPriceE6 * bufferBps) / 10000n;
             }
           })()}
           tradingFee={(positionSize * tradingFeeBps) / 10000n}
