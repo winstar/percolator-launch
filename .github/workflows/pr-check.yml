@@ -1,31 +1,62 @@
-name: PR Check
+name: PR Check (Build & Fast Tests)
+
 on:
   pull_request:
     branches: [main]
-  push:
-    branches: [main]
+
+# Cancel in-progress runs on same PR
+concurrency:
+  group: pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
 
 jobs:
   build-and-test:
+    name: Build & Fast Tests
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
         with:
           version: 9
-      - uses: actions/setup-node@v4
+          
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm --filter @percolator/shared build
-      - run: pnpm --filter @percolator/api build
-      - run: pnpm --filter @percolator/keeper build
-      - run: pnpm --filter @percolator/indexer build
-      - run: pnpm --filter @percolator/shared test
-      - run: pnpm --filter @percolator/api test
-      - run: pnpm --filter @percolator/keeper test
-      - run: pnpm --filter @percolator/indexer test
+          
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+        
+      - name: Build shared package
+        run: pnpm --filter @percolator/shared build
+        
+      - name: Build API
+        run: pnpm --filter @percolator/api build
+        
+      - name: Build keeper
+        run: pnpm --filter @percolator/keeper build
+        
+      - name: Build indexer
+        run: pnpm --filter @percolator/indexer build
+        
+      - name: Test shared package
+        run: pnpm --filter @percolator/shared test
+        
+      - name: Test API
+        run: pnpm --filter @percolator/api test
+        
+      - name: Test keeper
+        run: pnpm --filter @percolator/keeper test
+        
+      - name: Test indexer
+        run: pnpm --filter @percolator/indexer test
+        
       - name: Build frontend
         run: cd app && npx next build
         env:

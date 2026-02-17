@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Keypair,
   PublicKey,
@@ -110,6 +110,19 @@ export function useCreateMarket() {
   // Persist slab keypair across retries so we can resume from any step
   const slabKpRef = useRef<Keypair | null>(null);
 
+  // Load persisted keypair from localStorage on mount
+  useEffect(() => {
+    const persisted = localStorage.getItem("percolator-pending-slab-keypair");
+    if (persisted) {
+      try {
+        const secretKey = Uint8Array.from(JSON.parse(persisted));
+        slabKpRef.current = Keypair.fromSecretKey(secretKey);
+      } catch {
+        localStorage.removeItem("percolator-pending-slab-keypair");
+      }
+    }
+  }, []);
+
   const create = useCallback(
     async (params: CreateMarketParams, retryFromStep?: number) => {
       if (!wallet.publicKey || !wallet.sendTransaction) {
@@ -136,7 +149,7 @@ export function useCreateMarket() {
         ...(startStep === 0 ? { txSigs: [], slabAddress: null } : {}),
       }));
 
-      // Persist slab keypair in ref so retries can reuse it
+      // Persist slab keypair in ref and localStorage so retries can reuse it even after page refresh
       let slabKp: Keypair;
       let slabPk: PublicKey;
       let vaultAta: PublicKey;
@@ -145,6 +158,11 @@ export function useCreateMarket() {
         slabKp = Keypair.generate();
         slabKpRef.current = slabKp;
         slabPk = slabKp.publicKey;
+        // Persist to localStorage for retry after page refresh
+        localStorage.setItem(
+          "percolator-pending-slab-keypair",
+          JSON.stringify(Array.from(slabKp.secretKey))
+        );
       } else if (slabKpRef.current) {
         // Retry with persisted keypair — full functionality
         slabKp = slabKpRef.current;
@@ -543,7 +561,8 @@ export function useCreateMarket() {
           console.warn("Failed to register market in dashboard DB");
         }
 
-        // Done!
+        // Done! Clear persisted keypair from localStorage
+        localStorage.removeItem("percolator-pending-slab-keypair");
         setState((s) => ({
           ...s,
           loading: false,
@@ -560,6 +579,7 @@ export function useCreateMarket() {
 
   const reset = useCallback(() => {
     slabKpRef.current = null;
+    localStorage.removeItem("percolator-pending-slab-keypair");
     setState({
       step: 0,
       stepLabel: "",

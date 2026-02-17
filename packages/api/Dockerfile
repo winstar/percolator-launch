@@ -1,5 +1,5 @@
 # Builder stage
-FROM node:22-alpine AS builder
+FROM node:22-alpine@sha256:3a4802e64ab5181c7870d6ddd8c824c2efc42873baae37d1971451668659483b AS builder
 
 # Install pnpm
 RUN corepack enable && corepack prepare pnpm@9 --activate
@@ -25,7 +25,7 @@ RUN pnpm --filter @percolator/core build
 RUN pnpm --filter @percolator/api build
 
 # Runner stage
-FROM node:22-alpine AS runner
+FROM node:22-alpine@sha256:3a4802e64ab5181c7870d6ddd8c824c2efc42873baae37d1971451668659483b AS runner
 
 # Install curl for health checks
 RUN apk add --no-cache curl
@@ -49,6 +49,12 @@ COPY --from=builder /app/packages/api/node_modules ./packages/api/node_modules
 # Copy workspace config for runtime
 COPY --from=builder /app/pnpm-workspace.yaml ./
 COPY --from=builder /app/package.json ./
+
+# Change ownership to node user
+RUN chown -R node:node /app
+
+# Switch to non-root user
+USER node
 
 WORKDIR /app/packages/api
 

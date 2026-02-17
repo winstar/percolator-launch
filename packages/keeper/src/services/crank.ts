@@ -8,7 +8,7 @@ import {
   ACCOUNTS_KEEPER_CRANK,
   type DiscoveredMarket,
 } from "@percolator/core";
-import { config, getConnection, getFallbackConnection, loadKeypair, sendWithRetry, rateLimitedCall, eventBus, createLogger } from "@percolator/shared";
+import { config, getConnection, getFallbackConnection, loadKeypair, sendWithRetry, rateLimitedCall, eventBus, createLogger, sendCriticalAlert } from "@percolator/shared";
 import { OracleService } from "./oracle.js";
 
 const logger = createLogger("keeper:crank");
@@ -232,6 +232,15 @@ export class CrankService {
         market: market.slabAddress.toBase58(),
         programId: market.programId.toBase58()
       });
+      
+      // Alert on 5+ consecutive failures
+      if (state.consecutiveFailures === 5) {
+        await sendCriticalAlert("Crank experiencing consecutive failures", [
+          { name: "Market", value: slabAddress.slice(0, 12), inline: true },
+          { name: "Consecutive Failures", value: state.consecutiveFailures.toString(), inline: true },
+          { name: "Error", value: (err instanceof Error ? err.message : String(err)).slice(0, 100), inline: false },
+        ]);
+      }
       
       eventBus.publish("crank.failure", slabAddress, {
         error: err instanceof Error ? err.message : String(err),

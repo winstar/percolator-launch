@@ -16,8 +16,18 @@ const MAX_CONNECTIONS_PER_IP = 5; // Max concurrent connections per IP
 
 // Authentication settings
 const WS_AUTH_REQUIRED = process.env.WS_AUTH_REQUIRED === "true";
-const WS_AUTH_SECRET = process.env.WS_AUTH_SECRET || "percolator-ws-secret-change-in-production";
+const WS_AUTH_SECRET = process.env.WS_AUTH_SECRET;
 const AUTH_TIMEOUT_MS = 5_000; // 5 seconds to authenticate
+
+// Validate WS auth configuration at startup
+if (WS_AUTH_REQUIRED && !WS_AUTH_SECRET) {
+  logger.error("FATAL: WS_AUTH_REQUIRED=true but WS_AUTH_SECRET is not set");
+  logger.error("Please set WS_AUTH_SECRET environment variable or disable WS_AUTH_REQUIRED");
+  process.exit(1);
+}
+
+// Use a fallback secret only for development when auth is not required
+const WS_SECRET = WS_AUTH_SECRET || "percolator-ws-dev-secret-not-for-production";
 
 // BH2: Heartbeat configuration
 const HEARTBEAT_INTERVAL_MS = 30_000; // 30 seconds
@@ -33,6 +43,7 @@ interface WsClient {
   pongTimeout?: ReturnType<typeof setTimeout>; // BH2: Pong response timeout
   isAlive: boolean; // BH2: Track pong responses
   authenticated: boolean; // Auth status
+  authenticatedSlab?: string; // Slab address from auth token (if slab-bound)
   ip: string; // Client IP address
   authTimeout?: ReturnType<typeof setTimeout>; // Auth timeout timer
 }
@@ -96,11 +107,14 @@ setInterval(() => {
 
 /**
  * Extract client IP from request
+ * Uses the last IP in X-Forwarded-For chain to prevent IP spoofing
  */
 function getClientIp(req: IncomingMessage): string {
   const forwarded = req.headers["x-forwarded-for"];
   if (typeof forwarded === "string") {
-    return forwarded.split(",")[0].trim();
+    const ips = forwarded.split(",").map(ip => ip.trim());
+    // Use the last IP (the one added by our reverse proxy, hardest to spoof)
+    return ips[ips.length - 1] || req.socket.remoteAddress || "unknown";
   }
   return req.socket.remoteAddress || "unknown";
 }
@@ -112,18 +126,21 @@ function getClientIp(req: IncomingMessage): string {
 export function generateWsToken(slabAddress: string): string {
   const timestamp = Date.now();
   const payload = `${slabAddress}:${timestamp}`;
-  const hmac = createHmac("sha256", WS_AUTH_SECRET);
+  const hmac = createHmac("sha256", WS_SECRET);
   hmac.update(payload);
   return `${payload}:${hmac.digest("hex")}`;
 }
 
 /**
- * Verify an auth token
+ * Verify an auth token and optionally validate slab binding
+ * @param token The authentication token
+ * @param expectedSlab Optional slab address to verify against token
+ * @returns Object with isValid boolean and slabAddress string (or null)
  */
-function verifyWsToken(token: string): boolean {
+function verifyWsToken(token: string, expectedSlab?: string): { isValid: boolean; slabAddress: string | null } {
   try {
     const parts = token.split(":");
-    if (parts.length !== 3) return false;
+    if (parts.length !== 3) return { isValid: false, slabAddress: null };
     
     const [slabAddress, timestampStr, signature] = parts;
     const timestamp = parseInt(timestampStr, 10);
@@ -131,18 +148,28 @@ function verifyWsToken(token: string): boolean {
     // Check timestamp is within last 5 minutes
     const now = Date.now();
     if (now - timestamp > 5 * 60 * 1000) {
-      return false;
+      return { isValid: false, slabAddress: null };
     }
     
     // Verify HMAC
     const payload = `${slabAddress}:${timestampStr}`;
-    const hmac = createHmac("sha256", WS_AUTH_SECRET);
+    const hmac = createHmac("sha256", WS_SECRET);
     hmac.update(payload);
     const expectedSignature = hmac.digest("hex");
     
-    return signature === expectedSignature;
+    if (signature !== expectedSignature) {
+      return { isValid: false, slabAddress: null };
+    }
+    
+    // If expectedSlab is provided, verify token is bound to that slab
+    if (expectedSlab && slabAddress !== expectedSlab) {
+      logger.warn("Token slab mismatch", { tokenSlab: slabAddress, expectedSlab });
+      return { isValid: false, slabAddress: null };
+    }
+    
+    return { isValid: true, slabAddress };
   } catch {
-    return false;
+    return { isValid: false, slabAddress: null };
   }
 }
 
@@ -376,10 +403,17 @@ export function setupWebSocket(server: Server): WebSocketServer {
     
     // Determine if authenticated
     let authenticated = !WS_AUTH_REQUIRED; // If auth not required, auto-authenticate
+    let authenticatedSlab: string | undefined = undefined;
+    
     if (WS_AUTH_REQUIRED && token) {
-      authenticated = verifyWsToken(token);
+      const tokenVerification = verifyWsToken(token);
+      authenticated = tokenVerification.isValid;
+      authenticatedSlab = tokenVerification.slabAddress || undefined;
+      
       if (!authenticated) {
         logger.warn("Invalid WS auth token provided", { ip: clientIp });
+      } else if (authenticatedSlab) {
+        logger.info("Client authenticated with slab binding", { ip: clientIp, slab: authenticatedSlab });
       }
     }
 
@@ -389,6 +423,7 @@ export function setupWebSocket(server: Server): WebSocketServer {
       subscriptions: new Set(), 
       isAlive: true,
       authenticated,
+      authenticatedSlab,
       ip: clientIp
     };
     clients.add(client);
@@ -469,14 +504,24 @@ export function setupWebSocket(server: Server): WebSocketServer {
         
         // Handle auth message
         if (msg.type === "auth" && msg.token) {
-          if (verifyWsToken(msg.token)) {
+          const tokenVerification = verifyWsToken(msg.token);
+          if (tokenVerification.isValid) {
             client.authenticated = true;
+            client.authenticatedSlab = tokenVerification.slabAddress || undefined;
+            
             if (client.authTimeout) {
               clearTimeout(client.authTimeout);
               client.authTimeout = undefined;
             }
-            logger.info("Client authenticated via message", { ip: client.ip });
-            ws.send(JSON.stringify({ type: "authenticated" }));
+            
+            logger.info("Client authenticated via message", { 
+              ip: client.ip, 
+              slab: client.authenticatedSlab 
+            });
+            ws.send(JSON.stringify({ 
+              type: "authenticated", 
+              slabBinding: client.authenticatedSlab 
+            }));
           } else {
             logger.warn("Invalid auth token in message", { ip: client.ip });
             ws.send(JSON.stringify({ type: "error", message: "Invalid authentication token" }));
@@ -512,6 +557,17 @@ export function setupWebSocket(server: Server): WebSocketServer {
             const sanitized = sanitizeSlabAddress(slabAddress);
             if (!sanitized) {
               errors.push(`Invalid slab address: ${slabAddress}`);
+              continue;
+            }
+            
+            // Verify slab binding if client is authenticated with a specific slab
+            if (client.authenticatedSlab && client.authenticatedSlab !== sanitized) {
+              errors.push(`Token is bound to slab ${client.authenticatedSlab}, cannot subscribe to ${sanitized}`);
+              logger.warn("Slab binding violation attempt", { 
+                ip: client.ip, 
+                authenticatedSlab: client.authenticatedSlab, 
+                requestedSlab: sanitized 
+              });
               continue;
             }
             
@@ -591,6 +647,20 @@ export function setupWebSocket(server: Server): WebSocketServer {
           const sanitized = sanitizeSlabAddress(msg.slabAddress);
           if (!sanitized) {
             ws.send(JSON.stringify({ type: "error", message: "Invalid slab address" }));
+            return;
+          }
+          
+          // Verify slab binding if client is authenticated with a specific slab
+          if (client.authenticatedSlab && client.authenticatedSlab !== sanitized) {
+            logger.warn("Slab binding violation attempt (legacy)", { 
+              ip: client.ip, 
+              authenticatedSlab: client.authenticatedSlab, 
+              requestedSlab: sanitized 
+            });
+            ws.send(JSON.stringify({ 
+              type: "error", 
+              message: `Token is bound to slab ${client.authenticatedSlab}, cannot subscribe to ${sanitized}` 
+            }));
             return;
           }
           

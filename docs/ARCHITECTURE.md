@@ -11,13 +11,14 @@ Percolator is a high-performance perpetual futures trading engine built on Solan
 
 ┌──────────────────┐         ┌──────────────────┐         ┌──────────────────┐
 │                  │         │                  │         │                  │
-│    Frontend      │◀───────▶│       API        │◀───────▶│     Indexer      │
-│   (Next.js)      │         │      (Hono)      │         │   (Background)   │
+│    Frontend      │◀───────▶│     API Service  │◀───────▶│     Indexer      │
+│   (Next.js)      │         │      (Hono)      │         │     Service      │
+│     app/         │         │   packages/api/  │         │ packages/indexer/│
 │                  │         │                  │         │                  │
 │  - User Interface│         │  - REST Endpoints│         │  - Event Indexing│
-│  - Trading UI    │         │  - WebSocket     │         │  - Data Pipeline │
-│  - Charts        │         │  - Rate Limiting │         │  - Cron Jobs     │
-│  - Wallet Connect│         │  - Caching       │         │  - Monitoring    │
+│  - Trading UI    │         │  - WebSocket     │         │  - Market Scan   │
+│  - Charts        │         │  - Rate Limiting │         │  - Position Track│
+│  - Wallet Connect│         │  - Swagger UI    │         │  - Trade Parsing │
 │                  │         │                  │         │                  │
 └────────┬─────────┘         └────────┬─────────┘         └────────┬─────────┘
          │                            │                            │
@@ -44,22 +45,24 @@ Percolator is a high-performance perpetual futures trading engine built on Solan
 └────────────────────────┬────────────────────────────────────────┘
                          │
                          ▼
-            ┌────────────────────────┐
-            │    SOLANA BLOCKCHAIN   │
-            │                        │
-            │  - Percolator Program  │
-            │  - Slab Accounts       │
-            │  - User Accounts       │
-            │  - Token Vaults        │
-            │  - Oracle Feeds        │
-            └────────────────────────┘
+            ┌────────────────────────────────────────┐
+            │       SOLANA BLOCKCHAIN                │
+            │                           ┌──────────┐ │
+            │  - Percolator Program     │ Keeper   │ │
+            │  - Slab Accounts    ◀─────┤ Service  │ │
+            │  - User Accounts          │ (Crank,  │ │
+            │  - Token Vaults           │  Liq,    │ │
+            │  - Oracle Feeds           │  Oracle) │ │
+            │                           └──────────┘ │
+            │                       packages/keeper/ │
+            └────────────────────────────────────────┘
 ```
 
 ## Service Breakdown
 
-### 1. Frontend (`packages/frontend`)
+### 1. Frontend (`app/`)
 
-**Technology**: Next.js 14 (App Router), React, TailwindCSS, shadcn/ui
+**Technology**: Next.js 14 (App Router), React, TailwindCSS, GSAP
 
 **Purpose**: User-facing web application for trading and market monitoring.
 
@@ -68,36 +71,39 @@ Percolator is a high-performance perpetual futures trading engine built on Solan
 - Real-time market data visualization
 - Interactive price charts (TradingView style)
 - Wallet integration (Phantom, Solflare, etc.)
-- Position management
-- Portfolio tracking
+- Position management and portfolio tracking
+- Quick Launch wizard for market creation
+- Admin dashboard for market management
 
 **Communication**:
 - Consumes REST API from the API service
-- Subscribes to WebSocket for real-time updates
+- Subscribes to WebSocket for real-time price updates
 - Directly interacts with Solana blockchain for wallet transactions
 
-**Entry Point**: `packages/frontend/src/app/page.tsx`
+**Entry Point**: `app/page.tsx`
 
 ---
 
-### 2. API Service (`packages/api`)
+### 2. API Service (`packages/api/`)
 
 **Technology**: Hono (lightweight web framework), TypeScript
 
 **Purpose**: REST API server providing read access to market data and platform statistics.
 
 **Key Features**:
-- **RESTful Endpoints**: 20+ endpoints for markets, trades, prices, funding, etc.
-- **WebSocket Server**: Real-time updates for trades and market data
+- **RESTful Endpoints**: 20+ endpoints for markets, trades, prices, funding, insurance, stats
+- **WebSocket Server**: Real-time price streaming via Helius Geyser
 - **Response Caching**: Intelligent caching with varying TTLs (10-60s)
-- **Rate Limiting**: Per-IP rate limiting (100 req/min for reads, 20 for writes)
-- **CORS Handling**: Configurable cross-origin resource sharing
+- **Rate Limiting**: Token-bucket rate limiter (10 req/s per client)
+- **CORS Handling**: Configurable allowlist of trusted origins
 - **Health Monitoring**: Service health checks for DB and RPC connectivity
-- **API Documentation**: Swagger UI at `/docs`
+- **API Documentation**: Interactive Swagger UI at `/docs`
+- **CSP Headers**: Content-Security-Policy for Swagger UI resources
 
 **Data Sources**:
 - **Supabase**: Primary data source for historical and aggregated data
 - **Solana RPC**: On-chain data for real-time market details
+- **Helius Geyser**: WebSocket streaming for live price updates
 
 **Entry Point**: `packages/api/src/index.ts`
 
@@ -105,7 +111,37 @@ Percolator is a high-performance perpetual futures trading engine built on Solan
 
 ---
 
-### 3. Indexer Service (`packages/indexer`)
+### 3. Keeper Service (`packages/keeper/`)
+
+**Technology**: TypeScript, Node.js
+
+**Purpose**: Automated cron jobs for market maintenance and keeper operations.
+
+**Key Responsibilities**:
+
+1. **Crank Bot** (`crank.ts`):
+   - Discovers all markets across 3 program tiers via `getProgramAccounts`
+   - Cranks every market every 10 seconds (batched, rate-limited)
+   - Updates funding rates, mark prices, and risk metrics
+   - Handles 43+ markets concurrently with 0 failures
+
+2. **Liquidation Scanner** (`liquidation.ts`):
+   - Scans all markets every 15 seconds for undercollateralized positions
+   - Auto-executes liquidations with atomic crank → liquidate transactions
+   - Profit from liquidation rewards
+
+3. **Oracle Pusher** (`oracle-push.ts`):
+   - Pushes oracle prices for admin-oracle markets where keeper wallet is authority
+   - Only pushes when the keeper wallet IS the oracle authority
+   - Circuit breaker enforcement for price sanity checks
+
+**Entry Point**: `packages/keeper/src/index.ts`
+
+**Runs**: As a long-running background process (systemd, PM2, Railway, or Docker)
+
+---
+
+### 4. Indexer Service (`packages/indexer/`)
 
 **Technology**: TypeScript, Node.js
 
@@ -113,62 +149,47 @@ Percolator is a high-performance perpetual futures trading engine built on Solan
 
 **Key Responsibilities**:
 
-1. **Event Indexing**:
-   - Listen to program logs from Percolator contracts
-   - Parse and decode trade events, liquidations, funding updates
-   - Store events in Supabase for historical analysis
+1. **Trade Indexer** (`TradeIndexer.ts`):
+   - Listens for successful crank events
+   - Parses on-chain transactions for TradeCpi (tag 10) and TradeNoCpi (tag 6)
+   - Extracts trader, size, side, price from instruction data
+   - Writes to Supabase `trades` table with deduplication
 
-2. **Market Monitoring**:
-   - Poll market slab accounts for state changes
-   - Update market statistics (OI, funding, prices)
-   - Track insurance fund balances
+2. **Market Discovery** (`MarketDiscovery.ts`):
+   - Scans all program tiers for new markets
+   - Auto-registers discovered markets in Supabase
+   - Fetches token metadata from Metaplex and Jupiter
 
-3. **Oracle Updates**:
-   - Fetch oracle price updates
-   - Store price history for charting
+3. **Position Tracker** (`PositionTracker.ts`):
+   - Monitors slab accounts for position changes
+   - Updates aggregated position stats
+   - Tracks insurance fund balances
 
-4. **Scheduled Jobs**:
-   - Periodic cleanup of old data
-   - Aggregate statistics calculation
-   - Market health monitoring
-
-5. **Data Pipeline**:
-   - Validate and sanitize on-chain data
-   - Transform data into queryable formats
-   - Ensure data consistency
+4. **Data Pipeline**:
+   - Validates and sanitizes on-chain data
+   - Transforms data into queryable formats
+   - Ensures data consistency via transaction signature deduplication
 
 **Entry Point**: `packages/indexer/src/index.ts`
 
-**Runs**: As a long-running background process (systemd, PM2, or Docker)
+**Runs**: As a long-running background process (systemd, PM2, Railway, or Docker)
 
 ---
 
-## Shared Package (`packages/shared`)
+## Core Package (`packages/core/`)
 
-**Purpose**: Common utilities, types, and database access shared across all services.
-
-**Contents**:
-- **Database Client**: Supabase client initialization
-- **RPC Connection**: Solana connection management
-- **Type Definitions**: Shared TypeScript types
-- **Utility Functions**: Sanitization, validation, logging
-- **Core Logic**: Slab parsing, oracle resolution
-
-**Used By**: API, Indexer, Frontend (for types)
-
----
-
-## Core Package (`packages/core`)
-
-**Purpose**: On-chain data parsing and interaction logic.
+**Purpose**: Shared TypeScript SDK for on-chain data parsing and instruction encoding.
 
 **Contents**:
-- **Slab Parser**: Parse binary slab account data
+- **Slab Parser** (`solana/slab.ts`): Parse binary slab account data
+- **Instruction Encoders** (`abi/instructions.ts`): Encode all 29 program instructions
 - **Event Decoder**: Decode program logs and events
-- **Oracle Router**: Multi-source price resolution (Pyth, Switchboard, etc.)
-- **Account Layouts**: Binary layout definitions for on-chain accounts
+- **Oracle Router** (`oracle/price-router.ts`): Multi-source price resolution (DexScreener, Jupiter, Pyth)
+- **Trading Math** (`math/`): PnL, liquidation price, margin calculations
+- **Market Discovery** (`solana/discovery.ts`): On-chain market scanning
+- **Error Codes** (`abi/errors.ts`): All 34 error codes with human-readable messages
 
-**Used By**: Indexer (for parsing), API (for on-chain reads)
+**Used By**: All services (app, api, keeper, indexer)
 
 ---
 
@@ -411,12 +432,16 @@ cp .env.example .env
 cd packages/api
 pnpm dev
 
-# Terminal 2: Indexer Service
+# Terminal 2: Keeper Service
+cd packages/keeper
+pnpm dev
+
+# Terminal 3: Indexer Service
 cd packages/indexer
 pnpm dev
 
-# Terminal 3: Frontend
-cd packages/frontend
+# Terminal 4: Frontend
+cd app
 pnpm dev
 ```
 
@@ -464,11 +489,20 @@ The `docker-compose.yml` file orchestrates all three services with proper networ
                           ┌──────────────┴──────────────┐
                           │                             │
                           ▼                             ▼
-                   ┌─────────────┐             ┌──────────────┐
-                   │  Supabase   │             │   Indexer    │
-                   │ (Postgres)  │             │ (Background) │
-                   └─────────────┘             │  (Railway)   │
-                                               └──────────────┘
+                   ┌─────────────┐         ┌───────────────────────┐
+                   │  Supabase   │         │  Backend Workers      │
+                   │ (Postgres)  │◀───────▶│  (Railway)            │
+                   └─────────────┘         │                       │
+                          ▲                │  - Keeper (crank/liq) │
+                          │                │  - Indexer (events)   │
+                          │                └───────────┬───────────┘
+                          │                            │
+                          └────────────────────────────┘
+                                                       ▼
+                                          ┌─────────────────────┐
+                                          │  Solana Blockchain  │
+                                          │  (Helius RPC)       │
+                                          └─────────────────────┘
 ```
 
 ### Deployment Checklist
@@ -478,17 +512,27 @@ The `docker-compose.yml` file orchestrates all three services with proper networ
   - Configure custom domain
   - Enable preview deployments
 
-- [ ] **API Service**: Deploy to Railway/Render/Fly.io
-  - Set production environment variables
+- [ ] **API Service**: Deploy to Railway
+  - Set production environment variables (see `packages/api/.env.example`)
   - Configure health check endpoint (`/health`)
-  - Set up auto-scaling (if needed)
-  - Enable HTTPS
+  - Enable HTTPS and CORS allowlist
+  - Set up rate limiting and caching
 
-- [ ] **Indexer**: Deploy as background worker
-  - Use systemd, PM2, or Docker
+- [ ] **Keeper Service**: Deploy to Railway as background worker
+  - Set production environment variables (see `packages/keeper/.env.example`)
+  - Configure crank wallet keypair (CRANK_KEYPAIR env var)
+  - Set crank/liquidation intervals
+  - Configure restart policy (auto-restart on failure)
+  - Set up logging and monitoring
+  - Enable alerts for crank failures
+
+- [ ] **Indexer Service**: Deploy to Railway as background worker
+  - Set production environment variables (see `packages/indexer/.env.example`)
+  - Configure Supabase service role key
+  - Set indexing interval (default 5s)
   - Configure restart policy
   - Set up logging and monitoring
-  - Enable alerts for failures
+  - Enable alerts for indexing failures
 
 - [ ] **Database**: Supabase
   - Configure connection pooling
@@ -538,7 +582,13 @@ The `docker-compose.yml` file orchestrates all three services with proper networ
 - Error rate (4xx, 5xx)
 - Cache hit rate
 
-**Indexer**:
+**Keeper Service**:
+- Crank success rate
+- Liquidations executed
+- Oracle push frequency
+- Error rate
+
+**Indexer Service**:
 - Events indexed per minute
 - Processing lag (blockchain vs database)
 - Error rate

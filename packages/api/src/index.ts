@@ -3,7 +3,7 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { compress } from "hono/compress";
 import { serve } from "@hono/node-server";
-import { createLogger } from "@percolator/shared";
+import { createLogger, sendInfoAlert } from "@percolator/shared";
 import { healthRoutes } from "./routes/health.js";
 import { marketRoutes } from "./routes/markets.js";
 import { tradeRoutes } from "./routes/trades.js";
@@ -126,8 +126,13 @@ app.onError((err, c) => {
 });
 
 const port = Number(process.env.API_PORT ?? 3001);
-const server = serve({ fetch: app.fetch, port }, (info) => {
+const server = serve({ fetch: app.fetch, port }, async (info) => {
   logger.info("Percolator API started", { port: info.port });
+  
+  // Send startup alert
+  await sendInfoAlert("API service started", [
+    { name: "Port", value: info.port.toString(), inline: true },
+  ]);
 });
 
 const wss = setupWebSocket(server as unknown as import("node:http").Server);
@@ -136,6 +141,11 @@ async function shutdown(signal: string): Promise<void> {
   logger.info("Shutdown initiated", { signal });
   
   try {
+    // Send shutdown alert
+    await sendInfoAlert("API service shutting down", [
+      { name: "Signal", value: signal, inline: true },
+    ]);
+    
     // Close WebSocket server (stops accepting new connections)
     logger.info("Closing WebSocket server");
     await new Promise<void>((resolve, reject) => {

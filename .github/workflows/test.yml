@@ -29,7 +29,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: 'pnpm'
 
       - name: Install dependencies
@@ -40,11 +40,9 @@ jobs:
 
       - name: Run unit tests (server)
         run: cd packages/server && pnpm test:unit
-        continue-on-error: true # Allow initial setup without tests
 
       - name: Run unit tests (frontend)
         run: cd app && pnpm test:unit
-        continue-on-error: true # Allow initial setup without tests
 
       - name: Upload coverage (server)
         uses: codecov/codecov-action@v4
@@ -85,7 +83,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: 'pnpm'
 
       - name: Install dependencies
@@ -93,7 +91,6 @@ jobs:
 
       - name: Run integration tests
         run: cd packages/server && pnpm test:integration
-        continue-on-error: true # Allow initial setup without tests
 
       - name: Upload coverage
         uses: codecov/codecov-action@v4
@@ -126,7 +123,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: 'pnpm'
 
       - name: Install dependencies
@@ -140,7 +137,6 @@ jobs:
 
       - name: Run E2E tests
         run: pnpm run test:e2e
-        continue-on-error: true # Allow initial setup without tests
 
       - name: Upload Playwright report
         if: always()
@@ -157,6 +153,33 @@ jobs:
           name: test-results
           path: test-results/
           retention-days: 7
+
+  fuzz-tests:
+    name: Fuzz Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run fuzz tests
+        run: cd packages/core && pnpm test:fuzz
+        continue-on-error: true
 
   coverage-check:
     name: Coverage Gate
@@ -176,7 +199,6 @@ jobs:
           echo "   - Overall coverage ≥90%"
           echo "   - Critical paths 100%"
           echo "   - No coverage regressions"
-        continue-on-error: true
 
   security-tests:
     name: Security Tests
@@ -195,7 +217,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: 'pnpm'
 
       - name: Install dependencies
@@ -203,11 +225,9 @@ jobs:
 
       - name: Run security audit
         run: pnpm audit --audit-level=moderate
-        continue-on-error: true
 
       - name: Run security tests
         run: cd packages/server && pnpm test:security
-        continue-on-error: true # Allow initial setup without tests
 
   type-check:
     name: Type Check
@@ -226,7 +246,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: 'pnpm'
 
       - name: Install dependencies

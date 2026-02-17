@@ -1,6 +1,7 @@
 import { Connection, Transaction, TransactionInstruction, ComputeBudgetProgram } from "@solana/web3.js";
 import type { WalletContextState } from "@solana/wallet-adapter-react";
 import type { Signer } from "@solana/web3.js";
+import { getConfig } from "./config";
 
 export interface SendTxParams {
   connection: Connection;
@@ -15,6 +16,61 @@ export interface SendTxParams {
 const POLL_INTERVAL_MS = 2000;
 const MAX_POLL_TIME_MS = 90_000;
 const PRIORITY_FEE = Number(process.env.NEXT_PUBLIC_PRIORITY_FEE ?? 100_000);
+
+// Network detection cache — only check once per session
+let networkValidated = false;
+let lastGenesisHash: string | null = null;
+
+/**
+ * Validate that the wallet's connected network matches the app's expected network.
+ * Throws an error if there's a mismatch (e.g. wallet on mainnet, app on devnet).
+ */
+async function validateNetwork(connection: Connection): Promise<void> {
+  if (networkValidated) return; // Already validated this session
+  
+  try {
+    const genesisHash = await connection.getGenesisHash();
+    const cfg = getConfig();
+    
+    // Known genesis hashes for Solana clusters
+    const GENESIS_HASHES = {
+      mainnet: "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d",
+      devnet: "EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG",
+      testnet: "4uhcVJyU9pJkvQyS88uRDiswHXSCkY3zQawwpjk2NsNY",
+    };
+    
+    const expectedHash = GENESIS_HASHES[cfg.network as keyof typeof GENESIS_HASHES];
+    
+    if (expectedHash && genesisHash !== expectedHash) {
+      // Cache the detected hash to show in error message
+      lastGenesisHash = genesisHash;
+      
+      // Determine which network the wallet is actually on
+      let detectedNetwork = "unknown";
+      for (const [net, hash] of Object.entries(GENESIS_HASHES)) {
+        if (hash === genesisHash) {
+          detectedNetwork = net;
+          break;
+        }
+      }
+      
+      throw new Error(
+        `Network mismatch: App is configured for ${cfg.network.toUpperCase()} but your wallet is connected to ${detectedNetwork.toUpperCase()}. ` +
+        `Please switch your wallet to ${cfg.network.toUpperCase()} or change the app network in settings.`
+      );
+    }
+    
+    networkValidated = true;
+    lastGenesisHash = genesisHash;
+  } catch (error) {
+    // If it's our network mismatch error, rethrow it
+    if (error instanceof Error && error.message.includes("Network mismatch")) {
+      throw error;
+    }
+    // Otherwise, log but don't block (RPC might not support getGenesisHash)
+    console.warn("[validateNetwork] Failed to validate network:", error);
+  }
+}
 
 /**
  * Poll getSignatureStatuses until confirmed or timeout.
@@ -78,6 +134,9 @@ export async function sendTx({
   if (!wallet.publicKey || !wallet.signTransaction) {
     throw new Error("Wallet not connected");
   }
+  
+  // Validate network before sending any transactions
+  await validateNetwork(connection);
 
   let lastError: Error | null = null;
   let lastSignature: string | undefined;

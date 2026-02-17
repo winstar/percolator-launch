@@ -18,7 +18,7 @@ import {
   derivePythPushOraclePDA,
   type DiscoveredMarket,
 } from "@percolator/core";
-import { config, getConnection, loadKeypair, sendWithRetry, pollSignatureStatus, getRecentPriorityFees, checkTransactionSize, eventBus, createLogger } from "@percolator/shared";
+import { config, getConnection, loadKeypair, sendWithRetry, pollSignatureStatus, getRecentPriorityFees, checkTransactionSize, eventBus, createLogger, sendWarningAlert } from "@percolator/shared";
 import { OracleService } from "./oracle.js";
 
 const logger = createLogger("keeper:liquidation");
@@ -342,6 +342,14 @@ export class LiquidationService {
         signature: sig!,
       });
       logger.info("Account liquidated", { accountIndex: accountIdx, slabAddress: slabAddress.toBase58(), signature: sig });
+      
+      // Send Discord alert for liquidation execution
+      await sendWarningAlert("Liquidation executed", [
+        { name: "Market", value: slabAddress.toBase58().slice(0, 8), inline: true },
+        { name: "Account Index", value: accountIdx.toString(), inline: true },
+        { name: "Signature", value: sig!.slice(0, 12), inline: true },
+      ]);
+      
       return sig!;
     } catch (err) {
       logger.error("Liquidation failed", { 

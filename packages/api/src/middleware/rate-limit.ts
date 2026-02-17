@@ -22,9 +22,17 @@ setInterval(() => {
 }, 5 * 60_000);
 
 function getClientIp(c: Context): string {
-  return c.req.header("x-forwarded-for")?.split(",")[0]?.trim() ?? 
-         c.req.header("x-real-ip") ?? 
-         "unknown";
+  // Use the last IP in X-Forwarded-For chain (closest to server, hardest to spoof)
+  // or fall back to direct connection IP
+  const forwarded = c.req.header("x-forwarded-for");
+  if (forwarded) {
+    const ips = forwarded.split(",").map(ip => ip.trim());
+    // Use the last IP (the one added by our reverse proxy)
+    return ips[ips.length - 1] || "unknown";
+  }
+  
+  // Fallback to x-real-ip or unknown
+  return c.req.header("x-real-ip") ?? "unknown";
 }
 
 interface RateLimitResult {

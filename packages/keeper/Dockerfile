@@ -1,5 +1,5 @@
 # Builder stage
-FROM node:22-alpine AS builder
+FROM node:22-alpine@sha256:3a4802e64ab5181c7870d6ddd8c824c2efc42873baae37d1971451668659483b AS builder
 
 # Install pnpm
 RUN corepack enable && corepack prepare pnpm@9 --activate
@@ -25,7 +25,10 @@ RUN pnpm --filter @percolator/core build
 RUN pnpm --filter @percolator/keeper build
 
 # Runner stage
-FROM node:22-alpine AS runner
+FROM node:22-alpine@sha256:3a4802e64ab5181c7870d6ddd8c824c2efc42873baae37d1971451668659483b AS runner
+
+# Install curl for health checks
+RUN apk add --no-cache curl
 
 WORKDIR /app
 
@@ -47,6 +50,19 @@ COPY --from=builder /app/packages/keeper/node_modules ./packages/keeper/node_mod
 COPY --from=builder /app/pnpm-workspace.yaml ./
 COPY --from=builder /app/package.json ./
 
+# Change ownership to node user
+RUN chown -R node:node /app
+
+# Switch to non-root user
+USER node
+
 WORKDIR /app/packages/keeper
+
+# Expose health endpoint port (default 8081)
+EXPOSE 8081
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
+  CMD curl -f http://localhost:${KEEPER_HEALTH_PORT:-8081}/health || exit 1
 
 CMD ["node", "dist/index.js"]

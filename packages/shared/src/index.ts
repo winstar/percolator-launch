@@ -10,3 +10,4 @@ export * from "./services/events.js";
 export * from "./retry.js";
 export * from "./sentry.js";
 export * from "./sanitize.js";
+export * from "./alerts.js";
