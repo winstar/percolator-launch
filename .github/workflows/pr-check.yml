@@ -32,6 +32,13 @@ jobs:
           
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      # Build core FIRST — @percolator/api, keeper, indexer, and shared all
+      # declare "@percolator/core": "workspace:*" as a dependency.
+      # Without this step TypeScript cannot resolve @percolator/core imports
+      # and the subsequent package builds fail with TS2307.
+      - name: Build core package
+        run: pnpm --filter @percolator/core build
         
       - name: Build shared package
         run: pnpm --filter @percolator/shared build
