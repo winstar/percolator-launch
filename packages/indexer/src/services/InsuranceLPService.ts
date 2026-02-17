@@ -6,7 +6,7 @@ import { PublicKey } from "@solana/web3.js";
 const logger = createLogger("indexer:insurance-lp");
 
 // BL2: Named constants for magic numbers
-const POLL_INTERVAL_MS = 30_000;
+const POLL_INTERVAL_MS = 120_000;
 const MS_PER_DAY = 86_400_000;
 const REDEMPTION_RATE_E6_DEFAULT = 1_000_000; // 1:1 ratio when no LPs
 

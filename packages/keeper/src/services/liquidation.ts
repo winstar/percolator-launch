@@ -51,7 +51,7 @@ export class LiquidationService {
   private recentSignatures = new Map<string, number>(); // signature -> timestamp
   private readonly signatureTTLMs = 60_000; // 60 seconds
 
-  constructor(oracleService: OracleService, intervalMs = 15_000) {
+  constructor(oracleService: OracleService, intervalMs = 60_000) {
     this.oracleService = oracleService;
     this.intervalMs = intervalMs;
   }

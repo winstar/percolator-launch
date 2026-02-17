@@ -42,7 +42,7 @@ export interface MarketProvider {
 }
 
 /** How often to collect stats (every 30s — runs after crank cycles) */
-const COLLECT_INTERVAL_MS = 30_000;
+const COLLECT_INTERVAL_MS = 120_000;
 
 /** How often to log oracle prices to DB (every 60s per market to avoid bloat) */
 const ORACLE_LOG_INTERVAL_MS = 60_000;

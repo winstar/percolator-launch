@@ -20,7 +20,7 @@ export const config = {
   heliusApiKey: env.HELIUS_API_KEY ?? "",
   fallbackRpcUrl: env.FALLBACK_RPC_URL ?? "https://api.devnet.solana.com",
   port: env.PORT ?? 3001,
-  crankIntervalMs: env.CRANK_INTERVAL_MS ?? 10_000,
+  crankIntervalMs: env.CRANK_INTERVAL_MS ?? 30_000,
   crankInactiveIntervalMs: env.CRANK_INACTIVE_INTERVAL_MS ?? 60_000,
   /** BH4: Reduced to 60s to catch markets created/deleted within smaller window */
   discoveryIntervalMs: env.DISCOVERY_INTERVAL_MS ?? 60_000,

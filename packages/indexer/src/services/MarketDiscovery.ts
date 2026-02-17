@@ -35,7 +35,7 @@ export class MarketDiscovery {
     return this.markets;
   }
   
-  start(intervalMs = 60_000) {
+  start(intervalMs = 300_000) {
     this.discover().catch((err) => {
       logger.error("Initial discovery failed", { error: err });
       captureException(err, { tags: { context: "market-discovery-initial" } });
