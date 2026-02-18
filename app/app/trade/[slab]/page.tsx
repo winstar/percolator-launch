@@ -2,6 +2,7 @@
 
 import { use, useState, useRef, useEffect } from "react";
 import gsap from "gsap";
+import { PublicKey } from "@solana/web3.js";
 import { SlabProvider, useSlabState } from "@/components/providers/SlabProvider";
 import { UsdToggleProvider, useUsdToggle } from "@/components/providers/UsdToggleProvider";
 import { TradeForm } from "@/components/trade/TradeForm";
@@ -417,8 +418,41 @@ function TradePageInner({ slab }: { slab: string }) {
   );
 }
 
+function isValidPublicKey(address: string): boolean {
+  try {
+    new PublicKey(address);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function InvalidAddressPage({ address }: { address: string }) {
+  return (
+    <div className="min-h-[calc(100vh-48px)] flex flex-col items-center justify-center gap-3">
+      <div className="border border-[var(--short)]/30 bg-[var(--short)]/5 p-6 text-center max-w-md">
+        <p className="text-sm font-medium text-[var(--short)]">Invalid market address</p>
+        <p className="mt-2 text-[11px] text-[var(--text-secondary)]">
+          The address in the URL is not a valid Solana public key.
+        </p>
+        <p className="mt-2 text-[10px] text-[var(--text-dim)] break-all" style={{ fontFamily: "var(--font-mono)" }}>{address}</p>
+        <a
+          href="/markets"
+          className="mt-4 inline-block border border-[var(--border)] px-4 py-1.5 text-[11px] text-[var(--text-secondary)] hover:border-[var(--accent)]/40 hover:text-[var(--text)] transition-colors"
+        >
+          Browse Markets
+        </a>
+      </div>
+    </div>
+  );
+}
+
 export default function TradePage({ params }: { params: Promise<{ slab: string }> }) {
   const { slab } = use(params);
+
+  if (!isValidPublicKey(slab)) {
+    return <InvalidAddressPage address={slab} />;
+  }
 
   return (
     <SlabProvider slabAddress={slab}>
