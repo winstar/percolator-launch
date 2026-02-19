@@ -30,7 +30,15 @@ import { ShimmerSkeleton } from "@/components/ui/ShimmerSkeleton";
 import { LogoUpload } from "@/components/create/LogoUpload";
 import { usePrefersReducedMotion } from "@/hooks/usePrefersReducedMotion";
 
-const HELIUS_RPC = `https://devnet.helius-rpc.com/?api-key=${process.env.NEXT_PUBLIC_HELIUS_API_KEY ?? ""}`;
+/**
+ * Use the server-side RPC proxy to avoid exposing HELIUS_API_KEY in the client bundle.
+ * The proxy forwards JSON-RPC requests to Helius keeping the key server-side only.
+ * Falls back to the public devnet RPC if window is not available (SSR edge case).
+ */
+const HELIUS_RPC =
+  typeof window !== "undefined"
+    ? `${window.location.origin}/api/rpc`
+    : "https://api.devnet.solana.com";
 // Public devnet RPC for airdrop (Helius may not forward airdrop requests)
 const PUBLIC_DEVNET_RPC = "https://api.devnet.solana.com";
 
