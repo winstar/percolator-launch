@@ -19,10 +19,28 @@ export function formatBps(bps: bigint | number): string {
   return `${(n / 100).toFixed(2)}%`;
 }
 
+/**
+ * Sentinel returned by computeLiqPrice when a short position is over-collateralised
+ * (maintenanceMarginBps >= 100%). Signals "this position cannot be liquidated."
+ * Using max u64 as the sentinel matches the on-chain convention.
+ */
+export const LIQ_PRICE_UNLIQUIDATABLE = 18446744073709551615n; // max u64
+
 export function formatUsd(priceE6: bigint | null | undefined): string {
   if (priceE6 == null) return "$0.00";
   const val = Number(priceE6) / 1_000_000;
   return `$${val.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 6 })}`;
+}
+
+/**
+ * Format a liquidation price in e6 format.
+ * Returns "∞" when the position is unliquidatable (liqPrice === max u64),
+ * "-" when zero/null, otherwise delegates to formatUsd.
+ */
+export function formatLiqPrice(liqPriceE6: bigint | null | undefined): string {
+  if (liqPriceE6 == null || liqPriceE6 === 0n) return "-";
+  if (liqPriceE6 >= LIQ_PRICE_UNLIQUIDATABLE) return "∞";
+  return formatUsd(liqPriceE6);
 }
 
 export function shortenAddress(address: string, chars: number = 4): string {
