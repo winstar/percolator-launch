@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 import { withSentryConfig } from "@sentry/nextjs";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://percolator-api-production.up.railway.app";
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://percolator-api1-production.up.railway.app";
 
 const nextConfig: NextConfig = {
   transpilePackages: ["@percolator/core"],
