@@ -207,7 +207,7 @@ function MarketsPageInner() {
       }
     });
     return list;
-  }, [effectiveMarkets, debouncedSearch, sortBy, leverageFilter, oracleFilter]);
+  }, [effectiveMarkets, debouncedSearch, sortBy, leverageFilter, oracleFilter, tokenMetaMap]);
 
   // P-MED-3: Infinite scroll observer
   useEffect(() => {
