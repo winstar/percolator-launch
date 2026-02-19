@@ -35,9 +35,9 @@ export default function PortfolioPage() {
 
   // In mock mode, use synthetic positions
   const mockPositions = mockMode && !walletConnected ? getMockPortfolioPositions() : null;
-  const positions = mockPositions ?? portfolio.positions;
-  const totalPnl = mockPositions ? mockPositions.reduce((s, p) => s + p.account.pnl, 0n) : portfolio.totalPnl;
-  const totalDeposited = mockPositions ? mockPositions.reduce((s, p) => s + p.account.capital, 0n) : portfolio.totalDeposited;
+  const positions = mockPositions ?? portfolio.positions ?? [];
+  const totalPnl = mockPositions ? mockPositions.reduce((s, p) => s + (p.account.pnl ?? 0n), 0n) : (portfolio.totalPnl ?? 0n);
+  const totalDeposited = mockPositions ? mockPositions.reduce((s, p) => s + (p.account.capital ?? 0n), 0n) : (portfolio.totalDeposited ?? 0n);
   const loading = mockPositions ? false : portfolio.loading;
   const refresh = portfolio.refresh;
 
@@ -157,9 +157,13 @@ export default function PortfolioPage() {
               </div>
 
               {positions.map((pos, i) => {
-                const side = pos.account.positionSize > 0n ? "Long" : pos.account.positionSize < 0n ? "Short" : "Flat";
-                const sizeAbs = pos.account.positionSize < 0n ? -pos.account.positionSize : pos.account.positionSize;
-                const pnlPositive = pos.account.pnl >= 0n;
+                const posSize = pos.account?.positionSize ?? 0n;
+                const posPnl = pos.account?.pnl ?? 0n;
+                const posCapital = pos.account?.capital ?? 0n;
+                const posEntry = pos.account?.entryPrice ?? 0n;
+                const side = posSize > 0n ? "Long" : posSize < 0n ? "Short" : "Flat";
+                const sizeAbs = posSize < 0n ? -posSize : posSize;
+                const pnlPositive = posPnl >= 0n;
 
                 return (
                   <Link
@@ -188,10 +192,10 @@ export default function PortfolioPage() {
                       </span>
                     </div>
                     <div className="text-right text-sm text-white truncate" style={{ fontFamily: "var(--font-jetbrains-mono)" }}>{formatTokenAmount(sizeAbs)}</div>
-                    <div className="text-right text-sm text-[var(--text-secondary)] truncate" style={{ fontFamily: "var(--font-jetbrains-mono)" }}>{formatPriceE6(pos.account.entryPrice)}</div>
-                    <div className="text-right text-sm text-[var(--text-secondary)] truncate" style={{ fontFamily: "var(--font-jetbrains-mono)" }}>{formatTokenAmount(pos.account.capital)}</div>
+                    <div className="text-right text-sm text-[var(--text-secondary)] truncate" style={{ fontFamily: "var(--font-jetbrains-mono)" }}>{formatPriceE6(posEntry)}</div>
+                    <div className="text-right text-sm text-[var(--text-secondary)] truncate" style={{ fontFamily: "var(--font-jetbrains-mono)" }}>{formatTokenAmount(posCapital)}</div>
                     <div className={`text-right text-sm font-medium truncate ${pnlPositive ? "text-[var(--long)]" : "text-[var(--short)]"}`} style={{ fontFamily: "var(--font-jetbrains-mono)" }}>
-                      {formatPnl(pos.account.pnl)}
+                      {formatPnl(posPnl)}
                     </div>
                   </Link>
                 );

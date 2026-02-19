@@ -92,7 +92,13 @@ export const SlabProvider: FC<{ children: ReactNode; slabAddress: string }> = ({
       return;
     }
 
-    const slabPk = new PublicKey(slabAddress);
+    let slabPk: PublicKey;
+    try {
+      slabPk = new PublicKey(slabAddress);
+    } catch {
+      setState((s) => ({ ...s, slabAddress, loading: false, error: "Invalid market address. Check the URL and try again." }));
+      return;
+    }
     let cancelled = false;
 
     function parseSlab(data: Uint8Array, owner?: PublicKey) {
