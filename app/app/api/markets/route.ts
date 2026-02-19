@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAuth, UNAUTHORIZED } from "@/lib/api-auth";
+// requireAuth removed from POST — on-chain admin verification is sufficient
 import { Connection, PublicKey } from "@solana/web3.js";
 import { parseHeader } from "@percolator/core";
 import { getServiceClient } from "@/lib/supabase";
@@ -36,9 +36,10 @@ export async function GET() {
 }
 
 // POST /api/markets — register a new market after deployment
+// Auth: on-chain verification (deployer == slab admin) is the real gate.
+// No API key required — the client calls this after successful on-chain deployment.
 export async function POST(req: NextRequest) {
   try {
-    if (!requireAuth(req)) return UNAUTHORIZED;
     const body = await req.json();
 
   const {
