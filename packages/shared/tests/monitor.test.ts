@@ -45,22 +45,37 @@ describe("ServiceMonitor", () => {
   });
 
   it("should alert after maxConsecutiveFailures", async () => {
-    await monitor.recordFailure("err1");
-    await monitor.recordFailure("err2");
+    // Use a monitor where only consecutiveFailures can trigger
+    // (high error rate threshold so it doesn't trigger first)
+    const strictMonitor = new ServiceMonitor("test", "strict", {
+      maxConsecutiveFailures: 3,
+      maxStalenessMs: 600_000, // 10 min — won't trigger in test
+      maxErrorRate: 1.0, // 100% — won't trigger
+      errorRateWindow: 10,
+    });
+    await strictMonitor.recordFailure("err1");
+    await strictMonitor.recordFailure("err2");
     expect(sendCriticalAlert).not.toHaveBeenCalled();
-    await monitor.recordFailure("err3");
+    await strictMonitor.recordFailure("err3");
     expect(sendCriticalAlert).toHaveBeenCalledTimes(1);
-    expect(monitor.getStatus().alertActive).toBe(true);
+    expect(strictMonitor.getStatus().alertActive).toBe(true);
   });
 
   it("should send recovery alert after alerting then succeeding", async () => {
-    await monitor.recordFailure("err1");
-    await monitor.recordFailure("err2");
-    await monitor.recordFailure("err3");
+    // Use a monitor where only consecutiveFailures triggers
+    const recMonitor = new ServiceMonitor("test", "recovery", {
+      maxConsecutiveFailures: 3,
+      maxStalenessMs: 600_000,
+      maxErrorRate: 1.0,
+      errorRateWindow: 10,
+    });
+    await recMonitor.recordFailure("err1");
+    await recMonitor.recordFailure("err2");
+    await recMonitor.recordFailure("err3");
     expect(sendCriticalAlert).toHaveBeenCalledTimes(1);
-    await monitor.recordSuccess();
+    await recMonitor.recordSuccess();
     expect(sendWarningAlert).toHaveBeenCalledTimes(1);
-    expect(monitor.getStatus().alertActive).toBe(false);
+    expect(recMonitor.getStatus().alertActive).toBe(false);
   });
 
   it("should calculate error rate correctly", async () => {
