@@ -1,9 +1,12 @@
 import "dotenv/config";
 import http from "node:http";
-import { config, createLogger, initSentry, captureException, sendInfoAlert } from "@percolator/shared";
+import { config, createLogger, initSentry, captureException, sendInfoAlert, createServiceMonitors } from "@percolator/shared";
 import { OracleService } from "./services/oracle.js";
 import { CrankService } from "./services/crank.js";
 import { LiquidationService } from "./services/liquidation.js";
+
+// Monitoring — alerts to Discord on threshold breaches
+export const monitors = createServiceMonitors("Keeper");
 
 // Initialize Sentry first
 initSentry("keeper");
@@ -82,6 +85,11 @@ const healthServer = http.createServer((req, res) => {
       marketsTracked,
       timeSinceLastCrankMs: timeSinceLastCrank === Infinity ? null : timeSinceLastCrank,
       timeSinceLastOracleMs: timeSinceLastOracle === Infinity ? null : timeSinceLastOracle,
+      monitors: {
+        rpc: monitors.rpc.getStatus(),
+        scan: monitors.scan.getStatus(),
+        oracle: monitors.oracle.getStatus(),
+      },
     };
     
     const statusCode = status === "down" ? 503 : 200;
