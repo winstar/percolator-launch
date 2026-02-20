@@ -1,5 +1,8 @@
 import { Hono } from "hono";
 import { resolvePrice, type PriceRouterResult } from "@percolator/core";
+import { createLogger } from "@percolator/shared";
+
+const logger = createLogger("api:oracle-router");
 
 // Simple in-memory cache: mint → { result, expiresAt }
 const cache = new Map<string, { result: PriceRouterResult; expiresAt: number }>();
