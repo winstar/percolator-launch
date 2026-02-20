@@ -59,7 +59,7 @@ jobs:
 
       - name: Upload coverage (shared)
         uses: codecov/codecov-action@v4
-        if: always()
+        if: always() && secrets.CODECOV_TOKEN != ''
         with:
           files: ./packages/shared/coverage/coverage-final.json
           flags: unit-shared
@@ -68,7 +68,7 @@ jobs:
 
       - name: Upload coverage (api)
         uses: codecov/codecov-action@v4
-        if: always()
+        if: always() && secrets.CODECOV_TOKEN != ''
         with:
           files: ./packages/api/coverage/coverage-final.json
           flags: unit-api
@@ -117,7 +117,7 @@ jobs:
 
       - name: Upload coverage
         uses: codecov/codecov-action@v4
-        if: always()
+        if: always() && secrets.CODECOV_TOKEN != ''
         with:
           files: ./packages/api/coverage/coverage-final.json
           flags: integration
@@ -161,25 +161,37 @@ jobs:
       # E2E tests require a live devnet wallet + running app.
       # passWithNoTests=true in playwright.config.ts prevents CI failure
       # when the e2e/ directory is absent (e.g. during active development).
+      - name: Check for E2E tests
+        id: e2e-check
+        run: |
+          if [ -d "e2e" ] || [ -d "tests/e2e" ] || compgen -G "**/*.e2e.ts" > /dev/null 2>&1; then
+            echo "has_tests=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_tests=false" >> "$GITHUB_OUTPUT"
+            echo "ℹ️  No E2E test files found — skipping"
+          fi
+
       - name: Run E2E tests
+        if: steps.e2e-check.outputs.has_tests == 'true'
         run: pnpm run test:e2e
-        continue-on-error: true
 
       - name: Upload Playwright report
-        if: always()
+        if: always() && steps.e2e-check.outputs.has_tests == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: playwright-report
           path: playwright-report/
           retention-days: 7
+          if-no-files-found: ignore
 
       - name: Upload test results
-        if: always()
+        if: always() && steps.e2e-check.outputs.has_tests == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: test-results
           path: test-results/
           retention-days: 7
+          if-no-files-found: ignore
 
   fuzz-tests:
     name: Fuzz Tests
@@ -204,9 +216,24 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Check for fuzz test script
+        id: fuzz-check
+        run: |
+          if cd packages/core && pnpm run --silent --if-present test:fuzz --help > /dev/null 2>&1; then
+            echo "has_fuzz=true" >> "$GITHUB_OUTPUT"
+          else
+            # Check if the script exists in package.json
+            if node -e "const p=require('./package.json'); process.exit(p.scripts?.['test:fuzz'] ? 0 : 1)" 2>/dev/null; then
+              echo "has_fuzz=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "has_fuzz=false" >> "$GITHUB_OUTPUT"
+              echo "ℹ️  No test:fuzz script in packages/core — skipping"
+            fi
+          fi
+
       - name: Run fuzz tests
+        if: steps.fuzz-check.outputs.has_fuzz == 'true'
         run: cd packages/core && pnpm test:fuzz
-        continue-on-error: true
 
   coverage-check:
     name: Coverage Gate
