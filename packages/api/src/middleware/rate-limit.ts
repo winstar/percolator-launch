@@ -21,17 +21,35 @@ setInterval(() => {
   for (const [k, v] of writeBuckets) if (v.resetAt <= now) writeBuckets.delete(k);
 }, 5 * 60_000);
 
+/**
+ * Extract client IP with configurable trusted proxy depth.
+ *
+ * TRUSTED_PROXY_DEPTH=0 (default): Ignore X-Forwarded-For entirely,
+ *   use X-Real-IP or connection address. Safe when exposed directly.
+ * TRUSTED_PROXY_DEPTH=1: One reverse proxy (e.g. Vercel, Cloudflare).
+ *   Use the IP at position (length - 1) in X-Forwarded-For.
+ * TRUSTED_PROXY_DEPTH=2: Two proxy layers. Use (length - 2).
+ *
+ * This prevents bypass via spoofed X-Forwarded-For headers when
+ * no trusted proxy is configured.
+ */
+const PROXY_DEPTH = Math.max(0, Number(process.env.TRUSTED_PROXY_DEPTH ?? 1));
+
 function getClientIp(c: Context): string {
-  // Use the last IP in X-Forwarded-For chain (closest to server, hardest to spoof)
-  // or fall back to direct connection IP
+  if (PROXY_DEPTH === 0) {
+    // No trusted proxy: ignore forwarded headers, use connection IP
+    return c.req.header("x-real-ip") ?? "unknown";
+  }
+
   const forwarded = c.req.header("x-forwarded-for");
   if (forwarded) {
-    const ips = forwarded.split(",").map(ip => ip.trim());
-    // Use the last IP (the one added by our reverse proxy)
-    return ips[ips.length - 1] || "unknown";
+    const ips = forwarded.split(",").map(ip => ip.trim()).filter(Boolean);
+    // Use the IP at (length - PROXY_DEPTH): the one the outermost
+    // trusted proxy appended for the real client.
+    const idx = Math.max(0, ips.length - PROXY_DEPTH);
+    return ips[idx] || "unknown";
   }
-  
-  // Fallback to x-real-ip or unknown
+
   return c.req.header("x-real-ip") ?? "unknown";
 }
 

@@ -43,7 +43,9 @@ export function oracleRouterRoutes(): Hono {
 
       return c.json({ ...result, cached: false });
     } catch (err: any) {
-      return c.json({ error: err.message || "Failed to resolve oracle sources" }, 500);
+      const detail = err instanceof Error ? err.message : String(err);
+      logger.error("Oracle resolve error", { detail, path: c.req.path });
+      return c.json({ error: "Failed to resolve oracle sources" }, 500);
     }
   });
 

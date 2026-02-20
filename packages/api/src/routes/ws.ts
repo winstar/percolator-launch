@@ -121,12 +121,22 @@ setInterval(() => {
  * Extract client IP from request
  * Uses the last IP in X-Forwarded-For chain to prevent IP spoofing
  */
+/**
+ * Extract client IP respecting TRUSTED_PROXY_DEPTH.
+ * See rate-limit.ts for full documentation.
+ */
+const WS_PROXY_DEPTH = Math.max(0, Number(process.env.TRUSTED_PROXY_DEPTH ?? 1));
+
 function getClientIp(req: IncomingMessage): string {
+  if (WS_PROXY_DEPTH === 0) {
+    return req.socket.remoteAddress || "unknown";
+  }
+
   const forwarded = req.headers["x-forwarded-for"];
   if (typeof forwarded === "string") {
-    const ips = forwarded.split(",").map(ip => ip.trim());
-    // Use the last IP (the one added by our reverse proxy, hardest to spoof)
-    return ips[ips.length - 1] || req.socket.remoteAddress || "unknown";
+    const ips = forwarded.split(",").map(ip => ip.trim()).filter(Boolean);
+    const idx = Math.max(0, ips.length - WS_PROXY_DEPTH);
+    return ips[idx] || req.socket.remoteAddress || "unknown";
   }
   return req.socket.remoteAddress || "unknown";
 }

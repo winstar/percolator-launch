@@ -64,9 +64,28 @@ app.use("*", cors({
     logger.warn("CORS rejected origin", { origin });
     return null;
   },
-  allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  // Only allow GET + OPTIONS until write endpoints are implemented.
+  // When mutation routes are added, expand this AND apply requireApiKey()
+  // middleware to those routes. See middleware/auth.ts.
+  allowMethods: ["GET", "OPTIONS"],
   allowHeaders: ["Content-Type", "x-api-key"],
 }));
+
+// Default-deny for mutation methods. Until write endpoints are added,
+// reject any POST/PUT/DELETE/PATCH requests that reach the API.
+// When write routes are needed, apply requireApiKey() from middleware/auth.ts
+// to those specific routes and remove this global guard.
+app.use("*", async (c, next) => {
+  const method = c.req.method;
+  if (method !== "GET" && method !== "HEAD" && method !== "OPTIONS") {
+    logger.warn("Blocked mutation request (no write endpoints)", {
+      method,
+      path: c.req.path,
+    });
+    return c.json({ error: "Method not allowed" }, 405);
+  }
+  return next();
+});
 
 // Compression Middleware (gzip/brotli for JSON responses)
 app.use("*", compress());
