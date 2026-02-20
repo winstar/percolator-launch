@@ -56,8 +56,38 @@ tags:
     description: Oracle price resolution
   - name: Stats
     description: Platform-wide statistics
+  - name: WebSocket
+    description: WebSocket metrics and real-time data streaming
 
 paths:
+  # ─── WebSocket Stats ──────────────────────────────────────────────
+  /ws/stats:
+    get:
+      tags:
+        - WebSocket
+      summary: WebSocket connection metrics
+      description: Returns current WebSocket connection counts, throughput, and rate limits
+      operationId: getWsStats
+      responses:
+        '200':
+          description: WebSocket metrics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebSocketMetrics'
+              example:
+                totalConnections: 42
+                connectionsPerSlab:
+                  FxfD37s1XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX: 12
+                  7YcKXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX: 8
+                messagesPerSec: 15.4
+                bytesPerSec: 32768
+                limits:
+                  maxGlobalConnections: 500
+                  maxConnectionsPerSlab: 50
+                  maxConnectionsPerIp: 5
+        '500':
+          $ref: '#/components/responses/InternalServerError'
   /health:
     get:
       tags:
@@ -604,6 +634,37 @@ components:
         pattern: '^[1-9A-HJ-NP-Za-km-z]{32,44}$'
 
   schemas:
+    WebSocketMetrics:
+      type: object
+      properties:
+        totalConnections:
+          type: integer
+          description: Total active WebSocket connections
+        connectionsPerSlab:
+          type: object
+          additionalProperties:
+            type: integer
+          description: Connection count per slab address
+        messagesPerSec:
+          type: number
+          format: float
+          description: Average messages sent per second since last reset
+        bytesPerSec:
+          type: integer
+          description: Average bytes sent per second since last reset
+        limits:
+          type: object
+          properties:
+            maxGlobalConnections:
+              type: integer
+              description: Maximum total WebSocket connections allowed
+            maxConnectionsPerSlab:
+              type: integer
+              description: Maximum connections per slab
+            maxConnectionsPerIp:
+              type: integer
+              description: Maximum connections per IP address
+
     HealthResponse:
       type: object
       required:
