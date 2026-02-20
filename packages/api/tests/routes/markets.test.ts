@@ -343,7 +343,8 @@ describe("markets routes", () => {
 
       expect(res.status).toBe(400);
       const data = await res.json();
-      expect(data.error).toBe("Account not found");
+      // In production, error details are hidden; generic message returned
+      expect(data.error).toBe("Failed to fetch market data");
     });
   });
 });
