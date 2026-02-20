@@ -272,7 +272,7 @@ describe("OpenInterestCard Component", () => {
     render(<OpenInterestCard slabAddress="test-slab" />);
 
     await waitFor(() => {
-      expect(screen.getByText("24h OI History")).toBeInTheDocument();
+      expect(screen.getByText("24h OI")).toBeInTheDocument();
       // Calculate percentage change
       const percentChange = ((5234123 / 5000000 - 1) * 100).toFixed(1);
       expect(screen.getByText(new RegExp(`${percentChange}%`))).toBeInTheDocument();

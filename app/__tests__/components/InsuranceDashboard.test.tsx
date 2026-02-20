@@ -154,14 +154,14 @@ describe("InsuranceDashboard Component", () => {
     render(<InsuranceDashboard slabAddress="test-slab" />);
 
     await waitFor(() => {
-      expect(screen.getByText("7-Day Balance Trend")).toBeInTheDocument();
+      expect(screen.getByText("7d Trend")).toBeInTheDocument();
       // Calculate percentage increase
       const percentIncrease = ((125432 / 120000 - 1) * 100).toFixed(1);
       expect(screen.getByText(new RegExp(`${percentIncrease}%`))).toBeInTheDocument();
     });
   });
 
-  it("should open explainer modal when 'Learn More' is clicked", async () => {
+  it("should open explainer modal when 'more' is clicked", async () => {
     const mockInsuranceData = {
       balance: "125432000000",
       feeRevenue: "12543000000",
@@ -181,17 +181,17 @@ describe("InsuranceDashboard Component", () => {
     render(<InsuranceDashboard slabAddress="test-slab" />);
 
     await waitFor(() => {
-      expect(screen.getAllByText("Learn More")[0]).toBeInTheDocument();
+      expect(screen.getAllByText("more")[0]).toBeInTheDocument();
     });
 
-    // Click one of the "Learn More" buttons
-    const learnMoreButtons = screen.getAllByText("Learn More");
+    // Click one of the "more" buttons
+    const learnMoreButtons = screen.getAllByText("more");
     fireEvent.click(learnMoreButtons[0]);
 
     // Modal should open (would need to verify modal content in real test)
   });
 
-  it("should show disabled top-up button with 'Coming Soon' label", async () => {
+  it("should show fee revenue data", async () => {
     const mockInsuranceData = {
       balance: "125432000000",
       feeRevenue: "12543000000",
@@ -211,12 +211,8 @@ describe("InsuranceDashboard Component", () => {
     render(<InsuranceDashboard slabAddress="test-slab" />);
 
     await waitFor(() => {
-      expect(screen.getByText("Top Up (Coming Soon)")).toBeInTheDocument();
+      expect(screen.getByText("Fee Revenue")).toBeInTheDocument();
     });
-
-    // Button should be disabled — insurance top-up not yet implemented
-    const topUpButton = screen.getByText("Top Up (Coming Soon)");
-    expect(topUpButton).toBeDisabled();
   });
 
   it("should handle API errors gracefully", async () => {
