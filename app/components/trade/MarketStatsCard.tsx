@@ -10,8 +10,6 @@ import { formatTokenAmount, formatUsd, formatBps } from "@/lib/format";
 import { useLivePrice } from "@/hooks/useLivePrice";
 import { FundingRateCard } from "./FundingRateCard";
 import { FundingRateChart } from "./FundingRateChart";
-import { OpenInterestCard } from "../market/OpenInterestCard";
-import { InsuranceDashboard } from "../market/InsuranceDashboard";
 
 function formatNum(n: number): string {
   if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`;
@@ -28,7 +26,6 @@ export const MarketStatsCard: FC = () => {
   const tokenMeta = useTokenMeta(mktConfig?.collateralMint ?? null);
   const symbol = tokenMeta?.symbol ?? "Token";
   const [showFundingChart, setShowFundingChart] = useState(false);
-  const [activeTab, setActiveTab] = useState<"stats" | "advanced">("stats");
 
   if (loading || !engine || !config || !params) {
     return (
@@ -58,71 +55,41 @@ export const MarketStatsCard: FC = () => {
 
   return (
     <div className="space-y-1.5">
-      {/* Tab Navigation */}
-      <div className="flex gap-1">
-        <button
-          onClick={() => setActiveTab("stats")}
-          className={`flex-1 rounded-none border px-3 py-2 text-[10px] font-medium uppercase tracking-[0.1em] transition-colors ${
-            activeTab === "stats"
-              ? "border-[var(--accent)] bg-[var(--accent)]/10 text-[var(--accent)]"
-              : "border-[var(--border)]/50 bg-[var(--bg)]/80 text-[var(--text-muted)] hover:bg-[var(--bg-elevated)] hover:text-[var(--text)]"
-          }`}
-        >
-          Stats
-        </button>
-        <button
-          onClick={() => setActiveTab("advanced")}
-          className={`flex-1 rounded-none border px-3 py-2 text-[10px] font-medium uppercase tracking-[0.1em] transition-colors ${
-            activeTab === "advanced"
-              ? "border-[var(--accent)] bg-[var(--accent)]/10 text-[var(--accent)]"
-              : "border-[var(--border)]/50 bg-[var(--bg)]/80 text-[var(--text-muted)] hover:bg-[var(--bg-elevated)] hover:text-[var(--text)]"
-          }`}
-        >
-          Advanced
-        </button>
+      {/* Market Stats Grid */}
+      <div className="relative rounded-none border border-[var(--border)]/50 bg-[var(--bg)]/80 p-2">
+        <div className="grid grid-cols-3 gap-px">
+          {stats.map((s) => (
+            <div key={s.label} className="px-1.5 py-1 border-b border-r border-[var(--border)]/20 last:border-r-0 [&:nth-child(3n)]:border-r-0 [&:nth-last-child(-n+3)]:border-b-0">
+              <p className="text-[8px] uppercase tracking-[0.1em] text-[var(--text-dim)] truncate">{s.label}</p>
+              <p className="text-[11px] font-medium text-[var(--text)] truncate" style={{ fontFamily: "var(--font-mono)" }}>{s.value}</p>
+            </div>
+          ))}
+        </div>
       </div>
 
-      {/* Stats Tab */}
-      {activeTab === "stats" && (
+      {/* Funding Rate Section */}
+      {slabAddress && (
         <>
-          {/* Market Stats Grid */}
-          <div className="relative rounded-none border border-[var(--border)]/50 bg-[var(--bg)]/80 p-3">
-            <div className="grid grid-cols-3 gap-px">
-              {stats.map((s) => (
-                <div key={s.label} className="p-2 border-b border-r border-[var(--border)]/20 last:border-r-0 [&:nth-child(3n)]:border-r-0 [&:nth-last-child(-n+3)]:border-b-0">
-                  <p className="text-[8px] uppercase tracking-[0.15em] text-[var(--text-dim)] truncate">{s.label}</p>
-                  <p className="text-[11px] font-medium text-[var(--text)] truncate" style={{ fontFamily: "var(--font-mono)" }}>{s.value}</p>
-                </div>
-              ))}
-            </div>
+          <FundingRateCard slabAddress={slabAddress} />
+
+          {/* Funding Chart Toggle */}
+          <div className="rounded-none border border-[var(--border)]/50 bg-[var(--bg)]/80">
+            <button
+              onClick={() => setShowFundingChart(!showFundingChart)}
+              className="flex w-full items-center justify-between px-2 py-1 text-left text-[9px] font-medium uppercase tracking-[0.15em] text-[var(--text-dim)] transition-colors hover:text-[var(--text-secondary)]"
+            >
+              <span>Funding History</span>
+              <span className={`text-[9px] text-[var(--text-dim)] transition-transform duration-200 ${showFundingChart ? "rotate-180" : ""}`}>▾</span>
+            </button>
+            {showFundingChart && (
+              <div className="px-2 pb-2">
+                <FundingRateChart slabAddress={slabAddress} />
+              </div>
+            )}
           </div>
-
-          {/* Funding Rate Section */}
-          {slabAddress && (
-            <>
-              <FundingRateCard slabAddress={slabAddress} />
-              
-              {/* Funding Chart Toggle */}
-              <button
-                onClick={() => setShowFundingChart(!showFundingChart)}
-                className="w-full rounded-none border border-[var(--border)]/50 bg-[var(--bg)]/80 px-3 py-2 text-[10px] font-medium uppercase tracking-[0.1em] text-[var(--text-secondary)] transition-colors hover:bg-[var(--bg-elevated)] hover:text-[var(--text)]"
-              >
-                {showFundingChart ? "Hide" : "Show"} Funding History
-              </button>
-              
-              {showFundingChart && <FundingRateChart slabAddress={slabAddress} />}
-            </>
-          )}
         </>
       )}
 
-      {/* Advanced Tab */}
-      {activeTab === "advanced" && slabAddress && (
-        <>
-          <OpenInterestCard slabAddress={slabAddress} />
-          <InsuranceDashboard slabAddress={slabAddress} />
-        </>
-      )}
     </div>
   );
 };

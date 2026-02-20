@@ -117,7 +117,7 @@ export const ShareButton: FC<Omit<ShareCardProps, "change24h"> & { change24h?: n
         Share
       </button>
       {open && (
-        <div ref={dropdownRef} className="absolute left-0 top-full z-50 mt-2 w-72">
+        <div ref={dropdownRef} className="absolute right-0 top-full z-50 mt-2 w-72">
           <ShareCard {...props} />
         </div>
       )}

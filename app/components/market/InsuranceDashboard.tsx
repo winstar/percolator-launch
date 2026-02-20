@@ -181,133 +181,89 @@ export const InsuranceDashboard: FC<{ slabAddress: string }> = ({
 
   return (
     <>
-      <div className="rounded-none border border-[var(--border)]/50 bg-[var(--bg)]/80 p-3">
-        {/* Header */}
-        <div className="mb-2 flex items-center justify-between">
+      <div className="rounded-none border border-[var(--border)]/50 bg-[var(--bg)]/80 p-2">
+        {/* Header row: label + balance */}
+        <div className="mb-1.5 flex items-baseline justify-between">
           <div className="flex items-center gap-1">
-            <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-[var(--text-dim)]">
+            <span className="text-[9px] font-bold uppercase tracking-[0.15em] text-[var(--text-dim)]">
               Insurance Fund
             </span>
             <InfoIcon tooltip="Safety net that protects LPs from bankruptcy during extreme market events." />
             <button
               onClick={() => setShowExplainer(true)}
-              className="ml-1 text-[9px] text-[var(--accent)] hover:underline"
+              className="text-[8px] text-[var(--accent)] hover:underline"
             >
-              Learn more
+              more
             </button>
           </div>
+          <span
+            className="text-sm font-bold text-[var(--text)]"
+            style={{ fontFamily: "var(--font-mono)" }}
+          >
+            ${balanceUsd}
+          </span>
         </div>
 
-        {/* Balance & Revenue */}
-        <div className="mb-3 space-y-2">
-          <div className="flex items-baseline justify-between">
-            <span className="text-[10px] uppercase tracking-[0.15em] text-[var(--text-dim)]">
-              Balance
+        {/* Fee Revenue row */}
+        <div className="mb-1.5 flex items-baseline justify-between">
+          <span className="text-[9px] uppercase tracking-[0.1em] text-[var(--text-dim)]">Fee Revenue</span>
+          <div className="flex items-baseline gap-1">
+            <span className="text-[11px] font-medium text-[var(--text-secondary)]" style={{ fontFamily: "var(--font-mono)" }}>
+              ${feeRevenueUsd}
             </span>
-            <span
-              className="text-2xl font-bold text-[var(--text)]"
-              style={{ fontFamily: "var(--font-mono)" }}
-            >
-              ${balanceUsd}
-            </span>
+            {insuranceData.dailyAccumulationRate != null && (
+              <span className="text-[9px] text-[var(--long)]">(+${insuranceData.dailyAccumulationRate}/d)</span>
+            )}
           </div>
-          <div className="flex items-baseline justify-between">
-            <span className="text-[10px] uppercase tracking-[0.15em] text-[var(--text-dim)]">
-              Fee Revenue
+        </div>
+
+        {/* Health + Coverage — compact inline */}
+        <div className={`mb-1.5 rounded-none border-l-2 ${healthStatus.borderColor} ${healthStatus.bgColor} px-1.5 py-1`}>
+          <div className="flex items-center gap-1.5">
+            <span className={`inline-block w-1.5 h-1.5 rounded-full ${healthStatus.dotColor}`} />
+            <span className="text-[10px] font-medium text-[var(--text)]">
+              <span className={healthStatus.color}>{healthStatus.label}</span>
             </span>
-            <div className="text-right">
-              <span
-                className="text-sm font-medium text-[var(--text-secondary)]"
-                style={{ fontFamily: "var(--font-mono)" }}
-              >
-                ${feeRevenueUsd}
+            {insuranceData.coverageRatio != null && typeof insuranceData.coverageRatio === "number" && (
+              <span className="text-[9px] text-[var(--text-dim)]">
+                {insuranceData.coverageRatio.toFixed(1)}x coverage
               </span>
-              {insuranceData.dailyAccumulationRate != null && (
-                <span className="ml-1.5 text-[10px] text-[var(--long)]">
-                  (+${insuranceData.dailyAccumulationRate}/day)
-                </span>
-              )}
-            </div>
+            )}
           </div>
         </div>
 
-        {/* Health Status */}
-        <div
-          className={`mb-3 rounded-none border-l-2 ${healthStatus.borderColor} ${healthStatus.bgColor} p-2.5`}
-        >
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span className={`inline-block w-2 h-2 rounded-full ${healthStatus.dotColor}`} />
-              <div>
-                <div className="text-[11px] font-medium text-[var(--text)]">
-                  Health: <span className={healthStatus.color}>{healthStatus.label}</span>
-                </div>
-                {insuranceData.coverageRatio != null && typeof insuranceData.coverageRatio === "number" && (
-                  <div className="text-[10px] text-[var(--text-dim)]">
-                    Coverage Ratio: {insuranceData.coverageRatio.toFixed(1)}x total risk
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Mini Sparkline Chart (simplified) */}
-        <div className="mb-3 rounded-none border border-[var(--border)]/30 bg-[var(--bg-elevated)] p-2">
-          <div className="mb-1 text-[10px] uppercase tracking-[0.15em] text-[var(--text-dim)]">
-            7-Day Balance Trend
+        {/* 7-day mini chart */}
+        <div className="rounded-none border border-[var(--border)]/30 bg-[var(--bg-elevated)] px-1.5 py-1">
+          <div className="mb-0.5 flex items-center justify-between">
+            <span className="text-[8px] uppercase tracking-[0.1em] text-[var(--text-dim)]">7d Trend</span>
+            {insuranceData.historicalBalance && insuranceData.historicalBalance.length > 1 && insuranceData.historicalBalance[0].balance > 0 && (
+              <span className="text-[9px] text-[var(--long)]" style={{ fontFamily: "var(--font-mono)" }}>
+                +{((insuranceData.historicalBalance[insuranceData.historicalBalance.length - 1].balance / insuranceData.historicalBalance[0].balance - 1) * 100).toFixed(1)}%
+              </span>
+            )}
           </div>
           {insuranceData.historicalBalance && insuranceData.historicalBalance.length > 0 ? (
-            <>
-              <div className="flex h-12 items-end justify-between gap-[2px]">
-                {insuranceData.historicalBalance.map((point, idx) => {
-                  const maxBalance = Math.max(
-                    ...insuranceData.historicalBalance.map((p) => p.balance)
-                  ) || 1;
-                  const height = (point.balance / maxBalance) * 100;
-                  return (
-                    <div
-                      key={idx}
-                      className="flex-1 rounded-none bg-[var(--long)]/30 transition-all hover:bg-[var(--long)]/50"
-                      style={{ height: `${height}%` }}
-                      title={`$${point.balance.toLocaleString()}`}
-                    />
-                  );
-                })}
-              </div>
-              <div className="mt-1 flex justify-between text-[9px] text-[var(--text-dim)]">
-                <span>7d ago</span>
-                <span className="text-[var(--long)]">+{insuranceData.historicalBalance.length > 1 && insuranceData.historicalBalance[0].balance > 0 ? ((insuranceData.historicalBalance[insuranceData.historicalBalance.length - 1].balance / insuranceData.historicalBalance[0].balance - 1) * 100).toFixed(1) : "0.0"}%</span>
-              </div>
-            </>
-          ) : (
-            <div className="flex h-12 items-center justify-center text-[10px] text-[var(--text-dim)]">
-              No historical data
+            <div className="flex h-6 items-end justify-between gap-[1px]">
+              {insuranceData.historicalBalance.map((point, idx) => {
+                const maxBalance = Math.max(...insuranceData.historicalBalance.map((p) => p.balance)) || 1;
+                const height = (point.balance / maxBalance) * 100;
+                return (
+                  <div
+                    key={idx}
+                    className="flex-1 bg-[var(--long)]/30 hover:bg-[var(--long)]/50"
+                    style={{ height: `${height}%` }}
+                    title={`$${point.balance.toLocaleString()}`}
+                  />
+                );
+              })}
             </div>
+          ) : (
+            <div className="flex h-6 items-center justify-center text-[9px] text-[var(--text-dim)]">No data</div>
           )}
         </div>
 
-        {/* Action Buttons */}
-        <div className="flex gap-2">
-          <button
-            disabled
-            title="Insurance top-up coming soon"
-            className="flex-1 rounded-none border border-[var(--border)]/30 bg-[var(--bg-elevated)]/50 py-2 text-[10px] font-medium text-[var(--text-dim)] cursor-not-allowed opacity-50"
-          >
-            Top Up (Coming Soon)
-          </button>
-          <button
-            onClick={() => setShowExplainer(true)}
-            className="flex-1 rounded-none border border-[var(--border)]/50 py-2 text-[10px] font-medium text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-elevated)]"
-          >
-            Learn More
-          </button>
-        </div>
-
         {error && !mockMode && (
-          <div className="mt-2 text-[9px] text-[var(--warning)]">
-            {error} (using on-chain data)
-          </div>
+          <div className="mt-1 text-[8px] text-[var(--warning)]">{error} (on-chain fallback)</div>
         )}
       </div>
 

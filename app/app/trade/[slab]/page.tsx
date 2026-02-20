@@ -7,8 +7,9 @@ import { SlabProvider, useSlabState } from "@/components/providers/SlabProvider"
 import { UsdToggleProvider, useUsdToggle } from "@/components/providers/UsdToggleProvider";
 import { TradeForm } from "@/components/trade/TradeForm";
 import { PositionPanel } from "@/components/trade/PositionPanel";
+import { PositionsTable } from "@/components/trade/PositionsTable";
 import { AccountsCard } from "@/components/trade/AccountsCard";
-import { DepositWithdrawCard } from "@/components/trade/DepositWithdrawCard";
+import { DepositTrigger } from "@/components/trade/DepositTrigger";
 import { EngineHealthCard } from "@/components/trade/EngineHealthCard";
 import { MarketStatsCard } from "@/components/trade/MarketStatsCard";
 import { MarketBookCard } from "@/components/trade/MarketBookCard";
@@ -17,9 +18,12 @@ import { TradeHistory } from "@/components/trade/TradeHistory";
 import { LiquidationAnalytics } from "@/components/trade/LiquidationAnalytics";
 import { CrankHealthCard } from "@/components/trade/CrankHealthCard";
 import { SystemCapitalCard } from "@/components/trade/SystemCapitalCard";
+import { OpenInterestCard } from "@/components/market/OpenInterestCard";
+import { InsuranceDashboard } from "@/components/market/InsuranceDashboard";
 import { HealthBadge } from "@/components/market/HealthBadge";
 import { ShareButton } from "@/components/market/ShareCard";
 import { MarketLogo } from "@/components/market/MarketLogo";
+import { MarketSelector } from "@/components/trade/MarketSelector";
 import { ErrorBoundary } from "@/components/ui/ErrorBoundary";
 import { computeMarketHealth } from "@/lib/health";
 import { useLivePrice } from "@/hooks/useLivePrice";
@@ -136,10 +140,6 @@ function TradePageInner({ slab }: { slab: string }) {
   const { priceUsd } = useLivePrice();
   const health = engine ? computeMarketHealth(engine) : null;
   const pageRef = useRef<HTMLDivElement>(null);
-  // No wallet/account → Deposit tab (2), has capital → Position tab (0)
-  const hasCapital = accounts.some(a => a.account.capital > 0n || a.account.positionSize !== 0n);
-  const defaultLeftTab = hasCapital ? 0 : 2;
-
   const symbol = tokenMeta?.symbol ?? (config?.collateralMint ? `${config.collateralMint.toBase58().slice(0, 4)}…${config.collateralMint.toBase58().slice(-4)}` : "TOKEN");
   const shortAddress = `${slab.slice(0, 4)}…${slab.slice(-4)}`;
 
@@ -220,7 +220,7 @@ function TradePageInner({ slab }: { slab: string }) {
   }
 
   return (
-    <div ref={pageRef} className="mx-auto max-w-7xl overflow-x-hidden gsap-fade">
+    <div ref={pageRef} className="mx-auto max-w-[1920px] overflow-x-hidden gsap-fade">
 
       {/* ── MOBILE: Sticky header ── */}
       <div className="sticky top-0 z-30 border-b border-[var(--border)]/50 bg-[var(--bg)]/95 px-3 py-2 backdrop-blur-sm lg:hidden">
@@ -252,7 +252,7 @@ function TradePageInner({ slab }: { slab: string }) {
                 ? "border-[var(--long)]/30 bg-[var(--long)]/5 text-[var(--long)]"
                 : "border-[var(--warning)]/30 bg-[var(--warning)]/5 text-[var(--warning)]"
             }`}>
-              {header.admin.toBase58() === "11111111111111111111111111111111" ? "✅ Admin Renounced" : "⚠️ Admin Active"}
+              {header.admin.toBase58() === "11111111111111111111111111111111" ? "Admin Renounced" : "Admin Active"}
             </span>
           )}
           <ShareButton
@@ -263,45 +263,61 @@ function TradePageInner({ slab }: { slab: string }) {
         </div>
       </div>
 
-      {/* ── DESKTOP: Full header ── */}
-      <div className="hidden lg:flex items-start justify-between px-4 py-2 gap-3 border-b border-[var(--border)]/30">
-        <div className="min-w-0">
-          <p className="mb-0.5 text-[9px] font-medium uppercase tracking-[0.2em] text-[var(--accent)]/70">// TRADE</p>
-          <div className="flex items-center gap-2.5">
-            <MarketLogo logoUrl={logoUrl} symbol={symbol} size="md" />
-            <h1 className="text-lg font-bold text-[var(--text)]" style={{ fontFamily: "var(--font-display)" }}>
-              {symbol}/USD <span className="text-xs font-normal text-[var(--text-muted)]">PERP</span>
-            </h1>
-          </div>
-          <div className="mt-0.5 flex items-center gap-3">
-            <span className="flex items-center text-[10px] text-[var(--text-dim)]" style={{ fontFamily: "var(--font-mono)" }}>
-              {shortAddress}
-              <CopyButton text={slab} />
+      {/* ── DESKTOP: Compact header bar ── */}
+      <div className="hidden lg:flex items-center gap-3 border-b border-[var(--border)]/30 px-6 py-1.5">
+        {/* Left: pair selector */}
+        <MarketLogo logoUrl={logoUrl} symbol={symbol} size="sm" />
+        <MarketSelector
+          currentSlabAddress={slab}
+          symbol={symbol}
+          logoUrl={logoUrl}
+        />
+
+        <span className="h-3.5 w-px bg-[var(--border)]/40" />
+
+        {/* Price */}
+        {priceDisplay && (
+          <span className="text-sm font-bold tabular-nums text-[var(--text)]" style={{ fontFamily: "var(--font-mono)" }}>
+            {priceDisplay}
+          </span>
+        )}
+
+        <span className="h-3.5 w-px bg-[var(--border)]/40" />
+
+        {/* Metadata */}
+        <span className="flex items-center text-[10px] text-[var(--text-dim)]" style={{ fontFamily: "var(--font-mono)" }}>
+          {shortAddress}
+          <CopyButton text={slab} />
+        </span>
+
+        {health && (
+          <>
+            <span className="h-3.5 w-px bg-[var(--border)]/40" />
+            <HealthBadge level={health.level} />
+          </>
+        )}
+
+        {header?.admin && (
+          <>
+            <span className="h-3.5 w-px bg-[var(--border)]/40" />
+            <span className={`text-[9px] font-medium uppercase tracking-[0.12em] px-1.5 py-0.5 rounded-sm border ${
+              header.admin.toBase58() === "11111111111111111111111111111111"
+                ? "border-[var(--long)]/30 bg-[var(--long)]/5 text-[var(--long)]"
+                : "border-[var(--warning)]/30 bg-[var(--warning)]/5 text-[var(--warning)]"
+            }`}>
+              {header.admin.toBase58() === "11111111111111111111111111111111" ? "Admin Renounced" : "Admin Active"}
             </span>
-            {health && <HealthBadge level={health.level} />}
-            {header?.admin && (
-              <span className={`text-[9px] font-medium uppercase tracking-[0.12em] px-1.5 py-0.5 rounded-sm border ${
-                header.admin.toBase58() === "11111111111111111111111111111111"
-                  ? "border-[var(--long)]/30 bg-[var(--long)]/5 text-[var(--long)]"
-                  : "border-[var(--warning)]/30 bg-[var(--warning)]/5 text-[var(--warning)]"
-              }`}>
-                {header.admin.toBase58() === "11111111111111111111111111111111" ? "✅ Admin Renounced" : "⚠️ Admin Active"}
-              </span>
-            )}
-            <ShareButton
-              slabAddress={slab}
-              marketName={symbol}
-              price={BigInt(Math.round((priceUsd ?? 0) * 1e6))}
-            />
-          </div>
-        </div>
-        <div className="flex items-center gap-3">
+          </>
+        )}
+
+        {/* Right-aligned controls */}
+        <div className="ml-auto flex items-center gap-3">
           <UsdToggleButton />
-          {priceDisplay && (
-            <div className="text-right">
-              <div className="text-xl font-bold text-[var(--text)]" style={{ fontFamily: "var(--font-mono)" }}>{priceDisplay}</div>
-            </div>
-          )}
+          <ShareButton
+            slabAddress={slab}
+            marketName={symbol}
+            price={BigInt(Math.round((priceUsd ?? 0) * 1e6))}
+          />
         </div>
       </div>
 
@@ -331,6 +347,11 @@ function TradePageInner({ slab }: { slab: string }) {
           </div>
         </ErrorBoundary>
 
+        {/* Deposit trigger */}
+        <ErrorBoundary label="DepositTrigger">
+          <DepositTrigger slabAddress={slab} />
+        </ErrorBoundary>
+
         {/* Trade form */}
         <ErrorBoundary label="TradeForm">
           <TradeForm slabAddress={slab} />
@@ -340,13 +361,6 @@ function TradePageInner({ slab }: { slab: string }) {
         <ErrorBoundary label="PositionPanel">
           <Collapsible title="Position" defaultOpen={true}>
             <PositionPanel slabAddress={slab} />
-          </Collapsible>
-        </ErrorBoundary>
-
-        {/* Account / Deposit — collapsible */}
-        <ErrorBoundary label="DepositWithdrawCard">
-          <Collapsible title="Deposit / Withdraw" defaultOpen={false}>
-            <DepositWithdrawCard slabAddress={slab} />
           </Collapsible>
         </ErrorBoundary>
 
@@ -361,7 +375,9 @@ function TradePageInner({ slab }: { slab: string }) {
           <ErrorBoundary label="MarketStatsCard"><MarketStatsCard /></ErrorBoundary>
           <ErrorBoundary label="TradeHistory"><TradeHistory slabAddress={slab} /></ErrorBoundary>
           <ErrorBoundary label="RiskAnalytics">
-            <CrankHealthCard />
+            <OpenInterestCard slabAddress={slab} />
+            <div className="mt-2"><InsuranceDashboard slabAddress={slab} /></div>
+            <div className="mt-2"><CrankHealthCard /></div>
             <div className="mt-2"><LiquidationAnalytics /></div>
             <div className="mt-2"><SystemCapitalCard /></div>
           </ErrorBoundary>
@@ -373,7 +389,7 @@ function TradePageInner({ slab }: { slab: string }) {
           DESKTOP LAYOUT  (≥ lg / 1024px)
           Two columns: left ~68%, right ~32%
           ════════════════════════════════════════════════════════ */}
-      <div className="hidden lg:grid grid-cols-[1fr_340px] gap-1.5 px-3 pb-3 pt-1.5">
+      <div className="hidden lg:grid grid-cols-[1fr_380px] gap-4 px-4 lg:px-6 pb-3 pt-2">
         {/* ── Left column ── */}
         <div className="min-w-0 space-y-1.5">
           {/* Chart */}
@@ -381,18 +397,19 @@ function TradePageInner({ slab }: { slab: string }) {
             <TradingChart slabAddress={slab} />
           </ErrorBoundary>
 
-          {/* Position / Account / Deposit — tabbed */}
-          <Tabs tabs={["Position", "Positions & Liqs", "Deposit"]} defaultTab={defaultLeftTab}>
-            <ErrorBoundary label="PositionPanel"><PositionPanel slabAddress={slab} /></ErrorBoundary>
+          {/* My Positions / Account — tabbed */}
+          <Tabs tabs={["My Positions", "Positions & Liqs"]}>
+            <ErrorBoundary label="PositionsTable"><PositionsTable slabAddress={slab} /></ErrorBoundary>
             <ErrorBoundary label="AccountsCard"><AccountsCard /></ErrorBoundary>
-            <ErrorBoundary label="DepositWithdrawCard"><DepositWithdrawCard slabAddress={slab} /></ErrorBoundary>
           </Tabs>
         </div>
 
         {/* ── Right column ── */}
         <div className="min-w-0 space-y-1.5">
-          {/* Trade form — sticky */}
-          <div className="sticky top-0 z-20">
+          <div className="sticky top-0 z-20 space-y-1.5">
+            <ErrorBoundary label="DepositTrigger">
+              <DepositTrigger slabAddress={slab} />
+            </ErrorBoundary>
             <ErrorBoundary label="TradeForm">
               <TradeForm slabAddress={slab} />
             </ErrorBoundary>
@@ -407,13 +424,16 @@ function TradePageInner({ slab }: { slab: string }) {
               <div className="mt-2"><CrankHealthCard /></div>
             </ErrorBoundary>
             <ErrorBoundary label="RiskAnalytics">
-              <LiquidationAnalytics />
-              <div className="mt-2"><SystemCapitalCard /></div>
+              <OpenInterestCard slabAddress={slab} />
+              <div className="mt-1.5"><InsuranceDashboard slabAddress={slab} /></div>
+              <div className="mt-1.5"><LiquidationAnalytics /></div>
+              <div className="mt-1.5"><SystemCapitalCard /></div>
             </ErrorBoundary>
             <ErrorBoundary label="MarketBookCard"><MarketBookCard /></ErrorBoundary>
           </Tabs>
         </div>
       </div>
+
     </div>
   );
 }

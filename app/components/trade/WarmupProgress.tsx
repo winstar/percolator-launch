@@ -1,7 +1,6 @@
 "use client";
 
 import { FC, useState, useEffect } from "react";
-import { InfoIcon } from "@/components/ui/Tooltip";
 import { WarmupExplainerModal } from "./WarmupExplainerModal";
 import { isMockMode } from "@/lib/mock-mode";
 import { isMockSlab } from "@/lib/mock-trade-data";
@@ -28,11 +27,9 @@ const MOCK_WARMUP: WarmupData = {
 };
 
 function formatCountdown(slots: number): string {
-  // Solana slots ~400ms each → roughly 2.5 slots per second
   const seconds = Math.floor(slots * 0.4);
   const minutes = Math.floor(seconds / 60);
   const secs = seconds % 60;
-
   if (minutes > 0) return `${minutes}m ${secs}s`;
   return `${secs}s`;
 }
@@ -73,7 +70,6 @@ export const WarmupProgress: FC<{
         );
         if (!res.ok) {
           if (res.status === 404) {
-            // No active warmup
             setWarmupData(null);
             setError(null);
             return;
@@ -85,7 +81,6 @@ export const WarmupProgress: FC<{
         setError(null);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Unknown error");
-        // Fallback to mock data on error (for demo)
         setWarmupData(null);
       } finally {
         setLoading(false);
@@ -93,7 +88,7 @@ export const WarmupProgress: FC<{
     };
 
     fetchWarmup();
-    const interval = setInterval(fetchWarmup, 5000); // Refresh every 5s
+    const interval = setInterval(fetchWarmup, 5000);
     return () => clearInterval(interval);
   }, [slabAddress, accountIdx, mockMode]);
 
@@ -119,134 +114,86 @@ export const WarmupProgress: FC<{
     return () => clearInterval(interval);
   }, [warmupData]);
 
-  // Don't render if no warmup active
   if (!warmupData && !loading) return null;
 
   if (loading && !warmupData) {
     return (
-      <div className="rounded-none border border-[var(--border)]/50 bg-[var(--bg)]/80 p-3">
-        <div className="flex items-center justify-between">
-          <span className="text-[10px] uppercase tracking-[0.15em] text-[var(--text-dim)]">
-            Warmup Status
-          </span>
-          <div className="h-4 w-16 animate-pulse rounded bg-[var(--border)]" />
-        </div>
+      <div className="flex items-center gap-2 py-1">
+        <div className="h-1 flex-1 animate-pulse rounded-full bg-[var(--border)]/30" />
       </div>
     );
   }
 
   if (!warmupData) return null;
 
-  // Check if warmup is complete
   const isComplete = progress >= 100 || countdown === 0;
 
   if (isComplete) {
     return (
-      <div className="rounded-none border border-[var(--long)]/50 bg-[var(--long)]/5 p-3">
-        <div className="flex items-center gap-2">
-          <span className="inline-block w-2 h-2 rounded-full bg-[var(--long)]" />
-          <div className="flex-1">
-            <div className="text-[11px] font-medium text-[var(--long)]">
-              Fully Unlocked
-            </div>
-            <div className="text-[10px] text-[var(--text-dim)]">
-              All profits are now withdrawable
-            </div>
-          </div>
-        </div>
+      <div className="flex items-center gap-2 py-1">
+        <span className="inline-block h-1.5 w-1.5 rounded-full bg-[var(--long)]" />
+        <span className="text-[10px] text-[var(--text-dim)]">Profits fully unlocked</span>
       </div>
     );
   }
 
   return (
     <>
-      <div className="rounded-none border border-[var(--warning)]/50 bg-[var(--bg)]/80 p-3">
-        {/* Header */}
-        <div className="mb-2 flex items-center justify-between">
-          <div className="flex items-center gap-1">
-            <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-[var(--text-dim)]">
-              Profit Warming Up
-            </span>
-            <InfoIcon tooltip="Your profits are gradually unlocking. This protects against oracle manipulation attacks." />
-            <button
-              onClick={() => setShowExplainer(true)}
-              className="ml-1 text-[9px] text-[var(--accent)] hover:underline"
-            >
-              Why?
-            </button>
-          </div>
-        </div>
+      <div className="py-1">
+        {/* Single row: label, progress bar, countdown */}
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setShowExplainer(true)}
+            className="shrink-0 text-[10px] text-[var(--text-dim)] hover:text-[var(--text-secondary)] transition-colors"
+          >
+            Unlocking profits
+          </button>
 
-        {/* Amounts */}
-        <div className="mb-3 space-y-1.5">
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] uppercase tracking-[0.15em] text-[var(--text-dim)]">
-              Unlocked
-            </span>
-            <span
-              className="text-sm font-bold text-[var(--long)]"
-              style={{ fontFamily: "var(--font-mono)" }}
-            >
-              ${formatUsdAmount(warmupData.unlockedAmount)} ({progress.toFixed(0)}%)
-            </span>
-          </div>
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] uppercase tracking-[0.15em] text-[var(--text-dim)]">
-              Locked
-            </span>
-            <span
-              className="text-sm font-bold text-[var(--warning)]"
-              style={{ fontFamily: "var(--font-mono)" }}
-            >
-              ${formatUsdAmount(warmupData.lockedAmount)} ({(100 - progress).toFixed(0)}%)
-            </span>
-          </div>
-        </div>
-
-        {/* Progress Bar */}
-        <div className="mb-3">
-          <div className="h-2 w-full overflow-hidden rounded-none bg-[var(--border)]/30">
+          {/* Thin progress bar */}
+          <div className="flex-1 h-1 overflow-hidden rounded-full bg-[var(--border)]/20">
             <div
-              className="h-full transition-all duration-1000 ease-linear"
-              style={{
-                width: `${progress}%`,
-                background: `linear-gradient(90deg, var(--warning) 0%, var(--long) 100%)`,
-              }}
+              className="h-full rounded-full bg-[var(--accent)]/60 transition-all duration-1000 ease-linear"
+              style={{ width: `${progress}%` }}
             />
           </div>
+
+          <span
+            className="shrink-0 text-[10px] tabular-nums text-[var(--text-dim)]"
+            style={{ fontFamily: "var(--font-mono)" }}
+          >
+            {progress.toFixed(0)}%
+          </span>
+
+          <span
+            className="shrink-0 text-[10px] tabular-nums text-[var(--text-muted)]"
+            style={{ fontFamily: "var(--font-mono)" }}
+          >
+            {formatCountdown(countdown)}
+          </span>
         </div>
 
-        {/* Countdown */}
-        <div className="rounded-none border-l-2 border-l-[var(--warning)] bg-[var(--bg-elevated)] p-2">
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] text-[var(--text-secondary)]">
-              Fully withdrawable in:
-            </span>
-            <span
-              className="text-sm font-bold text-[var(--warning)]"
-              style={{ fontFamily: "var(--font-mono)" }}
-            >
-              {formatCountdown(countdown)}
-            </span>
-          </div>
-        </div>
-
-        {/* Explainer hint */}
-        <div className="mt-2 rounded-none border-l-2 border-l-[var(--accent)] bg-[var(--accent)]/5 p-2">
-          <p className="text-[9px] leading-relaxed text-[var(--text-dim)]">
-            <strong className="text-[var(--text-secondary)]">Why?</strong>{" "}
-            Protects against oracle attacks. Your profit gradually unlocks over ~8 minutes.
-          </p>
+        {/* Amounts row — compact */}
+        <div className="mt-1 flex items-center gap-3 pl-0">
+          <span className="text-[9px] text-[var(--text-dim)]">
+            <span className="text-[var(--text-muted)]" style={{ fontFamily: "var(--font-mono)" }}>${formatUsdAmount(warmupData.unlockedAmount)}</span> available
+          </span>
+          <span className="text-[var(--border)]">·</span>
+          <span className="text-[9px] text-[var(--text-dim)]">
+            <span className="text-[var(--text-muted)]" style={{ fontFamily: "var(--font-mono)" }}>${formatUsdAmount(warmupData.lockedAmount)}</span> locked
+          </span>
+          <button
+            onClick={() => setShowExplainer(true)}
+            className="ml-auto text-[9px] text-[var(--accent)]/60 hover:text-[var(--accent)] transition-colors"
+          >
+            Learn more
+          </button>
         </div>
 
         {error && !mockMode && (
-          <div className="mt-2 text-[9px] text-[var(--warning)]">
-            {error} (using mock data)
-          </div>
+          <p className="mt-1 text-[9px] text-[var(--text-dim)]">{error}</p>
         )}
       </div>
 
-      {/* Explainer Modal */}
       {showExplainer && (
         <WarmupExplainerModal onClose={() => setShowExplainer(false)} />
       )}

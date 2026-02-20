@@ -26,7 +26,7 @@ export const CrankHealthCard: FC = () => {
 
   if (loading || !engine) {
     return (
-      <div className="rounded-none border border-[var(--border)]/50 bg-[var(--bg)]/80 p-3">
+      <div className="rounded-none border border-[var(--border)]/50 bg-[var(--bg)]/80 p-2">
         <span className="text-[10px] text-[var(--text-dim)]">Loading...</span>
       </div>
     );
@@ -61,22 +61,22 @@ export const CrankHealthCard: FC = () => {
   }
 
   return (
-    <div className="rounded-none border border-[var(--border)]/50 bg-[var(--bg)]/80 p-3">
-      <div className="mb-3 flex items-center justify-between">
+    <div className="rounded-none border border-[var(--border)]/50 bg-[var(--bg)]/80 p-2">
+      <div className="mb-1.5 flex items-center justify-between">
         <div className="flex items-center gap-1">
-          <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-[var(--text-dim)]">
+          <span className="text-[8px] uppercase tracking-[0.15em] text-[var(--text-dim)]">
             Crank Health
           </span>
           <InfoIcon tooltip="The crank processes funding accrual, liquidation checks, and position updates every slot" />
         </div>
         <div className="flex items-center gap-1.5">
           <span className={`inline-block h-2 w-2 rounded-full ${dotColor}`} />
-          <span className={`text-[10px] font-bold uppercase tracking-[0.15em] ${statusColor}`}>{statusLabel}</span>
+          <span className={`text-[8px] uppercase tracking-[0.15em] ${statusColor}`}>{statusLabel}</span>
         </div>
       </div>
 
       {/* Staleness progress bar */}
-      <div className="mb-3">
+      <div className="mb-1.5">
         <div className="mb-1 flex items-center justify-between text-[9px] text-[var(--text-dim)]">
           <span>Last update: {secondsBehind}s ago ({slotsBehind.toLocaleString()} slots)</span>
           <span>Max: {maxStaleness.toLocaleString()} slots</span>
@@ -90,22 +90,22 @@ export const CrankHealthCard: FC = () => {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 gap-3">
-        <div className="flex flex-col">
-          <span className="mb-1 text-[10px] font-bold uppercase tracking-[0.15em] text-[var(--text-dim)]">
+      <div className="grid grid-cols-2 gap-px">
+        <div className="px-1.5 py-1 border-b border-r border-[var(--border)]/20 last:border-r-0 [&:nth-child(2n)]:border-r-0 [&:nth-last-child(-n+2)]:border-b-0">
+          <span className="text-[8px] uppercase tracking-[0.15em] text-[var(--text-dim)]">
             Lifetime Liquidations
           </span>
-          <span className="text-sm font-bold text-[var(--text)] font-mono">
+          <p className="text-[11px] font-medium text-[var(--text)]" style={{ fontFamily: "var(--font-mono)" }}>
             {Number(engine.lifetimeLiquidations ?? 0n).toLocaleString()}
-          </span>
+          </p>
         </div>
-        <div className="flex flex-col">
-          <span className="mb-1 text-[10px] font-bold uppercase tracking-[0.15em] text-[var(--text-dim)]">
+        <div className="px-1.5 py-1 border-b border-r border-[var(--border)]/20 last:border-r-0 [&:nth-child(2n)]:border-r-0 [&:nth-last-child(-n+2)]:border-b-0">
+          <span className="text-[8px] uppercase tracking-[0.15em] text-[var(--text-dim)]">
             Force Closes
           </span>
-          <span className="text-sm font-bold text-[var(--text)] font-mono">
+          <p className="text-[11px] font-medium text-[var(--text)]" style={{ fontFamily: "var(--font-mono)" }}>
             {Number(engine.lifetimeForceCloses ?? 0n).toLocaleString()}
-          </span>
+          </p>
         </div>
       </div>
     </div>
