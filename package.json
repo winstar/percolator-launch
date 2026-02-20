@@ -42,7 +42,8 @@
   "pnpm": {
     "overrides": {
       "axios": ">=1.13.5",
-      "lodash": ">=4.17.21"
+      "lodash": ">=4.17.21",
+      "minimatch": ">=10.0.0"
     }
   }
 }
