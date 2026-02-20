@@ -15,6 +15,10 @@ import { parseHumanAmount, formatHumanAmount } from "@/lib/parseAmount";
 import { SLAB_TIERS, type SlabTierKey } from "@percolator/core";
 import { InfoBanner } from "@/components/ui/InfoBanner";
 import { LogoUpload } from "@/components/create/LogoUpload";
+import { ValidationSummary } from "@/components/create/ValidationSummary";
+import { CostEstimate } from "@/components/create/CostEstimate";
+import { MarketPreview } from "@/components/create/MarketPreview";
+import { validateCreateForm } from "@/lib/createMarketValidation";
 
 function isValidBase58Pubkey(s: string): boolean {
   try {
@@ -402,13 +406,15 @@ const QuickLaunchPanel: FC<{
             </div>
           )}
 
-          {/* Estimated cost */}
-          <div className="flex items-center justify-between border border-[var(--border)] bg-[var(--bg)] p-4">
-            <span className="text-[9px] font-medium uppercase tracking-[0.15em] text-[var(--text-dim)]">Estimated SOL Cost</span>
-            <span className="text-[13px] font-bold text-[var(--text)]">
-              ~{quickSlabTier === "small" ? "0.5" : quickSlabTier === "medium" ? "1.8" : quickSlabTier === "large" ? "7.0" : "7.0"} SOL
-            </span>
-          </div>
+          {/* Cost Estimate */}
+          <CostEstimate
+            slabTier={quickSlabTier}
+            lpCollateral={effectiveLpCollateral}
+            insuranceAmount={insuranceAmount}
+            tokenSymbol={quickLaunch.config.symbol}
+            tokenDecimals={quickLaunch.config.decimals}
+            tokenPriceUsd={quickLaunch.poolInfo?.priceUsd}
+          />
 
           {/* Token balance info */}
           {quickMintValid && !balanceLoading && tokenBalance !== null && quickLaunch.config && (
@@ -991,34 +997,76 @@ export const CreateMarketWizard: FC<{ initialMint?: string }> = ({ initialMint }
             </div>
           </StepSection>
 
-          {/* Step 4: Review */}
+          {/* Step 4: Review & Create */}
           <StepSection open={openStep === 4} onToggle={() => toggleStep(4)} title="Review & Create" stepNum={4} valid={false}>
-            <div className="space-y-4">
-              <div className="border border-[var(--border)]">
-                <table className="w-full text-[12px]">
-                  <tbody className="divide-y divide-[var(--border)]">
-                    <tr><td className="px-3 py-2.5 text-[var(--text-muted)]">Mint</td><td className="px-3 py-2.5 text-right text-[var(--text)]">{tokenMeta ? <span>{tokenMeta.name} ({tokenMeta.symbol})</span> : mintValid ? <span className="font-mono text-[10px]">{mint.slice(0, 12)}...</span> : "—"}</td></tr>
-                    <tr><td className="px-3 py-2.5 text-[var(--text-muted)]">Oracle</td><td className="px-3 py-2.5 text-right text-[var(--text)]">{oracleMode === "auto" && priceRouter.bestSource ? `Auto — ${priceRouter.bestSource.pairLabel} (${priceRouter.bestSource.type})` : oracleMode === "dex" ? selectedDexPool ? `DEX — ${selectedDexPool.pairLabel} (${selectedDexPool.dexId})` : `DEX — ${dexPoolAddress.slice(0, 12)}...` : selectedFeedName ? `Pyth — ${selectedFeedName}` : `Pyth — ${feedId.slice(0, 12)}...`}</td></tr>
-                    <tr><td className="px-3 py-2.5 text-[var(--text-muted)]">Inverted</td><td className="px-3 py-2.5 text-right text-[var(--text)]">{invert ? "Yes" : "No"}</td></tr>
-                    <tr><td className="px-3 py-2.5 text-[var(--text-muted)]">Trading Fee</td><td className="px-3 py-2.5 text-right text-[var(--text)]">{tradingFeeBps} bps ({(tradingFeeBps / 100).toFixed(2)}%)</td></tr>
-                    <tr><td className="px-3 py-2.5 text-[var(--text-muted)]">Initial Margin</td><td className="px-3 py-2.5 text-right text-[var(--text)]">{initialMarginBps} bps ({maxLeverage}x max)</td></tr>
-                    <tr><td className="px-3 py-2.5 text-[var(--text-muted)]">LP Collateral</td><td className="px-3 py-2.5 text-right text-[var(--text)]">{lpCollateral ? `${lpCollateral} ${symbol}` : "—"}</td></tr>
-                    <tr><td className="px-3 py-2.5 text-[var(--text-muted)]">Insurance</td><td className="px-3 py-2.5 text-right text-[var(--text)]">{insuranceAmount ? `${insuranceAmount} ${symbol}` : "—"}</td></tr>
-                  </tbody>
-                </table>
-              </div>
-              <div className="flex items-center justify-between border border-[var(--border)] bg-[var(--bg)] p-4">
-                <span className="text-[9px] font-medium uppercase tracking-[0.15em] text-[var(--text-dim)]">Estimated SOL Cost</span>
-                <span className="text-[13px] font-bold text-[var(--text)]">~{slabTier === "small" ? "0.5" : slabTier === "medium" ? "1.8" : "7.0"} SOL</span>
-              </div>
-              {!publicKey && <p className="text-[11px] text-[var(--warning)]">Connect your wallet to create a market.</p>}
-              {publicKey && !hasManualTokens && mintValid && !balanceLoading && (
-                <p className="text-[11px] text-[var(--short)]">You need tokens for this mint to create a market. <Link href="/devnet-mint" className="underline hover:text-[var(--accent)]">Mint on faucet</Link></p>
-              )}
-              <button onClick={handleCreate} disabled={!allValid || !publicKey} className={btnPrimary}>
-                {!publicKey ? "Connect Wallet" : !hasManualTokens && mintValid ? "No Tokens — Mint First" : "Create Market"}
-              </button>
-            </div>
+            {(() => {
+              const oracleLabel = oracleMode === "auto" && priceRouter.bestSource
+                ? `Auto — ${priceRouter.bestSource.pairLabel} (${priceRouter.bestSource.type})`
+                : oracleMode === "dex"
+                  ? selectedDexPool ? `DEX — ${selectedDexPool.pairLabel} (${selectedDexPool.dexId})` : `DEX — ${dexPoolAddress.slice(0, 12)}...`
+                  : selectedFeedName ? `Pyth — ${selectedFeedName}` : feedId ? `Pyth — ${feedId.slice(0, 12)}...` : "Not configured";
+              const detectedPrice = selectedDexPool?.priceUsd ?? priceRouter.bestSource?.price ?? undefined;
+              const validationErrors = validateCreateForm({
+                mint,
+                mintValid,
+                tokenMeta: tokenMeta ?? null,
+                oracleResolved: step1Valid,
+                oracleMode,
+                tradingFeeBps,
+                initialMarginBps,
+                lpCollateral,
+                insuranceAmount,
+                tokenBalance,
+                walletConnected: !!publicKey,
+                decimals,
+              });
+              return (
+                <div className="space-y-5">
+                  {/* Market Preview */}
+                  <div>
+                    <p className="mb-2 text-[9px] font-medium uppercase tracking-[0.15em] text-[var(--text-dim)]">
+                      Market Preview
+                    </p>
+                    <MarketPreview
+                      symbol={tokenMeta?.symbol ?? symbol}
+                      name={tokenMeta?.name ?? "Unknown Token"}
+                      tokenMint={mint || "—"}
+                      oracleMode={oracleMode}
+                      oracleLabel={oracleLabel}
+                      tradingFeeBps={tradingFeeBps}
+                      initialMarginBps={initialMarginBps}
+                      maxLeverage={maxLeverage}
+                      lpCollateral={lpCollateral}
+                      insuranceAmount={insuranceAmount}
+                      tierLabel={SLAB_TIERS[slabTier].label}
+                      tierSlots={SLAB_TIERS[slabTier].maxAccounts}
+                      tokenDecimals={decimals}
+                      priceUsd={detectedPrice}
+                      inverted={invert}
+                      vammEnabled={enableVammManual}
+                    />
+                  </div>
+
+                  {/* Cost Estimate */}
+                  <CostEstimate
+                    slabTier={slabTier}
+                    lpCollateral={lpCollateral}
+                    insuranceAmount={insuranceAmount}
+                    tokenSymbol={tokenMeta?.symbol ?? symbol}
+                    tokenDecimals={decimals}
+                    tokenPriceUsd={detectedPrice}
+                  />
+
+                  {/* Validation Summary */}
+                  <ValidationSummary errors={validationErrors} />
+
+                  {/* Submit */}
+                  <button onClick={handleCreate} disabled={!allValid || !publicKey} className={btnPrimary}>
+                    {!publicKey ? "Connect Wallet" : !hasManualTokens && mintValid ? "No Tokens — Mint First" : validationErrors.filter(e => e.severity === "error").length > 0 ? `Fix ${validationErrors.filter(e => e.severity === "error").length} Error${validationErrors.filter(e => e.severity === "error").length > 1 ? "s" : ""} to Continue` : "Create Market"}
+                  </button>
+                </div>
+              );
+            })()}
           </StepSection>
         </div>
       )}
