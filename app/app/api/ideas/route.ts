@@ -24,30 +24,6 @@ function sanitize(str: string): string {
 
 const TABLE = "ideas";
 
-async function ensureTable() {
-  const sb = getServiceClient();
-  // Try a simple query — if it fails, table doesn't exist
-  const { error } = await (sb.from as any)(TABLE).select("id").limit(1);
-  if (error?.code === "42P01") {
-    // table doesn't exist — create it via raw SQL
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (sb.rpc as any)("exec_sql", {
-      query: `
-        CREATE TABLE IF NOT EXISTS public.ideas (
-          id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
-          handle text NOT NULL,
-          idea text NOT NULL,
-          contact text,
-          ip text,
-          created_at timestamptz DEFAULT now()
-        );
-        ALTER TABLE public.ideas ENABLE ROW LEVEL SECURITY;
-        CREATE POLICY "ideas_read" ON public.ideas FOR SELECT USING (true);
-      `,
-    });
-  }
-}
-
 export async function GET() {
   try {
     const sb = getServiceClient();
@@ -100,8 +76,6 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
-
-    await ensureTable();
 
     const sb = getServiceClient();
     const { error } = await (sb.from as any)(TABLE)

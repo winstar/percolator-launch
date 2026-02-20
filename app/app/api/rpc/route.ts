@@ -20,9 +20,61 @@ const RPC_URL = NETWORK === "mainnet"
   ? `https://mainnet.helius-rpc.com/?api-key=${HELIUS_API_KEY}`
   : `https://devnet.helius-rpc.com/?api-key=${HELIUS_API_KEY}`;
 
+/**
+ * Allowlist of JSON-RPC methods that may be proxied to Helius.
+ * Prevents abuse of the API key for unauthorized operations.
+ * Add methods here as the frontend needs them.
+ */
+const ALLOWED_RPC_METHODS = new Set([
+  // Health & cluster
+  "getHealth",
+  "getVersion",
+  "getSlot",
+  "getBlockHeight",
+  "getEpochInfo",
+  // Account queries
+  "getAccountInfo",
+  "getMultipleAccounts",
+  "getBalance",
+  "getTokenAccountBalance",
+  "getTokenAccountsByOwner",
+  "getProgramAccounts",
+  // Transaction queries
+  "getTransaction",
+  "getSignaturesForAddress",
+  "getSignatureStatuses",
+  "getLatestBlockhash",
+  "getRecentPrioritizationFees",
+  "getFeeForMessage",
+  "isBlockhashValid",
+  // Transaction submission
+  "sendTransaction",
+  "simulateTransaction",
+  // Misc read
+  "getMinimumBalanceForRentExemption",
+  "getSupply",
+]);
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
+
+    // Validate method is in allowlist
+    const method = body?.method;
+    if (!method || typeof method !== "string") {
+      return NextResponse.json(
+        { jsonrpc: "2.0", error: { code: -32600, message: "Invalid request: missing method" }, id: body?.id ?? null },
+        { status: 400 }
+      );
+    }
+
+    if (!ALLOWED_RPC_METHODS.has(method)) {
+      console.warn(`[/api/rpc] Blocked disallowed method: ${method}`);
+      return NextResponse.json(
+        { jsonrpc: "2.0", error: { code: -32601, message: `Method not allowed: ${method}` }, id: body?.id ?? null },
+        { status: 403 }
+      );
+    }
 
     // Forward the JSON-RPC request to Helius
     const response = await fetch(RPC_URL, {
