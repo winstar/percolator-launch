@@ -17,6 +17,7 @@ import { PreTradeSummary } from "@/components/trade/PreTradeSummary";
 import { TradeConfirmationModal } from "@/components/trade/TradeConfirmationModal";
 import { InfoIcon } from "@/components/ui/Tooltip";
 import { usePrefersReducedMotion } from "@/hooks/usePrefersReducedMotion";
+import { useWalletModal } from "@solana/wallet-adapter-react-ui";
 import { isMockMode } from "@/lib/mock-mode";
 import { isMockSlab, getMockUserAccountIdle } from "@/lib/mock-trade-data";
 
@@ -56,6 +57,7 @@ export const TradeForm: FC<{ slabAddress: string }> = ({ slabAddress }) => {
   const { accounts, config: mktConfig, header } = useSlabState();
   const tokenMeta = useTokenMeta(mktConfig?.collateralMint ?? null);
   const { priceUsd } = useLivePrice();
+  const { setVisible: openWalletModal } = useWalletModal();
   const symbol = tokenMeta?.symbol ?? "Token";
   
   // BUG FIX: Fetch on-chain decimals from token account (like DepositWithdrawCard)
@@ -176,35 +178,11 @@ export const TradeForm: FC<{ slabAddress: string }> = ({ slabAddress }) => {
     );
   }, [humanError, prefersReduced]);
 
-  if (!connected) {
-    return (
-      <div className="relative rounded-none bg-[var(--bg)]/80 border border-[var(--border)]/50 p-4 text-center">
-        <p className="text-[var(--text-secondary)] text-xs">Connect your wallet to trade</p>
-      </div>
-    );
-  }
-
-  if (!userAccount) {
-    return (
-      <div className="relative rounded-none bg-[var(--bg)]/80 border border-[var(--border)]/50 p-4 text-center">
-        <p className="text-[var(--text-secondary)] text-xs">
-          No trading account yet. Use the <strong className="text-[var(--text)]">Create Account</strong> button in the Deposit panel to get started.
-        </p>
-      </div>
-    );
-  }
-
-  if (lpUnderfunded) {
-    return (
-      <div className="relative rounded-none bg-[var(--bg)]/80 border border-[var(--border)]/50 p-4 text-center">
-        <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-[var(--warning)]">⚠ Liquidity Unavailable</p>
-        <p className="mt-1.5 text-[10px] text-[var(--text-secondary)] leading-relaxed">
-          The market&apos;s liquidity provider has no capital. Trades cannot be executed until the LP is funded.
-          Contact the market admin to deposit collateral into the LP account.
-        </p>
-      </div>
-    );
-  }
+  // Determine what the submit button should do
+  const needsWallet = !connected;
+  const needsAccount = connected && !userAccount;
+  const needsDeposit = connected && userAccount && capital === 0n;
+  const canTrade = connected && userAccount && capital > 0n && !lpUnderfunded;
 
   async function handleTrade() {
     if (!marginInput || !userAccount || positionSize <= 0n || exceedsMargin) return;
@@ -243,6 +221,16 @@ export const TradeForm: FC<{ slabAddress: string }> = ({ slabAddress }) => {
 
   return (
     <div className="relative rounded-none bg-[var(--bg)]/80 border border-[var(--border)]/50 p-3">
+
+      {/* LP underfunded warning */}
+      {lpUnderfunded && (
+        <div className="mb-3 rounded-none border border-[var(--warning)]/30 bg-[var(--warning)]/5 p-2.5">
+          <p className="text-[9px] font-bold uppercase tracking-[0.15em] text-[var(--warning)]">Liquidity Unavailable</p>
+          <p className="mt-1 text-[9px] text-[var(--text-secondary)] leading-relaxed">
+            The LP has no capital. Trades cannot execute until the LP is funded.
+          </p>
+        </div>
+      )}
 
       {/* Position open banner */}
       {hasPosition && (
@@ -401,32 +389,56 @@ export const TradeForm: FC<{ slabAddress: string }> = ({ slabAddress }) => {
       )}
 
       {/* Submit */}
-      <button
-        onClick={() => {
-          if (!marginInput || !userAccount || positionSize <= 0n || exceedsMargin || riskGateActive || header?.paused || tradePhase !== "idle" || loading) return;
-          setShowConfirmModal(true);
-        }}
-        disabled={tradePhase !== "idle" || loading || !marginInput || positionSize <= 0n || exceedsMargin || riskGateActive || header?.paused}
-        className={`w-full rounded-none py-2.5 text-[11px] font-medium uppercase tracking-[0.1em] text-white transition-all duration-150 hover:scale-[1.01] active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100 focus-visible:ring-1 focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--bg)] ${
-          direction === "long"
-            ? "bg-[var(--long)] hover:brightness-110 focus-visible:ring-[var(--long)]"
-            : "bg-[var(--short)] hover:brightness-110 focus-visible:ring-[var(--short)]"
-        }`}
-      >
-        {tradePhase === "submitting" ? (
-          <span className="inline-flex items-center gap-2">
-            <svg className="h-3.5 w-3.5 animate-spin" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
-            Submitting…
-          </span>
-        ) : tradePhase === "confirming" ? (
-          <span className="inline-flex items-center gap-2">
-            <svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"/></svg>
-            Confirmed!
-          </span>
-        ) : (
-          `${direction === "long" ? "Long" : "Short"} ${leverage}x`
-        )}
-      </button>
+      {needsWallet ? (
+        <button
+          onClick={() => openWalletModal(true)}
+          className="w-full rounded-none py-2.5 text-[11px] font-medium uppercase tracking-[0.1em] text-white transition-all duration-150 hover:scale-[1.01] active:scale-[0.99] bg-[var(--accent)] hover:brightness-110 focus-visible:ring-1 focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--bg)] focus-visible:ring-[var(--accent)]"
+        >
+          Connect Wallet
+        </button>
+      ) : needsAccount || needsDeposit ? (
+        <button
+          onClick={() => {
+            // Scroll to the deposit trigger above the form
+            const deposit = document.querySelector('[data-deposit-trigger]');
+            if (deposit) deposit.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }}
+          className={`w-full rounded-none py-2.5 text-[11px] font-medium uppercase tracking-[0.1em] text-white transition-all duration-150 hover:scale-[1.01] active:scale-[0.99] focus-visible:ring-1 focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--bg)] ${
+            direction === "long"
+              ? "bg-[var(--long)] hover:brightness-110 focus-visible:ring-[var(--long)]"
+              : "bg-[var(--short)] hover:brightness-110 focus-visible:ring-[var(--short)]"
+          }`}
+        >
+          {needsAccount ? "Create Account & Deposit" : "Deposit to Trade"}
+        </button>
+      ) : (
+        <button
+          onClick={() => {
+            if (!marginInput || !userAccount || positionSize <= 0n || exceedsMargin || riskGateActive || header?.paused || tradePhase !== "idle" || loading) return;
+            setShowConfirmModal(true);
+          }}
+          disabled={tradePhase !== "idle" || loading || !marginInput || positionSize <= 0n || exceedsMargin || riskGateActive || header?.paused || lpUnderfunded}
+          className={`w-full rounded-none py-2.5 text-[11px] font-medium uppercase tracking-[0.1em] text-white transition-all duration-150 hover:scale-[1.01] active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100 focus-visible:ring-1 focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--bg)] ${
+            direction === "long"
+              ? "bg-[var(--long)] hover:brightness-110 focus-visible:ring-[var(--long)]"
+              : "bg-[var(--short)] hover:brightness-110 focus-visible:ring-[var(--short)]"
+          }`}
+        >
+          {tradePhase === "submitting" ? (
+            <span className="inline-flex items-center gap-2">
+              <svg className="h-3.5 w-3.5 animate-spin" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+              Submitting…
+            </span>
+          ) : tradePhase === "confirming" ? (
+            <span className="inline-flex items-center gap-2">
+              <svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"/></svg>
+              Confirmed!
+            </span>
+          ) : (
+            `${direction === "long" ? "Long" : "Short"} ${leverage}x`
+          )}
+        </button>
+      )}
 
       {humanError && (
         <div ref={errorRef} className="mt-2 rounded-none border border-[var(--short)]/20 bg-[var(--short)]/5 px-3 py-2">

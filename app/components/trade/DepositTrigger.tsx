@@ -49,7 +49,7 @@ export const DepositTrigger: FC<{ slabAddress: string }> = ({ slabAddress }) => 
   // No wallet connected
   if (!isConnected) {
     return (
-      <div className="border border-[var(--border)]/50 bg-[var(--bg)]/80 px-3 py-1.5">
+      <div data-deposit-trigger className="border border-[var(--border)]/50 bg-[var(--bg)]/80 px-3 py-1.5">
         <p className="text-[10px] text-[var(--text-muted)] uppercase tracking-[0.1em]">
           Connect wallet to deposit
         </p>
@@ -60,7 +60,7 @@ export const DepositTrigger: FC<{ slabAddress: string }> = ({ slabAddress }) => 
   // First-time state: shimmer button
   if (!hasDeposited && capital === 0n) {
     return (
-      <div>
+      <div data-deposit-trigger>
         <button
           onClick={() => setExpanded(!expanded)}
           className="deposit-shimmer w-full border border-[var(--accent)]/60 bg-[var(--accent)]/[0.06] px-3 py-2.5 text-left transition-colors hover:bg-[var(--accent)]/[0.10]"
@@ -80,7 +80,7 @@ export const DepositTrigger: FC<{ slabAddress: string }> = ({ slabAddress }) => 
 
   // Returning state: balance bar
   return (
-    <div>
+    <div data-deposit-trigger>
       <div
         className="flex items-center justify-between border border-[var(--border)]/50 bg-[var(--bg)]/80 px-3 py-1.5 cursor-pointer transition-colors hover:border-[var(--border)]"
         onClick={() => setExpanded(!expanded)}
