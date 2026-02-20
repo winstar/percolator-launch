@@ -50,7 +50,7 @@ describe("ServiceMonitor", () => {
     const strictMonitor = new ServiceMonitor("test", "strict", {
       maxConsecutiveFailures: 3,
       maxStalenessMs: 600_000, // 10 min — won't trigger in test
-      maxErrorRate: 1.0, // 100% — won't trigger
+      maxErrorRate: 1.1, // above 100% — won't trigger
       errorRateWindow: 10,
     });
     await strictMonitor.recordFailure("err1");
