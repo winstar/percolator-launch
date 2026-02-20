@@ -18,7 +18,8 @@
     "test:coverage": "pnpm -r test:coverage",
     "lint": "eslint packages/*/src/**/*.ts",
     "format": "prettier --write packages/*/src/**/*.ts",
-    "format:check": "prettier --check packages/*/src/**/*.ts"
+    "format:check": "prettier --check packages/*/src/**/*.ts",
+    "start": "pnpm --filter @percolator/app start"
   },
   "engines": {
     "node": ">=20"

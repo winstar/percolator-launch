@@ -161,9 +161,8 @@ jobs:
       - name: Build application
         run: pnpm run build
 
-      # E2E tests require a live devnet wallet + running app.
-      # passWithNoTests=true in playwright.config.ts prevents CI failure
-      # when the e2e/ directory is absent (e.g. during active development).
+      # Playwright auto-starts the production server (pnpm start) via webServer config.
+      # The check below skips E2E when no test files exist (e.g. new packages).
       - name: Check for E2E tests
         id: e2e-check
         run: |
