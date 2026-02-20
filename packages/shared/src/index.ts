@@ -11,3 +11,4 @@ export * from "./retry.js";
 export * from "./sentry.js";
 export * from "./sanitize.js";
 export * from "./alerts.js";
+export * from "./monitor.js";
