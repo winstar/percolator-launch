@@ -16,6 +16,8 @@ jobs:
     name: Unit Tests
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    env:
+      HAS_CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN != '' }}
     
     steps:
       - name: Checkout code
@@ -59,7 +61,7 @@ jobs:
 
       - name: Upload coverage (shared)
         uses: codecov/codecov-action@v4
-        if: always() && secrets.CODECOV_TOKEN != ''
+        if: always() && env.HAS_CODECOV_TOKEN == 'true'
         with:
           files: ./packages/shared/coverage/coverage-final.json
           flags: unit-shared
@@ -68,7 +70,7 @@ jobs:
 
       - name: Upload coverage (api)
         uses: codecov/codecov-action@v4
-        if: always() && secrets.CODECOV_TOKEN != ''
+        if: always() && env.HAS_CODECOV_TOKEN == 'true'
         with:
           files: ./packages/api/coverage/coverage-final.json
           flags: unit-api
@@ -83,6 +85,7 @@ jobs:
     env:
       RPC_URL: ${{ secrets.DEVNET_RPC_URL || 'https://api.devnet.solana.com' }}
       DATABASE_URL: ${{ secrets.TEST_DATABASE_URL }}
+      HAS_CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN != '' }}
     
     steps:
       - name: Checkout code
@@ -117,7 +120,7 @@ jobs:
 
       - name: Upload coverage
         uses: codecov/codecov-action@v4
-        if: always() && secrets.CODECOV_TOKEN != ''
+        if: always() && env.HAS_CODECOV_TOKEN == 'true'
         with:
           files: ./packages/api/coverage/coverage-final.json
           flags: integration
