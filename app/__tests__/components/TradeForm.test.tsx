@@ -387,12 +387,12 @@ describe("TradeForm Component Tests", () => {
       
       rerender(<TradeForm slabAddress="test-slab" />);
       
-      // Should show connect wallet message and hide form
+      // Should show "Connect Wallet" button instead of trade buttons
       await waitFor(() => {
-        expect(screen.getByText(/Connect your wallet to trade/i)).toBeInTheDocument();
+        expect(screen.getByText(/Connect Wallet/i)).toBeInTheDocument();
       });
       
-      // Submit button should not be present
+      // Trade-specific submit button should not be present (replaced by Connect Wallet)
       expect(screen.queryByRole("button", { name: /Long 1x/i })).not.toBeInTheDocument();
       
       // Trade should not be called

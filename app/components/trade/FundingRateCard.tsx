@@ -191,70 +191,58 @@ export const FundingRateCard: FC<{ slabAddress: string }> = ({ slabAddress }) =>
 
   return (
     <>
-      <div className="rounded-none border border-[var(--border)]/50 bg-[var(--bg)]/80 p-3">
-        {/* Header */}
-        <div className="mb-2 flex items-center justify-between">
+      <div className="rounded-none border border-[var(--border)]/50 bg-[var(--bg)]/80 p-2">
+        {/* Header row: label + rate + APR */}
+        <div className="mb-1 flex items-center justify-between">
           <div className="flex items-center gap-1">
-            <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-[var(--text-dim)]">
+            <span className="text-[9px] font-bold uppercase tracking-[0.15em] text-[var(--text-dim)]">
               Funding Rate
             </span>
             <InfoIcon tooltip="Funding rates balance long/short positions. Percolator uses inventory-based funding to protect LPs." />
             <button
               onClick={() => setShowExplainer(true)}
-              className="ml-1 text-[9px] text-[var(--accent)] hover:underline"
+              className="text-[8px] text-[var(--accent)] hover:underline"
             >
-              Learn more
+              more
             </button>
           </div>
-        </div>
-
-        {/* Current Rate */}
-        <div className="mb-3 flex items-baseline justify-between">
-          <div>
-            <div
-              className={`text-2xl font-bold ${
-                hourlyRatePercent >= 0 ? "text-[var(--short)]" : "text-[var(--long)]"
-              }`}
+          <div className="flex items-baseline gap-1.5">
+            <span
+              className={`text-sm font-bold ${hourlyRatePercent >= 0 ? "text-[var(--short)]" : "text-[var(--long)]"}`}
               style={{ fontFamily: "var(--font-mono)" }}
             >
               {rateDisplay}
-            </div>
-            <div className="text-[10px] text-[var(--text-dim)]">per hour</div>
-          </div>
-          <div className="text-right">
-            <div className="text-xs text-[var(--text-secondary)]" style={{ fontFamily: "var(--font-mono)" }}>
-              {(fundingData.aprPercent ?? 0) >= 0 ? "+" : ""}
-              {(fundingData.aprPercent ?? 0).toFixed(2)}% APR
-            </div>
+            </span>
+            <span className="text-[9px] text-[var(--text-dim)]">/hr</span>
           </div>
         </div>
 
-        {/* Direction Indicator */}
-        <div className="mb-3 rounded-none border-l-2 border-l-[var(--border)] bg-[var(--bg-elevated)] p-2">
-          <div className="text-[11px] text-[var(--text-secondary)]">{directionText}</div>
-          <div className="mt-0.5 text-[10px] text-[var(--text-dim)]">
-            Next funding: {formatCountdown(countdown)}
+        {/* APR + Direction — compact row */}
+        <div className="mb-1 flex items-center justify-between">
+          <div className="rounded-none border-l-2 border-l-[var(--border)] bg-[var(--bg-elevated)] px-1.5 py-0.5">
+            <span className="text-[10px] text-[var(--text-secondary)]">{directionText}</span>
+            {countdown > 0 && (
+              <span className="ml-1.5 text-[9px] text-[var(--text-dim)]">· next {formatCountdown(countdown)}</span>
+            )}
           </div>
+          <span className="text-[10px] text-[var(--text-secondary)]" style={{ fontFamily: "var(--font-mono)" }}>
+            {(fundingData.aprPercent ?? 0) >= 0 ? "+" : ""}{(fundingData.aprPercent ?? 0).toFixed(1)}% APR
+          </span>
         </div>
 
         {/* Position-Specific Estimate */}
         {positionDirection && estimatedFunding24h !== null && (
-          <div className="rounded-none border border-[var(--border)]/30 bg-[var(--bg)] p-2">
+          <div className="rounded-none border border-[var(--border)]/30 bg-[var(--bg)] px-1.5 py-1">
             <div className="flex items-center justify-between">
-              <span className="text-[10px] uppercase tracking-[0.15em] text-[var(--text-dim)]">
-                Your Est. Funding (24h)
+              <span className="text-[9px] uppercase tracking-[0.1em] text-[var(--text-dim)]">
+                Est. 24h ({positionDirection})
               </span>
-              <span className={`text-sm font-bold ${fundingColor}`} style={{ fontFamily: "var(--font-mono)" }}>
+              <span className={`text-[11px] font-bold ${fundingColor}`} style={{ fontFamily: "var(--font-mono)" }}>
                 {fundingSign}{estimatedFunding24h.toFixed(4)} tokens
               </span>
             </div>
-            <div className="mt-1 text-[9px] text-[var(--text-dim)]">
-              Based on your {positionDirection} position
-            </div>
           </div>
         )}
-
-        {/* Error display removed — on-chain fallback is seamless */}
       </div>
 
       {/* Explainer Modal */}

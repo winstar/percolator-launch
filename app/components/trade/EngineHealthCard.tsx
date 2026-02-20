@@ -29,7 +29,7 @@ export const EngineHealthCard: FC = () => {
 
   if (loading || !engine) {
     return (
-      <div className="relative rounded-none border border-[var(--border)]/50 bg-[var(--bg)]/80 p-3">
+      <div className="relative rounded-none border border-[var(--border)]/50 bg-[var(--bg)]/80 p-2">
         <p className="text-[10px] text-[var(--text-secondary)]">{loading ? "Loading..." : "No engine"}</p>
       </div>
     );
@@ -76,17 +76,17 @@ export const EngineHealthCard: FC = () => {
   ];
 
   return (
-    <div className="relative rounded-none border border-[var(--border)]/50 bg-[var(--bg)]/80 p-3">
-      <div className="mb-2 flex items-center justify-between">
+    <div className="relative rounded-none border border-[var(--border)]/50 bg-[var(--bg)]/80 p-2">
+      <div className="mb-1.5 flex items-center justify-between">
         <span className={`text-[10px] font-medium uppercase tracking-[0.15em] ${HEALTH_COLORS[health.level]}${health.level === "warning" || health.level === "caution" ? " animate-pulse" : ""}`}>
           {health.label}
         </span>
       </div>
       <div className="grid grid-cols-3 gap-px">
         {metrics.map((m) => (
-          <div key={m.label} className="p-1.5 border-b border-r border-[var(--border)]/20 last:border-r-0 [&:nth-child(3n)]:border-r-0 [&:nth-last-child(-n+3)]:border-b-0">
+          <div key={m.label} className="px-1.5 py-1 border-b border-r border-[var(--border)]/20 last:border-r-0 [&:nth-child(3n)]:border-r-0 [&:nth-last-child(-n+3)]:border-b-0">
             <p className="text-[8px] uppercase tracking-[0.15em] text-[var(--text-dim)]">{m.label}</p>
-            <p className="text-[10px] text-[var(--text)]" style={{ fontFamily: "var(--font-mono)" }}>{m.value}</p>
+            <p className="text-[11px] font-medium text-[var(--text)]" style={{ fontFamily: "var(--font-mono)" }}>{m.value}</p>
           </div>
         ))}
       </div>

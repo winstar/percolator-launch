@@ -17,6 +17,7 @@ import { PreTradeSummary } from "@/components/trade/PreTradeSummary";
 import { TradeConfirmationModal } from "@/components/trade/TradeConfirmationModal";
 import { InfoIcon } from "@/components/ui/Tooltip";
 import { usePrefersReducedMotion } from "@/hooks/usePrefersReducedMotion";
+import { useWalletModal } from "@solana/wallet-adapter-react-ui";
 import { isMockMode } from "@/lib/mock-mode";
 import { isMockSlab, getMockUserAccountIdle } from "@/lib/mock-trade-data";
 
@@ -56,6 +57,7 @@ export const TradeForm: FC<{ slabAddress: string }> = ({ slabAddress }) => {
   const { accounts, config: mktConfig, header } = useSlabState();
   const tokenMeta = useTokenMeta(mktConfig?.collateralMint ?? null);
   const { priceUsd } = useLivePrice();
+  const { setVisible: openWalletModal } = useWalletModal();
   const symbol = tokenMeta?.symbol ?? "Token";
   
   // BUG FIX: Fetch on-chain decimals from token account (like DepositWithdrawCard)
@@ -176,125 +178,11 @@ export const TradeForm: FC<{ slabAddress: string }> = ({ slabAddress }) => {
     );
   }, [humanError, prefersReduced]);
 
-  if (!connected) {
-    return (
-      <div className="relative rounded-none bg-[var(--bg)]/80 border border-[var(--border)]/50 p-4 text-center">
-        <p className="text-[var(--text-secondary)] text-xs">Connect your wallet to trade</p>
-      </div>
-    );
-  }
-
-  if (!userAccount) {
-    return (
-      <div className="relative rounded-none bg-[var(--bg)]/80 border border-[var(--border)]/50 p-4 text-center">
-        <p className="text-[var(--text-secondary)] text-xs">
-          No trading account yet. Use the <strong className="text-[var(--text)]">Create Account</strong> button in the Deposit panel to get started.
-        </p>
-      </div>
-    );
-  }
-
-  if (lpUnderfunded) {
-    return (
-      <div className="relative rounded-none bg-[var(--bg)]/80 border border-[var(--border)]/50 p-4 text-center">
-        <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-[var(--warning)]">⚠ Liquidity Unavailable</p>
-        <p className="mt-1.5 text-[10px] text-[var(--text-secondary)] leading-relaxed">
-          The market&apos;s liquidity provider has no capital. Trades cannot be executed until the LP is funded.
-          Contact the market admin to deposit collateral into the LP account.
-        </p>
-      </div>
-    );
-  }
-
-  if (hasPosition) {
-    const isLong = existingPosition > 0n;
-    const closeDirection = isLong ? "short" : "long";
-    
-    const handleClosePosition = async () => {
-      if (mockMode) {
-        setTradePhase("submitting");
-        setTimeout(() => { setTradePhase("confirming"); }, 800);
-        setTimeout(() => setTradePhase("idle"), 2000);
-        return;
-      }
-      
-      if (!connected) {
-        setHumanError("Wallet disconnected. Please reconnect your wallet.");
-        return;
-      }
-      
-      setHumanError(null);
-      setTradePhase("submitting");
-      try {
-        // Close position by trading in opposite direction with same size
-        const closeSize = isLong ? -existingPosition : -existingPosition; // Flip sign
-        const sig = await withTransientRetry(
-          async () => trade({ lpIdx, userIdx: userAccount!.idx, size: closeSize }),
-          { maxRetries: 2, delayMs: 3000 },
-        );
-        setTradePhase("confirming");
-        setLastSig(sig ?? null);
-        setTimeout(() => setTradePhase("idle"), 2000);
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e);
-        console.error("[TradeForm] close position error:", msg);
-        setHumanError(humanizeError(msg));
-        setTradePhase("idle");
-      }
-    };
-    
-    return (
-      <div className="relative rounded-none bg-[var(--bg)]/80 border border-[var(--border)]/50 p-4">
-        <div className="rounded-none border border-[var(--warning)]/30 bg-[var(--warning)]/5 p-3 text-xs text-[var(--warning)]">
-          <p className="font-medium text-[10px] uppercase tracking-[0.15em]">Position open</p>
-          <p className="mt-2 text-[10px] text-[var(--warning)]/70">
-            You have an open {isLong ? "LONG" : "SHORT"} of{" "}
-            <span style={{ fontFamily: "var(--font-mono)" }}>{formatPerc(abs(existingPosition), decimals)}</span> {symbol}.
-          </p>
-        </div>
-        
-        <button
-          onClick={handleClosePosition}
-          disabled={tradePhase !== "idle" || loading || header?.paused}
-          className="mt-3 w-full rounded-none border border-[var(--accent)]/50 bg-[var(--accent)]/10 py-2.5 text-[11px] font-medium uppercase tracking-[0.1em] text-[var(--accent)] transition-all duration-150 hover:bg-[var(--accent)]/20 hover:border-[var(--accent)] active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100"
-        >
-          {tradePhase === "submitting" ? (
-            <span className="inline-flex items-center gap-2">
-              <svg className="h-3.5 w-3.5 animate-spin" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
-              Closing…
-            </span>
-          ) : tradePhase === "confirming" ? (
-            <span className="inline-flex items-center gap-2">
-              <svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"/></svg>
-              Confirmed!
-            </span>
-          ) : (
-            "Close Position"
-          )}
-        </button>
-        
-        {humanError && (
-          <div className="mt-2 rounded-none border border-[var(--short)]/20 bg-[var(--short)]/5 px-3 py-2">
-            <p className="text-[10px] text-[var(--short)]">{humanError}</p>
-          </div>
-        )}
-        
-        {lastSig && (
-          <p className="mt-2 text-[10px] text-[var(--text-dim)]" style={{ fontFamily: "var(--font-mono)" }}>
-            Tx:{" "}
-            <a
-              href={`${explorerTxUrl(lastSig)}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-[var(--accent)] hover:underline"
-            >
-              {lastSig.slice(0, 16)}...
-            </a>
-          </p>
-        )}
-      </div>
-    );
-  }
+  // Determine what the submit button should do
+  const needsWallet = !connected;
+  const needsAccount = connected && !userAccount;
+  const needsDeposit = connected && userAccount && capital === 0n;
+  const canTrade = connected && userAccount && capital > 0n && !lpUnderfunded;
 
   async function handleTrade() {
     if (!marginInput || !userAccount || positionSize <= 0n || exceedsMargin) return;
@@ -334,33 +222,25 @@ export const TradeForm: FC<{ slabAddress: string }> = ({ slabAddress }) => {
   return (
     <div className="relative rounded-none bg-[var(--bg)]/80 border border-[var(--border)]/50 p-3">
 
-      {/* Coin-margined warning badge */}
-      <div className="mb-3 rounded-none border border-[var(--warning)]/20 bg-[var(--warning)]/5 p-2.5">
-        <div className="flex items-start gap-2">
-          <span className="text-[var(--warning)] text-sm">⚠️</span>
-          <div className="flex-1">
-            <p className="text-[9px] font-bold uppercase tracking-[0.15em] text-[var(--warning)]">
-              Coin-Margined Market
-            </p>
-            <p className="mt-1 text-[9px] leading-relaxed text-[var(--text-secondary)]">
-              This market is margined in <strong>{symbol}</strong>, not USD. Your position value and liquidation risk are affected by {symbol} price movements in <em>both directions</em>:
-            </p>
-            <ul className="mt-1.5 space-y-0.5 text-[9px] text-[var(--text-secondary)]">
-              <li className="flex gap-1.5">
-                <span className="text-[var(--long)]">•</span>
-                <span><strong>Long:</strong> If {symbol} goes up, you profit twice (position + collateral value).</span>
-              </li>
-              <li className="flex gap-1.5">
-                <span className="text-[var(--short)]">•</span>
-                <span><strong>Short:</strong> If {symbol} goes down, you profit on position but lose collateral value.</span>
-              </li>
-            </ul>
-            <p className="mt-1.5 text-[9px] text-[var(--warning)]">
-              Effective USD leverage: <strong className="font-mono">{leverage > 0 ? `~${leverage * 2}x` : "—"}</strong> (nominal {leverage}x × 2 for coin exposure)
-            </p>
-          </div>
+      {/* LP underfunded warning */}
+      {lpUnderfunded && (
+        <div className="mb-3 rounded-none border border-[var(--warning)]/30 bg-[var(--warning)]/5 p-2.5">
+          <p className="text-[9px] font-bold uppercase tracking-[0.15em] text-[var(--warning)]">Liquidity Unavailable</p>
+          <p className="mt-1 text-[9px] text-[var(--text-secondary)] leading-relaxed">
+            The LP has no capital. Trades cannot execute until the LP is funded.
+          </p>
         </div>
-      </div>
+      )}
+
+      {/* Position open banner */}
+      {hasPosition && (
+        <div className="mb-3 rounded-none border border-[var(--accent)]/20 bg-[var(--accent)]/5 p-2.5">
+          <p className="text-[9px] font-bold uppercase tracking-[0.15em] text-[var(--accent)]">Position Open</p>
+          <p className="mt-1 text-[9px] text-[var(--text-secondary)]">
+            Close from the positions table below. You can still place new trades.
+          </p>
+        </div>
+      )}
 
       {/* Market paused banner */}
       {header?.paused && (
@@ -509,32 +389,56 @@ export const TradeForm: FC<{ slabAddress: string }> = ({ slabAddress }) => {
       )}
 
       {/* Submit */}
-      <button
-        onClick={() => {
-          if (!marginInput || !userAccount || positionSize <= 0n || exceedsMargin || riskGateActive || header?.paused || tradePhase !== "idle" || loading) return;
-          setShowConfirmModal(true);
-        }}
-        disabled={tradePhase !== "idle" || loading || !marginInput || positionSize <= 0n || exceedsMargin || riskGateActive || header?.paused}
-        className={`w-full rounded-none py-2.5 text-[11px] font-medium uppercase tracking-[0.1em] text-white transition-all duration-150 hover:scale-[1.01] active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100 focus-visible:ring-1 focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--bg)] ${
-          direction === "long"
-            ? "bg-[var(--long)] hover:brightness-110 focus-visible:ring-[var(--long)]"
-            : "bg-[var(--short)] hover:brightness-110 focus-visible:ring-[var(--short)]"
-        }`}
-      >
-        {tradePhase === "submitting" ? (
-          <span className="inline-flex items-center gap-2">
-            <svg className="h-3.5 w-3.5 animate-spin" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
-            Submitting…
-          </span>
-        ) : tradePhase === "confirming" ? (
-          <span className="inline-flex items-center gap-2">
-            <svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"/></svg>
-            Confirmed!
-          </span>
-        ) : (
-          `${direction === "long" ? "Long" : "Short"} ${leverage}x`
-        )}
-      </button>
+      {needsWallet ? (
+        <button
+          onClick={() => openWalletModal(true)}
+          className="w-full rounded-none py-2.5 text-[11px] font-medium uppercase tracking-[0.1em] text-white transition-all duration-150 hover:scale-[1.01] active:scale-[0.99] bg-[var(--accent)] hover:brightness-110 focus-visible:ring-1 focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--bg)] focus-visible:ring-[var(--accent)]"
+        >
+          Connect Wallet
+        </button>
+      ) : needsAccount || needsDeposit ? (
+        <button
+          onClick={() => {
+            // Scroll to the deposit trigger above the form
+            const deposit = document.querySelector('[data-deposit-trigger]');
+            if (deposit) deposit.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }}
+          className={`w-full rounded-none py-2.5 text-[11px] font-medium uppercase tracking-[0.1em] text-white transition-all duration-150 hover:scale-[1.01] active:scale-[0.99] focus-visible:ring-1 focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--bg)] ${
+            direction === "long"
+              ? "bg-[var(--long)] hover:brightness-110 focus-visible:ring-[var(--long)]"
+              : "bg-[var(--short)] hover:brightness-110 focus-visible:ring-[var(--short)]"
+          }`}
+        >
+          {needsAccount ? "Create Account & Deposit" : "Deposit to Trade"}
+        </button>
+      ) : (
+        <button
+          onClick={() => {
+            if (!marginInput || !userAccount || positionSize <= 0n || exceedsMargin || riskGateActive || header?.paused || tradePhase !== "idle" || loading) return;
+            setShowConfirmModal(true);
+          }}
+          disabled={tradePhase !== "idle" || loading || !marginInput || positionSize <= 0n || exceedsMargin || riskGateActive || header?.paused || lpUnderfunded}
+          className={`w-full rounded-none py-2.5 text-[11px] font-medium uppercase tracking-[0.1em] text-white transition-all duration-150 hover:scale-[1.01] active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100 focus-visible:ring-1 focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--bg)] ${
+            direction === "long"
+              ? "bg-[var(--long)] hover:brightness-110 focus-visible:ring-[var(--long)]"
+              : "bg-[var(--short)] hover:brightness-110 focus-visible:ring-[var(--short)]"
+          }`}
+        >
+          {tradePhase === "submitting" ? (
+            <span className="inline-flex items-center gap-2">
+              <svg className="h-3.5 w-3.5 animate-spin" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+              Submitting…
+            </span>
+          ) : tradePhase === "confirming" ? (
+            <span className="inline-flex items-center gap-2">
+              <svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"/></svg>
+              Confirmed!
+            </span>
+          ) : (
+            `${direction === "long" ? "Long" : "Short"} ${leverage}x`
+          )}
+        </button>
+      )}
 
       {humanError && (
         <div ref={errorRef} className="mt-2 rounded-none border border-[var(--short)]/20 bg-[var(--short)]/5 px-3 py-2">
@@ -555,6 +459,17 @@ export const TradeForm: FC<{ slabAddress: string }> = ({ slabAddress }) => {
           </a>
         </p>
       )}
+
+      {/* Coin-margined info */}
+      <div className="mt-3 rounded-none border border-[var(--border)]/20 bg-[var(--bg)]/50 p-2.5">
+        <p className="text-[9px] font-medium uppercase tracking-[0.15em] text-[var(--text-dim)]">
+          Coin-Margined Market
+        </p>
+        <p className="mt-1 text-[9px] leading-relaxed text-[var(--text-muted)]">
+          Margined in <strong className="text-[var(--text-secondary)]">{symbol}</strong>, not USD. Position value and liquidation risk are affected by {symbol} price movements.
+          Effective USD leverage: <span className="font-mono text-[var(--text-secondary)]">{leverage > 0 ? `~${leverage * 2}x` : "—"}</span> (nominal {leverage}x × 2 for coin exposure).
+        </p>
+      </div>
 
       {/* Trade confirmation modal */}
       {showConfirmModal && marginNative > 0n && positionSize > 0n && (

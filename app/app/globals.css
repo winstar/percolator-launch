@@ -170,6 +170,19 @@ body::before {
   animation: shimmer 1.5s ease-in-out infinite;
 }
 
+.deposit-shimmer {
+  animation: pulse-glow 2s ease-in-out infinite;
+  position: relative;
+  overflow: hidden;
+}
+.deposit-shimmer::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(153, 69, 255, 0.15), transparent);
+  animation: shimmer-sweep 2s ease-in-out infinite;
+}
+
 /* ─── Animation Classes ─── */
 .animate-fade-in-up { animation: fade-in-up 0.6s cubic-bezier(0.16, 1, 0.3, 1) both; }
 .animate-fade-in { animation: fade-in 0.4s ease-out both; }

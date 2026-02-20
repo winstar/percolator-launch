@@ -39,9 +39,11 @@ describe("WarmupProgress Component", () => {
       () => new Promise(() => {}) // Never resolves
     );
 
-    render(<WarmupProgress slabAddress="test-slab" accountIdx={0} />);
+    const { container } = render(<WarmupProgress slabAddress="test-slab" accountIdx={0} />);
 
-    expect(screen.getByText("Warmup Status")).toBeInTheDocument();
+    // Loading state is now a pulsing progress bar, not a text element
+    const pulseBar = container.querySelector(".animate-pulse");
+    expect(pulseBar).toBeInTheDocument();
   });
 
   it("should render warmup in progress correctly", async () => {
@@ -63,7 +65,7 @@ describe("WarmupProgress Component", () => {
     render(<WarmupProgress slabAddress="test-slab" accountIdx={0} />);
 
     await waitFor(() => {
-      expect(screen.getByText(/Profit Warming Up/i)).toBeInTheDocument();
+      expect(screen.getByText(/Unlocking profits/i)).toBeInTheDocument();
     });
 
     // Check unlocked amount (appears in both Unlocked and Locked rows)
@@ -94,7 +96,7 @@ describe("WarmupProgress Component", () => {
     render(<WarmupProgress slabAddress="test-slab" accountIdx={0} />);
 
     await waitFor(() => {
-      expect(screen.getByText("Fully Unlocked")).toBeInTheDocument();
+      expect(screen.getByText(/Profits fully unlocked/i)).toBeInTheDocument();
     });
   });
 
@@ -190,12 +192,12 @@ describe("WarmupProgress Component", () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: "Why?" })).toBeInTheDocument();
+      expect(screen.getByText(/Learn more/i)).toBeInTheDocument();
     });
 
-    // Click the "Why?" button
-    const whyButton = screen.getByRole("button", { name: "Why?" });
-    whyButton.click();
+    // Click the "Learn more" button to open explainer
+    const learnMoreBtn = screen.getByText(/Learn more/i);
+    learnMoreBtn.click();
 
     // Modal should open (mocked, so we just verify the button works)
   });

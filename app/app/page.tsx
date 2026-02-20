@@ -5,9 +5,9 @@ import Link from "next/link";
 import gsap from "gsap";
 import { getSupabase } from "@/lib/supabase";
 import { getConfig } from "@/lib/config";
-import { AnimatedNumber } from "@/components/ui/AnimatedNumber";
+import { isMockMode } from "@/lib/mock-mode";
+import { MOCK_SLAB_ADDRESSES, getMockMarketData } from "@/lib/mock-trade-data";
 import { ScrollReveal } from "@/components/ui/ScrollReveal";
-import { GlassCard } from "@/components/ui/GlassCard";
 import { GradientText } from "@/components/ui/GradientText";
 import { usePrefersReducedMotion } from "@/hooks/usePrefersReducedMotion";
 import { ErrorBoundary } from "@/components/ui/ErrorBoundary";
@@ -117,6 +117,31 @@ export default function Home() {
 
   useEffect(() => {
     async function loadStats() {
+      // In mock mode, use synthetic data instead of Supabase
+      if (isMockMode() || process.env.NODE_ENV === "development") {
+        const mockFeatured = MOCK_SLAB_ADDRESSES.slice(0, 5).map((addr) => {
+          const m = getMockMarketData(addr);
+          if (!m) return null;
+          const vol = Math.round(m.priceUsd * Number(m.oi) / 1_000_000 * 0.1);
+          return {
+            slab_address: addr,
+            symbol: m.symbol,
+            volume_24h: vol,
+            last_price: m.priceUsd,
+            total_open_interest: Math.round(Number(m.oi) / 1_000_000 * m.priceUsd),
+          };
+        }).filter(Boolean) as typeof featured;
+
+        setStats({
+          markets: MOCK_SLAB_ADDRESSES.length,
+          volume: mockFeatured.reduce((s, m) => s + m.volume_24h, 0),
+          insurance: 63200,
+        });
+        setStatsLoaded(true);
+        setFeatured(mockFeatured);
+        return;
+      }
+
       try {
         const { data } = await getSupabase().from("markets_with_stats").select("slab_address, symbol, volume_24h, insurance_balance, last_price, total_open_interest") as { data: { slab_address: string; symbol: string | null; volume_24h: number | null; insurance_balance: number | null; last_price: number | null; total_open_interest: number | null }[] | null };
         if (data) {
@@ -305,14 +330,14 @@ export default function Home() {
               <ScrollReveal stagger={0.08}>
                 <div className="grid grid-cols-2 gap-px overflow-hidden border border-[var(--border)] bg-[var(--border)] md:grid-cols-4">
                   {[
-                    { label: "Markets Live", value: statsLoaded ? <AnimatedNumber value={stats.markets} decimals={0} /> : "—", color: "text-[var(--accent)]" },
-                    { label: "24h Volume", value: statsLoaded ? <AnimatedNumber value={stats.volume / 1000} prefix="$" suffix="k" decimals={0} /> : "—", color: "text-[var(--long)]" },
-                    { label: "Insurance Fund", value: statsLoaded ? <AnimatedNumber value={stats.insurance / 1000} prefix="$" suffix="k" decimals={0} /> : "—", color: "text-[var(--accent)]" },
+                    { label: "Markets Live", value: statsLoaded ? String(stats.markets) : "—", color: "text-[var(--accent)]" },
+                    { label: "24h Volume", value: statsLoaded ? `$${Math.round(stats.volume / 1000).toLocaleString()}k` : "—", color: "text-[var(--long)]" },
+                    { label: "Insurance Fund", value: statsLoaded ? `$${Math.round(stats.insurance / 1000).toLocaleString()}k` : "—", color: "text-[var(--accent)]" },
                     { label: "Access", value: "Open", color: "text-[var(--long)]" },
                   ].map((stat) => (
-                    <div key={stat.label} className="bg-[var(--panel-bg)] p-4 sm:p-6 transition-colors duration-200 hover:bg-[var(--bg-elevated)]">
-                      <p className="mb-2 sm:mb-3 text-[9px] font-medium uppercase tracking-[0.2em] text-[var(--text-dim)]">{stat.label}</p>
-                      <p className={`text-xl sm:text-2xl md:text-3xl font-bold ${stat.color}`}>
+                    <div key={stat.label} className="bg-[var(--panel-bg)] p-4 sm:p-5 transition-colors duration-200 hover:bg-[var(--bg-elevated)]">
+                      <p className="mb-2 text-[9px] font-medium uppercase tracking-[0.2em] text-[var(--text-dim)]">{stat.label}</p>
+                      <p className={`text-lg sm:text-xl font-semibold tracking-tight tabular-nums ${stat.color}`} style={{ fontFamily: "var(--font-heading)" }}>
                         {stat.value}
                       </p>
                     </div>

@@ -253,17 +253,15 @@ export const FundingRateChart: FC<{ slabAddress: string }> = ({ slabAddress }) =
         <h3 className="text-[10px] font-bold uppercase tracking-[0.15em] text-[var(--text-dim)]">
           Funding Rate (24h)
         </h3>
-        {hoveredPoint && (
-          <div className="text-right">
-            <div className={`text-sm font-bold ${hoveredPoint.hourlyRatePercent >= 0 ? "text-[var(--short)]" : "text-[var(--long)]"}`} style={{ fontFamily: "var(--font-mono)" }}>
-              {hoveredPoint.hourlyRatePercent >= 0 ? "+" : ""}
-              {hoveredPoint.hourlyRatePercent.toFixed(4)}%/h
-            </div>
-            <div className="text-[10px] text-[var(--text-dim)]">
-              {new Date(hoveredPoint.timestamp).toLocaleString()}
-            </div>
+        <div className={`text-right transition-opacity duration-100 ${hoveredPoint ? "opacity-100" : "opacity-0 pointer-events-none"}`}>
+          <div className={`text-sm font-bold ${(hoveredPoint?.hourlyRatePercent ?? 0) >= 0 ? "text-[var(--short)]" : "text-[var(--long)]"}`} style={{ fontFamily: "var(--font-mono)" }}>
+            {(hoveredPoint?.hourlyRatePercent ?? 0) >= 0 ? "+" : ""}
+            {(hoveredPoint?.hourlyRatePercent ?? 0).toFixed(4)}%/h
           </div>
-        )}
+          <div className="text-[10px] text-[var(--text-dim)]">
+            {hoveredPoint ? new Date(hoveredPoint.timestamp).toLocaleString() : "\u00A0"}
+          </div>
+        </div>
       </div>
 
       <svg width={W} height={H} className="w-full" style={{ maxWidth: "100%" }} onMouseMove={handleMouseMove} onMouseLeave={handleMouseLeave}>
