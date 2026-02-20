@@ -161,10 +161,10 @@ export function useInsuranceLP() {
   }, [refreshState]);
   
   useEffect(() => {
-    refreshStateRef.current();
-    const interval = setInterval(() => {
-      refreshStateRef.current();
-    }, 10_000);
+    // Call refreshState on mount and set up auto-refresh interval
+    const doRefresh = () => refreshStateRef.current();
+    doRefresh();
+    const interval = setInterval(doRefresh, 10_000);
     return () => clearInterval(interval);
   }, []); // Empty deps safe now — ref always points to latest refreshState
 
