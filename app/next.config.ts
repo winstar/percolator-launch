@@ -94,9 +94,6 @@ export default withSentryConfig(nextConfig, {
     disable: !process.env.SENTRY_AUTH_TOKEN,
   },
 
-  // Automatically tree-shake Sentry logger statements to reduce bundle size
-  disableLogger: true,
-
   // Upload source maps during build when auth token is available
   org: process.env.SENTRY_ORG || "percolator",
   project: process.env.SENTRY_PROJECT || "percolator-app",
