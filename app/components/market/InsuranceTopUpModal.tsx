@@ -3,9 +3,11 @@
 import { FC, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import gsap from "gsap";
+import { useWallet } from "@solana/wallet-adapter-react";
 import { usePrefersReducedMotion } from "@/hooks/usePrefersReducedMotion";
 import { isMockMode } from "@/lib/mock-mode";
 import { isMockSlab } from "@/lib/mock-trade-data";
+import { useInsuranceLP } from "@/hooks/useInsuranceLP";
 
 interface InsuranceTopUpModalProps {
   slabAddress: string;
@@ -31,6 +33,9 @@ export const InsuranceTopUpModal: FC<InsuranceTopUpModalProps> = ({
   const modalRef = useRef<HTMLDivElement>(null);
   const prefersReduced = usePrefersReducedMotion();
   const mockMode = isMockMode() && isMockSlab(slabAddress);
+
+  const wallet = useWallet();
+  const { deposit, state: lpState, loading: lpLoading, error: lpError } = useInsuranceLP();
 
   const [amount, setAmount] = useState("");
   const [loading, setLoading] = useState(false);
@@ -78,6 +83,11 @@ export const InsuranceTopUpModal: FC<InsuranceTopUpModalProps> = ({
       return;
     }
 
+    if (!wallet.publicKey) {
+      setError("Please connect your wallet first");
+      return;
+    }
+
     if (mockMode) {
       // Mock success
       setLoading(true);
@@ -92,17 +102,38 @@ export const InsuranceTopUpModal: FC<InsuranceTopUpModalProps> = ({
       setLoading(true);
       setError(null);
 
-      // Call API to build and send transaction
-      // Insurance top-up requires wallet signing via on-chain instruction
-      // TODO: Implement client-side transaction building when insurance deposit instruction is available in @percolator/core
-      throw new Error("Insurance top-up is not yet available. This feature requires on-chain instruction support.");
+      if (!lpState.mintExists) {
+        setError(
+          "Insurance LP mint has not been created for this market yet. Please contact the market admin."
+        );
+        return;
+      }
+
+      // Convert USDC amount to base units (6 decimals for USDC)
+      const amountBaseUnits = BigInt(Math.floor(amountNum * 1e6));
+
+      const signature = await deposit(amountBaseUnits);
+
+      if (signature && typeof signature === "string") {
+        setTxSignature(signature);
+      }
+      setSuccess(true);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unknown error");
+      const message = err instanceof Error ? err.message : "Unknown error";
+      // Provide user-friendly error messages
+      if (message.includes("insufficient")) {
+        setError("Insufficient USDC balance. Please fund your wallet.");
+      } else if (message.includes("User rejected")) {
+        setError("Transaction was rejected in your wallet.");
+      } else {
+        setError(message);
+      }
     } finally {
       setLoading(false);
     }
   };
 
+  const isLoading = loading || lpLoading;
   const currentBalanceUsd = formatUsdAmount(currentBalance);
   const newBalanceUsd =
     amount && parseFloat(amount) > 0
@@ -114,6 +145,9 @@ export const InsuranceTopUpModal: FC<InsuranceTopUpModalProps> = ({
       ref={overlayRef}
       className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
       onClick={handleOverlayClick}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="insurance-topup-title"
     >
       <div
         ref={modalRef}
@@ -122,6 +156,7 @@ export const InsuranceTopUpModal: FC<InsuranceTopUpModalProps> = ({
         {/* Header */}
         <div className="flex items-center justify-between border-b border-[var(--border)]/50 bg-[var(--bg)] px-4 py-3">
           <h2
+            id="insurance-topup-title"
             className="text-lg font-bold text-[var(--text)]"
             style={{ fontFamily: "var(--font-display)" }}
           >
@@ -129,7 +164,8 @@ export const InsuranceTopUpModal: FC<InsuranceTopUpModalProps> = ({
           </h2>
           <button
             onClick={onClose}
-            disabled={loading}
+            disabled={isLoading}
+            aria-label="Close"
             className="flex h-8 w-8 items-center justify-center rounded-none text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-elevated)] hover:text-[var(--text)] disabled:opacity-50"
           >
             <svg
@@ -138,6 +174,7 @@ export const InsuranceTopUpModal: FC<InsuranceTopUpModalProps> = ({
               viewBox="0 0 24 24"
               stroke="currentColor"
               strokeWidth={2}
+              aria-hidden="true"
             >
               <path
                 strokeLinecap="round"
@@ -152,12 +189,31 @@ export const InsuranceTopUpModal: FC<InsuranceTopUpModalProps> = ({
         <div className="p-6">
           {!success ? (
             <>
+              {/* Wallet not connected warning */}
+              {!wallet.publicKey && (
+                <div className="mb-4 rounded-none border-l-2 border-l-[var(--warning)] bg-[var(--warning)]/5 p-3">
+                  <p className="text-[11px] leading-relaxed text-[var(--warning)]">
+                    Please connect your wallet to make a deposit.
+                  </p>
+                </div>
+              )}
+
+              {/* LP mint not created warning */}
+              {wallet.publicKey && !lpState.mintExists && !lpLoading && (
+                <div className="mb-4 rounded-none border-l-2 border-l-[var(--warning)] bg-[var(--warning)]/5 p-3">
+                  <p className="text-[11px] leading-relaxed text-[var(--warning)]">
+                    Insurance LP mint has not been created for this market.
+                    Deposits are not available yet.
+                  </p>
+                </div>
+              )}
+
               {/* Info Banner */}
               <div className="mb-4 rounded-none border-l-2 border-l-[var(--accent)] bg-[var(--accent)]/5 p-3">
                 <p className="text-[11px] leading-relaxed text-[var(--text-secondary)]">
-                  Anyone can contribute to the insurance fund. Your
-                  contribution helps protect all LPs and makes the market
-                  safer for everyone.
+                  Deposit USDC into the insurance fund and receive LP tokens
+                  proportional to your share. Your contribution helps protect
+                  all traders and earns yield from liquidation fees.
                 </p>
               </div>
 
@@ -179,7 +235,7 @@ export const InsuranceTopUpModal: FC<InsuranceTopUpModalProps> = ({
                     value={amount}
                     onChange={(e) => setAmount(e.target.value)}
                     placeholder="0.00"
-                    disabled={loading}
+                    disabled={isLoading}
                     className="w-full rounded-none border border-[var(--border)] bg-[var(--bg-elevated)] py-2 pl-7 pr-3 text-[var(--text)] placeholder-[var(--text-dim)] transition-colors focus:border-[var(--accent)] focus:outline-none disabled:opacity-50"
                     style={{ fontFamily: "var(--font-mono)" }}
                     min="0"
@@ -191,7 +247,7 @@ export const InsuranceTopUpModal: FC<InsuranceTopUpModalProps> = ({
                     <button
                       key={preset}
                       onClick={() => setAmount(preset.toString())}
-                      disabled={loading}
+                      disabled={isLoading}
                       className="flex-1 rounded-none border border-[var(--border)]/50 py-1 text-[9px] text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-elevated)] disabled:opacity-50"
                     >
                       ${preset}
@@ -205,7 +261,7 @@ export const InsuranceTopUpModal: FC<InsuranceTopUpModalProps> = ({
                 <div className="space-y-2 text-sm">
                   <div className="flex items-center justify-between">
                     <span className="text-[10px] uppercase tracking-[0.15em] text-[var(--text-dim)]">
-                      Current Balance
+                      Current Fund Balance
                     </span>
                     <span
                       className="text-[var(--text-secondary)]"
@@ -225,6 +281,25 @@ export const InsuranceTopUpModal: FC<InsuranceTopUpModalProps> = ({
                       +${amount || "0"}
                     </span>
                   </div>
+                  {lpState.mintExists && amount && parseFloat(amount) > 0 && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] uppercase tracking-[0.15em] text-[var(--text-dim)]">
+                        Est. LP Tokens
+                      </span>
+                      <span
+                        className="text-[var(--cyan)]"
+                        style={{ fontFamily: "var(--font-mono)" }}
+                      >
+                        {lpState.lpSupply > 0n
+                          ? (
+                              (parseFloat(amount) * 1e6 * Number(lpState.lpSupply)) /
+                              Number(lpState.insuranceBalance || 1n)
+                            ).toLocaleString(undefined, { maximumFractionDigits: 2 })
+                          : (parseFloat(amount) * 1e6).toLocaleString()}{" "}
+                        LP
+                      </span>
+                    </div>
+                  )}
                   <div className="border-t border-[var(--border)]/30 pt-2">
                     <div className="flex items-center justify-between">
                       <span className="text-[10px] font-medium uppercase tracking-[0.15em] text-[var(--text)]">
@@ -242,9 +317,9 @@ export const InsuranceTopUpModal: FC<InsuranceTopUpModalProps> = ({
               </div>
 
               {/* Error */}
-              {error && (
+              {(error || lpError) && (
                 <div className="mb-4 rounded-none border border-[var(--short)]/30 bg-[var(--short)]/5 p-3">
-                  <p className="text-[11px] text-[var(--short)]">{error}</p>
+                  <p className="text-[11px] text-[var(--short)]">{error || lpError}</p>
                 </div>
               )}
 
@@ -252,17 +327,27 @@ export const InsuranceTopUpModal: FC<InsuranceTopUpModalProps> = ({
               <div className="flex gap-2">
                 <button
                   onClick={onClose}
-                  disabled={loading}
+                  disabled={isLoading}
                   className="flex-1 rounded-none border border-[var(--border)]/50 py-2 text-sm font-medium text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-elevated)] disabled:opacity-50"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handleSubmit}
-                  disabled={loading || !amount || parseFloat(amount) <= 0}
+                  disabled={
+                    isLoading ||
+                    !amount ||
+                    parseFloat(amount) <= 0 ||
+                    !wallet.publicKey ||
+                    (!lpState.mintExists && !mockMode)
+                  }
                   className="flex-1 rounded-none bg-[var(--accent)] py-2 text-sm font-medium text-white transition-colors hover:opacity-90 disabled:opacity-50"
                 >
-                  {loading ? "Processing..." : "Sign & Send Transaction"}
+                  {isLoading
+                    ? "Processing..."
+                    : !wallet.publicKey
+                    ? "Connect Wallet"
+                    : "Sign & Deposit"}
                 </button>
               </div>
             </>
@@ -271,27 +356,46 @@ export const InsuranceTopUpModal: FC<InsuranceTopUpModalProps> = ({
             <div className="text-center">
               <div className="mb-4 flex justify-center">
                 <div className="flex h-16 w-16 items-center justify-center rounded-full bg-[var(--long)]/10">
-                  <span className="inline-block w-8 h-8 rounded-full bg-[var(--long)]" />
+                  <svg
+                    className="h-8 w-8 text-[var(--long)]"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                    aria-hidden="true"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M5 13l4 4L19 7"
+                    />
+                  </svg>
                 </div>
               </div>
               <h3 className="mb-2 text-lg font-bold text-[var(--text)]">
-                Top-Up Successful!
+                Deposit Successful!
               </h3>
               <p className="mb-4 text-sm text-[var(--text-secondary)]">
-                You contributed <strong>${amount}</strong> to the insurance
-                fund. Thank you for making Percolator safer!
+                You deposited <strong>${amount} USDC</strong> into the
+                insurance fund and received LP tokens. Thank you for making
+                Percolator safer!
               </p>
               {txSignature && (
                 <div className="mb-4 rounded-none border border-[var(--border)]/30 bg-[var(--bg-elevated)] p-3">
                   <div className="text-[10px] uppercase tracking-[0.15em] text-[var(--text-dim)]">
                     Transaction
                   </div>
-                  <div
-                    className="mt-1 break-all text-xs text-[var(--accent)]"
+                  <a
+                    href={`https://explorer.solana.com/tx/${txSignature}?cluster=devnet`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-1 block break-all text-xs text-[var(--accent)] hover:underline"
                     style={{ fontFamily: "var(--font-mono)" }}
                   >
-                    {txSignature}
-                  </div>
+                    {txSignature.length > 20
+                      ? `${txSignature.slice(0, 20)}...${txSignature.slice(-8)}`
+                      : txSignature}
+                  </a>
                 </div>
               )}
               <button
