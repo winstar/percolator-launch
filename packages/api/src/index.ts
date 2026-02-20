@@ -4,6 +4,10 @@ import { cors } from "hono/cors";
 import { compress } from "hono/compress";
 import { serve } from "@hono/node-server";
 import { createLogger, sendInfoAlert } from "@percolator/shared";
+import { initSentry, sentryMiddleware, flushSentry } from "./middleware/sentry.js";
+
+// Initialize Sentry before anything else
+initSentry();
 import { healthRoutes } from "./routes/health.js";
 import { marketRoutes } from "./routes/markets.js";
 import { tradeRoutes } from "./routes/trades.js";
@@ -66,6 +70,9 @@ app.use("*", cors({
 
 // Compression Middleware (gzip/brotli for JSON responses)
 app.use("*", compress());
+
+// Sentry error tracking middleware
+app.use("*", sentryMiddleware());
 
 // Security Headers Middleware
 app.use("*", async (c, next) => {
@@ -135,6 +142,19 @@ app.onError((err, c) => {
     endpoint: c.req.path,
     method: c.req.method
   });
+  
+  // Report to Sentry (sentryMiddleware may have already captured it,
+  // but this ensures errors from middleware chain are also caught)
+  import("@sentry/node").then((Sentry) => {
+    Sentry.captureException(err, {
+      tags: {
+        endpoint: c.req.path,
+        method: c.req.method,
+        handler: "onError",
+      },
+    });
+  }).catch(() => {});
+  
   return c.json({ error: "Internal server error" }, 500);
 });
 
@@ -154,6 +174,9 @@ async function shutdown(signal: string): Promise<void> {
   logger.info("Shutdown initiated", { signal });
   
   try {
+    // Flush Sentry events before shutting down
+    await flushSentry(2000);
+    
     // Send shutdown alert
     await sendInfoAlert("API service shutting down", [
       { name: "Signal", value: signal, inline: true },

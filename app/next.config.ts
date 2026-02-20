@@ -88,8 +88,17 @@ export default withSentryConfig(nextConfig, {
   // Sentry webpack plugin options
   silent: true, // Suppresses all logs
   
-  // Disable automatic source map upload (we'll enable later with auth token)
+  // Source maps: enabled when SENTRY_AUTH_TOKEN is set (CI/CD only)
+  // Set SENTRY_AUTH_TOKEN, SENTRY_ORG, and SENTRY_PROJECT in your CI environment
   sourcemaps: {
-    disable: true,
+    disable: !process.env.SENTRY_AUTH_TOKEN,
   },
+
+  // Automatically tree-shake Sentry logger statements to reduce bundle size
+  disableLogger: true,
+
+  // Upload source maps during build when auth token is available
+  org: process.env.SENTRY_ORG || "percolator",
+  project: process.env.SENTRY_PROJECT || "percolator-app",
+  authToken: process.env.SENTRY_AUTH_TOKEN,
 });
