@@ -12,6 +12,16 @@ import { GradientText } from "@/components/ui/GradientText";
 import { usePrefersReducedMotion } from "@/hooks/usePrefersReducedMotion";
 import { ErrorBoundary } from "@/components/ui/ErrorBoundary";
 
+/** Format large numbers compactly: 1.2T / 3.4B / 5.6M / 7.8K */
+function formatCompact(n: number): string {
+  const abs = Math.abs(n);
+  if (abs >= 1_000_000_000_000) return `$${(n / 1_000_000_000_000).toFixed(1)}T`;
+  if (abs >= 1_000_000_000) return `$${(n / 1_000_000_000).toFixed(1)}B`;
+  if (abs >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`;
+  if (abs >= 1_000) return `$${(n / 1_000).toFixed(1)}K`;
+  return `$${n.toLocaleString()}`;
+}
+
 const HOW_STEPS = [
   {
     number: "01",
@@ -331,8 +341,8 @@ export default function Home() {
                 <div className="grid grid-cols-2 gap-px overflow-hidden border border-[var(--border)] bg-[var(--border)] md:grid-cols-4">
                   {[
                     { label: "Markets Live", value: statsLoaded ? String(stats.markets) : "—", color: "text-[var(--accent)]" },
-                    { label: "24h Volume", value: statsLoaded ? `$${Math.round(stats.volume / 1000).toLocaleString()}k` : "—", color: "text-[var(--long)]" },
-                    { label: "Insurance Fund", value: statsLoaded ? `$${Math.round(stats.insurance / 1000).toLocaleString()}k` : "—", color: "text-[var(--accent)]" },
+                    { label: "24h Volume", value: statsLoaded ? formatCompact(stats.volume) : "—", color: "text-[var(--long)]" },
+                    { label: "Insurance Fund", value: statsLoaded ? formatCompact(stats.insurance) : "—", color: "text-[var(--accent)]" },
                     { label: "Access", value: "Open", color: "text-[var(--long)]" },
                   ].map((stat) => (
                     <div key={stat.label} className="bg-[var(--panel-bg)] p-4 sm:p-5 transition-colors duration-200 hover:bg-[var(--bg-elevated)]">
@@ -502,10 +512,10 @@ export default function Home() {
                         : "\u2014"}
                     </div>
                     <div className="text-right text-[12px] text-[var(--text-secondary)]">
-                      {m.volume_24h >= 1000 ? `$${(m.volume_24h / 1000).toFixed(1)}k` : `$${m.volume_24h}`}
+                      {formatCompact(m.volume_24h)}
                     </div>
                     <div className="text-right text-[12px] text-[var(--text-secondary)]">
-                      {m.total_open_interest >= 1000 ? `$${(m.total_open_interest / 1000).toFixed(1)}k` : `$${m.total_open_interest}`}
+                      {formatCompact(m.total_open_interest)}
                     </div>
                     <div className="text-right text-[11px] text-[var(--long)]">LIVE</div>
                   </Link>
