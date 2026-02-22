@@ -172,6 +172,9 @@ pub struct Account {
     /// Last slot when maintenance fees were settled for this account
     pub last_fee_slot: u64,
 
+    /// Last slot when a partial liquidation occurred (PERC-122 cooldown).
+    pub last_partial_liquidation_slot: u64,
+
 }
 
 impl Account {
@@ -204,6 +207,7 @@ fn empty_account() -> Account {
         owner: [0; 32],
         fee_credits: I128::ZERO,
         last_fee_slot: 0,
+        last_partial_liquidation_slot: 0,
     }
 }
 
@@ -310,6 +314,16 @@ pub struct RiskParams {
     /// Maximum absolute funding rate per slot (basis points).
     /// Caps the premium-based rate to prevent extreme funding.
     pub funding_premium_max_bps_per_slot: i64,
+
+    // ========================================
+    // Partial Liquidation Parameters (PERC-122)
+    // ========================================
+    /// Percentage of position to close per partial liquidation (bps, 0 = disabled).
+    pub partial_liquidation_bps: u64,
+    /// Cooldown slots between partial liquidations on the same account.
+    pub partial_liquidation_cooldown_slots: u64,
+    /// Use mark price (not oracle) for liquidation trigger.
+    pub use_mark_price_for_liquidation: bool,
 }
 
 impl RiskParams {
@@ -351,6 +365,9 @@ impl RiskParams {
         }
         // If funding premium is enabled, dampening must be non-zero
         if self.funding_premium_weight_bps > 0 && self.funding_premium_dampening_e6 == 0 {
+            return Err(RiskError::Overflow);
+        }
+        if self.partial_liquidation_bps > 10_000 {
             return Err(RiskError::Overflow);
         }
         Ok(())
@@ -1037,6 +1054,7 @@ impl RiskEngine {
             owner: [0; 32],
             fee_credits: I128::ZERO,
             last_fee_slot: self.current_slot,
+            last_partial_liquidation_slot: 0,
         };
 
         // Maintain c_tot aggregate (account was created with capital = excess)
@@ -1097,6 +1115,7 @@ impl RiskEngine {
             owner: [0; 32],
             fee_credits: I128::ZERO,
             last_fee_slot: self.current_slot,
+            last_partial_liquidation_slot: 0,
         };
 
         // Maintain c_tot aggregate (account was created with capital = excess)
@@ -2167,6 +2186,117 @@ impl RiskEngine {
         self.insurance_fund.balance = self.insurance_fund.balance.saturating_add_u128(U128::new(pay));
         self.insurance_fund.fee_revenue = self.insurance_fund.fee_revenue.saturating_add_u128(U128::new(pay));
 
+        self.lifetime_liquidations = self.lifetime_liquidations.saturating_add(1);
+
+        Ok(true)
+    }
+
+    // ========================================
+    // Mark-Price Liquidation + Partial (PERC-122)
+    // ========================================
+
+    /// Liquidation with mark-price trigger and partial liquidation.
+    ///
+    /// - Trigger: check margin at mark_price_e6 (prevents oracle manipulation)
+    /// - Settle: close position at oracle_price (actual market price)
+    /// - Partial: close partial_liquidation_bps/10_000 of position with cooldown
+    pub fn liquidate_with_mark_price(
+        &mut self,
+        idx: u16,
+        now_slot: u64,
+        oracle_price: u64,
+    ) -> Result<bool> {
+        if !self.params.use_mark_price_for_liquidation || self.mark_price_e6 == 0 {
+            return self.liquidate_at_oracle(idx, now_slot, oracle_price);
+        }
+
+        self.current_slot = now_slot;
+
+        if (idx as usize) >= MAX_ACCOUNTS || !self.is_used(idx as usize) {
+            return Ok(false);
+        }
+        if oracle_price == 0 || oracle_price > MAX_ORACLE_PRICE {
+            return Err(RiskError::Overflow);
+        }
+        if self.accounts[idx as usize].position_size.is_zero() {
+            return Ok(false);
+        }
+
+        // Settle at oracle price
+        self.touch_account_for_liquidation(idx, now_slot, oracle_price)?;
+
+        // TRIGGER at mark price (not oracle)
+        let mark_price = self.mark_price_e6;
+        if self.is_above_maintenance_margin_mtm(&self.accounts[idx as usize], mark_price) {
+            return Ok(false);
+        }
+
+        // Partial liquidation with cooldown
+        let cooldown = self.params.partial_liquidation_cooldown_slots;
+        let last_partial = self.accounts[idx as usize].last_partial_liquidation_slot;
+        let can_partial = self.params.partial_liquidation_bps > 0
+            && (cooldown == 0 || now_slot.saturating_sub(last_partial) >= cooldown);
+
+        let account = &self.accounts[idx as usize];
+        let pos_abs = saturating_abs_i128(account.position_size.get()) as u128;
+
+        let (close_abs, is_full_close) = if can_partial {
+            let batch = mul_u128(pos_abs, self.params.partial_liquidation_bps as u128) / 10_000;
+            let batch = batch.max(self.params.min_liquidation_abs.get());
+            if batch >= pos_abs { (pos_abs, true) } else { (batch, false) }
+        } else if cooldown > 0 && now_slot.saturating_sub(last_partial) < cooldown {
+            return Ok(false); // Cooldown not elapsed
+        } else {
+            (pos_abs, true)
+        };
+
+        if close_abs == 0 {
+            return Ok(false);
+        }
+
+        // SETTLE at oracle price
+        let mut outcome = if is_full_close {
+            self.oracle_close_position_core(idx, oracle_price)?
+        } else {
+            match self.oracle_close_position_slice_core(idx, oracle_price, close_abs) {
+                Ok(r) => r,
+                Err(RiskError::Overflow) => self.oracle_close_position_core(idx, oracle_price)?,
+                Err(e) => return Err(e),
+            }
+        };
+
+        if !outcome.position_was_closed {
+            return Ok(false);
+        }
+
+        if !is_full_close {
+            self.accounts[idx as usize].last_partial_liquidation_slot = now_slot;
+        }
+
+        // Safety: if still below target at mark price, full close
+        if !self.accounts[idx as usize].position_size.is_zero() {
+            let target_bps = self.params.maintenance_margin_bps
+                .saturating_add(self.params.liquidation_buffer_bps);
+            if !self.is_above_margin_bps_mtm(&self.accounts[idx as usize], mark_price, target_bps) {
+                let fallback = self.oracle_close_position_core(idx, oracle_price)?;
+                if fallback.position_was_closed {
+                    outcome.abs_pos = outcome.abs_pos.saturating_add(fallback.abs_pos);
+                }
+            }
+        }
+
+        // Liquidation fee
+        let notional = mul_u128(outcome.abs_pos, oracle_price as u128) / 1_000_000;
+        let fee_raw = if notional > 0 && self.params.liquidation_fee_bps > 0 {
+            (mul_u128(notional, self.params.liquidation_fee_bps as u128) + 9999) / 10_000
+        } else { 0 };
+        let fee = core::cmp::min(fee_raw, self.params.liquidation_fee_cap.get());
+        let acap = self.accounts[idx as usize].capital.get();
+        let pay = core::cmp::min(fee, acap);
+
+        self.set_capital(idx as usize, acap.saturating_sub(pay));
+        self.insurance_fund.balance = self.insurance_fund.balance.saturating_add_u128(U128::new(pay));
+        self.insurance_fund.fee_revenue = self.insurance_fund.fee_revenue.saturating_add_u128(U128::new(pay));
         self.lifetime_liquidations = self.lifetime_liquidations.saturating_add(1);
 
         Ok(true)

@@ -71,6 +71,9 @@ fn default_params() -> RiskParams {
         funding_settlement_interval_slots: 0,    // Disabled by default
         funding_premium_dampening_e6: 1_000_000, // 1x dampening (safe default)
         funding_premium_max_bps_per_slot: 5,     // Conservative cap
+        partial_liquidation_bps: 2000,
+        partial_liquidation_cooldown_slots: 30,
+        use_mark_price_for_liquidation: false,
     }
 }
 
@@ -1738,6 +1741,7 @@ fn test_account_equity_computes_correctly() {
         owner: [0; 32],
         fee_credits: I128::ZERO,
         last_fee_slot: 0,
+        last_partial_liquidation_slot: 0,
     };
     assert_eq!(engine.account_equity(&account_pos), 7_000);
 
@@ -1758,6 +1762,7 @@ fn test_account_equity_computes_correctly() {
         owner: [0; 32],
         fee_credits: I128::ZERO,
         last_fee_slot: 0,
+        last_partial_liquidation_slot: 0,
     };
     assert_eq!(engine.account_equity(&account_neg), 0);
 
@@ -1778,6 +1783,7 @@ fn test_account_equity_computes_correctly() {
         owner: [0; 32],
         fee_credits: I128::ZERO,
         last_fee_slot: 0,
+        last_partial_liquidation_slot: 0,
     };
     assert_eq!(engine.account_equity(&account_profit), 15_000);
 }
@@ -3575,6 +3581,9 @@ fn params_for_inline_tests() -> RiskParams {
         funding_settlement_interval_slots: 0,
         funding_premium_dampening_e6: 1_000_000,
         funding_premium_max_bps_per_slot: 5,
+        partial_liquidation_bps: 2000,
+        partial_liquidation_cooldown_slots: 30,
+        use_mark_price_for_liquidation: false,
     }
 }
 
@@ -4969,4 +4978,73 @@ fn test_frozen_funding_uses_snapshot_rate_on_accrue() {
 
     // ΔF = price * rate * dt / 10_000 = 1_000_000 * 5 * 100 / 10_000 = 50_000
     assert_eq!(engine.funding_index_qpb_e6.get(), 50_000);
+}
+
+// ==============================================================================
+// PERC-122: Mark-price liquidation + partial liquidation tests
+// ==============================================================================
+
+#[test]
+fn test_mark_price_liq_delegates_when_disabled() {
+    let mut params = default_params();
+    params.use_mark_price_for_liquidation = false;
+    let mut engine = Box::new(RiskEngine::new(params));
+    let user = engine.add_user(0).unwrap();
+    engine.deposit(user, 10_000_000, 1).unwrap();
+    assert_eq!(engine.liquidate_with_mark_price(user, 100, 1_000_000), Ok(false));
+}
+
+#[test]
+fn test_mark_price_liq_skips_healthy_at_mark() {
+    let mut params = default_params();
+    params.use_mark_price_for_liquidation = true;
+    let mut engine = Box::new(RiskEngine::new(params));
+    let user = engine.add_user(0).unwrap();
+    engine.deposit(user, 100_000_000, 1).unwrap();
+    engine.accounts[user as usize].position_size = I128::new(1_000_000);
+    engine.accounts[user as usize].entry_price = 1_000_000;
+    engine.total_open_interest = U128::new(1_000_000);
+    engine.mark_price_e6 = 1_000_000; // healthy mark
+    // Oracle crashed but mark is fine → no liquidation
+    assert_eq!(engine.liquidate_with_mark_price(user, 100, 500_000), Ok(false));
+}
+
+#[test]
+fn test_partial_liq_cooldown() {
+    let mut params = default_params();
+    params.use_mark_price_for_liquidation = true;
+    params.partial_liquidation_bps = 2000;
+    params.partial_liquidation_cooldown_slots = 30;
+    let mut engine = Box::new(RiskEngine::new(params));
+    let user = engine.add_user(0).unwrap();
+    engine.deposit(user, 10_000_000, 1).unwrap();
+    engine.accounts[user as usize].position_size = I128::new(100_000_000);
+    engine.accounts[user as usize].entry_price = 1_000_000;
+    engine.total_open_interest = U128::new(100_000_000);
+    engine.mark_price_e6 = 900_000;
+    // First call at slot 100
+    let r1 = engine.liquidate_with_mark_price(user, 100, 900_000);
+    assert!(r1.is_ok());
+    if r1.unwrap() {
+        // Within cooldown at slot 110
+        assert_eq!(engine.liquidate_with_mark_price(user, 110, 900_000), Ok(false));
+    }
+}
+
+#[test]
+fn test_partial_liq_params_validation() {
+    let mut params = default_params();
+    params.partial_liquidation_bps = 2000;
+    assert!(params.validate().is_ok());
+    params.partial_liquidation_bps = 10_001;
+    assert!(params.validate().is_err());
+}
+
+#[test]
+fn test_mark_price_liq_oob() {
+    let mut params = default_params();
+    params.use_mark_price_for_liquidation = true;
+    let mut engine = Box::new(RiskEngine::new(params));
+    engine.mark_price_e6 = 1_000_000;
+    assert_eq!(engine.liquidate_with_mark_price(u16::MAX, 100, 1_000_000), Ok(false));
 }

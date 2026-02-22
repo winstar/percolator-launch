@@ -182,6 +182,9 @@ fn params_regime_a() -> RiskParams {
         funding_settlement_interval_slots: 0,
         funding_premium_dampening_e6: 1_000_000,
         funding_premium_max_bps_per_slot: 5,
+        partial_liquidation_bps: 2000,
+        partial_liquidation_cooldown_slots: 30,
+        use_mark_price_for_liquidation: false,
     }
 }
 
@@ -205,6 +208,9 @@ fn params_regime_b() -> RiskParams {
         funding_settlement_interval_slots: 0,
         funding_premium_dampening_e6: 1_000_000,
         funding_premium_max_bps_per_slot: 5,
+        partial_liquidation_bps: 2000,
+        partial_liquidation_cooldown_slots: 30,
+        use_mark_price_for_liquidation: false,
     }
 }
 
