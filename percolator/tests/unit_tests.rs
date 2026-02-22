@@ -58,7 +58,7 @@ fn default_params() -> RiskParams {
         maintenance_margin_bps: 500, // 5%
         initial_margin_bps: 1000,    // 10%
         trading_fee_bps: 10,         // 0.1%
-        max_accounts: 1000,
+        max_accounts: MAX_ACCOUNTS as u64,
         new_account_fee: U128::new(0),          // Zero fee for tests
         risk_reduction_threshold: U128::new(0), // Default: only trigger on full depletion
         maintenance_fee_per_slot: U128::new(0), // No maintenance fee by default
@@ -3369,19 +3369,18 @@ fn test_execute_trade_sets_current_slot_and_resets_warmup_start() {
     params.warmup_period_slots = 1000;
     params.trading_fee_bps = 0;
     params.maintenance_fee_per_slot = U128::new(0);
-    params.maintenance_margin_bps = 0;
-    params.initial_margin_bps = 0;
     params.max_crank_staleness_slots = u64::MAX;
     params.max_accounts = 64;
 
     let mut engine = Box::new(RiskEngine::new(params));
 
-    // Create LP and user with capital
+    // Create LP and user with capital — deposits large enough to satisfy initial margin
+    // at oracle_price=100k with 10% initial margin (notional=1e11, margin_req=1e10)
     let lp_idx = engine.add_lp([1u8; 32], [0u8; 32], 0).unwrap();
-    engine.deposit(lp_idx, 1_000_000, 0).unwrap();
+    engine.deposit(lp_idx, 20_000_000_000, 0).unwrap();
 
     let user_idx = engine.add_user(0).unwrap();
-    engine.deposit(user_idx, 1_000_000, 0).unwrap();
+    engine.deposit(user_idx, 20_000_000_000, 0).unwrap();
 
     // Execute trade at now_slot = 100
     let now_slot = 100u64;
@@ -3553,8 +3552,8 @@ const ONE_BASE: i128 = 1_000_000; // 1.0 base unit if base is 1e6-scaled
 fn params_for_inline_tests() -> RiskParams {
     RiskParams {
         warmup_period_slots: 1000,
-        maintenance_margin_bps: 0,
-        initial_margin_bps: 0,
+        maintenance_margin_bps: 1,
+        initial_margin_bps: 1,
         trading_fee_bps: 0,
         max_accounts: MAX_ACCOUNTS as u64,
         new_account_fee: U128::new(0),
@@ -4567,4 +4566,152 @@ fn test_rounding_bound_with_many_positive_pnl_accounts() {
         slack,
         MAX_ROUNDING_SLACK
     );
+}
+
+// ==============================================================================
+// RISKPARAMS VALIDATION TESTS
+// ==============================================================================
+
+#[test]
+fn test_validate_valid_params() {
+    assert!(default_params().validate().is_ok());
+}
+
+#[test]
+fn test_validate_zero_maintenance_margin_rejected() {
+    let mut p = default_params();
+    p.maintenance_margin_bps = 0;
+    assert_eq!(p.validate(), Err(RiskError::Overflow));
+}
+
+#[test]
+fn test_validate_zero_initial_margin_rejected() {
+    let mut p = default_params();
+    p.initial_margin_bps = 0;
+    assert_eq!(p.validate(), Err(RiskError::Overflow));
+}
+
+#[test]
+fn test_validate_initial_less_than_maintenance_rejected() {
+    let mut p = default_params();
+    p.maintenance_margin_bps = 1000;
+    p.initial_margin_bps = 500; // initial < maintenance
+    assert_eq!(p.validate(), Err(RiskError::Overflow));
+}
+
+#[test]
+fn test_validate_margin_exceeds_10000_rejected() {
+    let mut p = default_params();
+    p.initial_margin_bps = 10_001;
+    assert_eq!(p.validate(), Err(RiskError::Overflow));
+
+    let mut p2 = default_params();
+    p2.maintenance_margin_bps = 10_001;
+    assert_eq!(p2.validate(), Err(RiskError::Overflow));
+}
+
+#[test]
+fn test_validate_zero_max_accounts_rejected() {
+    let mut p = default_params();
+    p.max_accounts = 0;
+    assert_eq!(p.validate(), Err(RiskError::Overflow));
+}
+
+#[test]
+fn test_validate_max_accounts_exceeds_physical_limit_rejected() {
+    let mut p = default_params();
+    p.max_accounts = MAX_ACCOUNTS as u64 + 1;
+    assert_eq!(p.validate(), Err(RiskError::Overflow));
+}
+
+#[test]
+fn test_validate_zero_crank_staleness_rejected() {
+    let mut p = default_params();
+    p.max_crank_staleness_slots = 0;
+    assert_eq!(p.validate(), Err(RiskError::Overflow));
+}
+
+#[test]
+fn test_validate_u64_max_crank_staleness_allowed() {
+    let mut p = default_params();
+    p.max_crank_staleness_slots = u64::MAX;
+    assert!(p.validate().is_ok());
+}
+
+#[test]
+fn test_validate_liquidation_fee_exceeds_10000_rejected() {
+    let mut p = default_params();
+    p.liquidation_fee_bps = 10_001;
+    assert_eq!(p.validate(), Err(RiskError::Overflow));
+}
+
+#[test]
+fn test_validate_liquidation_buffer_exceeds_10000_rejected() {
+    let mut p = default_params();
+    p.liquidation_buffer_bps = 10_001;
+    assert_eq!(p.validate(), Err(RiskError::Overflow));
+}
+
+#[test]
+fn test_init_in_place_rejects_invalid_params() {
+    let mut engine = RiskEngine::new(default_params());
+    let mut bad_params = default_params();
+    bad_params.maintenance_margin_bps = 0;
+    let result = engine.init_in_place(bad_params);
+    assert_eq!(result, Err(RiskError::Overflow));
+    // Engine params must remain unchanged after rejection
+    assert_eq!(engine.params.maintenance_margin_bps, default_params().maintenance_margin_bps);
+}
+
+#[test]
+fn test_init_in_place_accepts_valid_params() {
+    let mut engine = RiskEngine::new(default_params());
+    let mut new_params = default_params();
+    new_params.initial_margin_bps = 2000;
+    new_params.maintenance_margin_bps = 1000;
+    assert!(engine.init_in_place(new_params).is_ok());
+    assert_eq!(engine.params.initial_margin_bps, 2000);
+}
+
+#[test]
+fn test_set_margin_params_rejects_zero_maintenance() {
+    let mut engine = RiskEngine::new(default_params());
+    assert_eq!(engine.set_margin_params(1000, 0), Err(RiskError::Overflow));
+}
+
+#[test]
+fn test_set_margin_params_rejects_zero_initial() {
+    let mut engine = RiskEngine::new(default_params());
+    assert_eq!(engine.set_margin_params(0, 500), Err(RiskError::Overflow));
+}
+
+#[test]
+fn test_set_margin_params_rejects_maintenance_greater_than_initial() {
+    let mut engine = RiskEngine::new(default_params());
+    assert_eq!(engine.set_margin_params(500, 1000), Err(RiskError::Overflow));
+}
+
+#[test]
+fn test_set_margin_params_rejects_exceeding_10000() {
+    let mut engine = RiskEngine::new(default_params());
+    assert_eq!(engine.set_margin_params(10_001, 500), Err(RiskError::Overflow));
+    assert_eq!(engine.set_margin_params(1000, 10_001), Err(RiskError::Overflow));
+}
+
+#[test]
+fn test_set_margin_params_accepts_valid_values() {
+    let mut engine = RiskEngine::new(default_params());
+    assert!(engine.set_margin_params(2000, 1000).is_ok());
+    assert_eq!(engine.params.initial_margin_bps, 2000);
+    assert_eq!(engine.params.maintenance_margin_bps, 1000);
+}
+
+#[test]
+fn test_set_margin_params_does_not_update_on_error() {
+    let mut engine = RiskEngine::new(default_params());
+    let orig_initial = engine.params.initial_margin_bps;
+    let orig_maint = engine.params.maintenance_margin_bps;
+    let _ = engine.set_margin_params(500, 1000); // maintenance > initial → error
+    assert_eq!(engine.params.initial_margin_bps, orig_initial);
+    assert_eq!(engine.params.maintenance_margin_bps, orig_maint);
 }

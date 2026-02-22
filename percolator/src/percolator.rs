@@ -293,6 +293,43 @@ pub struct RiskParams {
     pub min_liquidation_abs: U128,
 }
 
+impl RiskParams {
+    /// Validate that all parameters are within safe bounds.
+    ///
+    /// Returns `Err(RiskError::Overflow)` if any parameter violates a safety invariant.
+    pub fn validate(&self) -> Result<()> {
+        // Margins must be non-zero
+        if self.maintenance_margin_bps == 0 || self.initial_margin_bps == 0 {
+            return Err(RiskError::Overflow);
+        }
+        // Margins must not exceed 100%
+        if self.initial_margin_bps > 10_000 || self.maintenance_margin_bps > 10_000 {
+            return Err(RiskError::Overflow);
+        }
+        // Initial margin must be >= maintenance margin
+        if self.initial_margin_bps < self.maintenance_margin_bps {
+            return Err(RiskError::Overflow);
+        }
+        // max_accounts must be > 0 and within physical slab size
+        if self.max_accounts == 0 || self.max_accounts > MAX_ACCOUNTS as u64 {
+            return Err(RiskError::Overflow);
+        }
+        // max_crank_staleness_slots must be non-zero (u64::MAX = disable mode is allowed)
+        if self.max_crank_staleness_slots == 0 {
+            return Err(RiskError::Overflow);
+        }
+        // Liquidation fee cannot exceed 100%
+        if self.liquidation_fee_bps > 10_000 {
+            return Err(RiskError::Overflow);
+        }
+        // Liquidation buffer cannot exceed 100%
+        if self.liquidation_buffer_bps > 10_000 {
+            return Err(RiskError::Overflow);
+        }
+        Ok(())
+    }
+}
+
 /// Main risk engine state - fixed slab with bitmap
 #[repr(C)]
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -645,7 +682,11 @@ impl RiskEngine {
     ///
     /// WARNING: This allocates ~6MB on the stack at MAX_ACCOUNTS=4096.
     /// For Solana BPF programs, use `init_in_place` instead.
+    ///
+    /// # Panics
+    /// Panics if `params` fails validation (see `RiskParams::validate`).
     pub fn new(params: RiskParams) -> Self {
+        params.validate().expect("invalid RiskParams");
         let mut engine = Self {
             vault: U128::ZERO,
             insurance_fund: InsuranceFund {
@@ -698,7 +739,9 @@ impl RiskEngine {
     ///
     /// This is the correct way to initialize RiskEngine in Solana BPF programs
     /// where stack space is limited to 4KB.
-    pub fn init_in_place(&mut self, params: RiskParams) {
+    pub fn init_in_place(&mut self, params: RiskParams) -> Result<()> {
+        params.validate()?;
+
         // Set params (non-zero field)
         self.params = params;
         self.max_crank_staleness_slots = params.max_crank_staleness_slots;
@@ -713,6 +756,7 @@ impl RiskEngine {
             self.next_free[i] = (i + 1) as u16;
         }
         self.next_free[MAX_ACCOUNTS - 1] = u16::MAX; // Sentinel
+        Ok(())
     }
 
     // ========================================
@@ -1290,9 +1334,19 @@ impl RiskEngine {
     }
 
     /// Update initial and maintenance margin BPS. Admin only.
-    pub fn set_margin_params(&mut self, initial_margin_bps: u64, maintenance_margin_bps: u64) {
+    pub fn set_margin_params(&mut self, initial_margin_bps: u64, maintenance_margin_bps: u64) -> Result<()> {
+        if maintenance_margin_bps == 0 || initial_margin_bps == 0 {
+            return Err(RiskError::Overflow);
+        }
+        if initial_margin_bps > 10_000 || maintenance_margin_bps > 10_000 {
+            return Err(RiskError::Overflow);
+        }
+        if initial_margin_bps < maintenance_margin_bps {
+            return Err(RiskError::Overflow);
+        }
         self.params.initial_margin_bps = initial_margin_bps;
         self.params.maintenance_margin_bps = maintenance_margin_bps;
+        Ok(())
     }
 
     /// Close an account and return its capital to the caller.

@@ -9,7 +9,7 @@ fn default_params() -> RiskParams {
         maintenance_margin_bps: 500, // 5%
         initial_margin_bps: 1000,    // 10%
         trading_fee_bps: 10,         // 0.1%
-        max_accounts: 1000,
+        max_accounts: MAX_ACCOUNTS as u64,
         new_account_fee: U128::new(0),          // Zero fee for tests
         risk_reduction_threshold: U128::new(0), // Default: only trigger on full depletion
         maintenance_fee_per_slot: U128::new(0), // No maintenance fee by default
