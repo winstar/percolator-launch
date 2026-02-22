@@ -25,6 +25,10 @@ use solana_program::declare_id;
 
 declare_id!("Perco1ator111111111111111111111111111111111");
 
+/// Instruction tag constants — single source of truth for CPI callers.
+#[path = "tags.rs"]
+pub mod tags;
+
 // 1. mod constants
 pub mod constants {
     use core::mem::{size_of, align_of};
@@ -1140,14 +1144,17 @@ pub mod ix {
         PauseMarket,
         /// Unpause the market. Admin only. Restores normal operation.
         UnpauseMarket,
+        /// Two-step admin transfer: Step 2 — pending admin accepts the role.
+        AcceptAdmin,
     }
 
     impl Instruction {
         pub fn decode(input: &[u8]) -> Result<Self, ProgramError> {
             let (&tag, mut rest) = input.split_first().ok_or(ProgramError::InvalidInstructionData)?;
             
+            use crate::tags::*;
             match tag {
-                0 => { // InitMarket
+                TAG_INIT_MARKET => { // InitMarket
                     let admin = read_pubkey(&mut rest)?;
                     let collateral_mint = read_pubkey(&mut rest)?;
                     let index_feed_id = read_bytes32(&mut rest)?;
@@ -1163,67 +1170,67 @@ pub mod ix {
                         initial_mark_price_e6, risk_params
                     })
                 },
-                1 => { // InitUser
+                TAG_INIT_USER => { // InitUser
                     let fee_payment = read_u64(&mut rest)?;
                     Ok(Instruction::InitUser { fee_payment })
                 },
-                2 => { // InitLP
+                TAG_INIT_LP => { // InitLP
                     let matcher_program = read_pubkey(&mut rest)?;
                     let matcher_context = read_pubkey(&mut rest)?;
                     let fee_payment = read_u64(&mut rest)?;
                     Ok(Instruction::InitLP { matcher_program, matcher_context, fee_payment })
                 },
-                3 => { // Deposit
+                TAG_DEPOSIT_COLLATERAL => { // Deposit
                     let user_idx = read_u16(&mut rest)?;
                     let amount = read_u64(&mut rest)?;
                     Ok(Instruction::DepositCollateral { user_idx, amount })
                 },
-                4 => { // Withdraw
+                TAG_WITHDRAW_COLLATERAL => { // Withdraw
                     let user_idx = read_u16(&mut rest)?;
                     let amount = read_u64(&mut rest)?;
                     Ok(Instruction::WithdrawCollateral { user_idx, amount })
                 },
-                5 => { // KeeperCrank
+                TAG_KEEPER_CRANK => { // KeeperCrank
                     let caller_idx = read_u16(&mut rest)?;
                     let allow_panic = read_u8(&mut rest)?;
                     Ok(Instruction::KeeperCrank { caller_idx, allow_panic })
                 },
-                6 => { // TradeNoCpi
+                TAG_TRADE_NO_CPI => { // TradeNoCpi
                     let lp_idx = read_u16(&mut rest)?;
                     let user_idx = read_u16(&mut rest)?;
                     let size = read_i128(&mut rest)?;
                     Ok(Instruction::TradeNoCpi { lp_idx, user_idx, size })
                 },
-                7 => { // LiquidateAtOracle
+                TAG_LIQUIDATE_AT_ORACLE => { // LiquidateAtOracle
                     let target_idx = read_u16(&mut rest)?;
                     Ok(Instruction::LiquidateAtOracle { target_idx })
                 },
-                8 => { // CloseAccount
+                TAG_CLOSE_ACCOUNT => { // CloseAccount
                     let user_idx = read_u16(&mut rest)?;
                     Ok(Instruction::CloseAccount { user_idx })
                 },
-                9 => { // TopUpInsurance
+                TAG_TOP_UP_INSURANCE => { // TopUpInsurance
                     let amount = read_u64(&mut rest)?;
                     Ok(Instruction::TopUpInsurance { amount })
                 },
-                10 => { // TradeCpi
+                TAG_TRADE_CPI => { // TradeCpi
                     let lp_idx = read_u16(&mut rest)?;
                     let user_idx = read_u16(&mut rest)?;
                     let size = read_i128(&mut rest)?;
                     Ok(Instruction::TradeCpi { lp_idx, user_idx, size })
                 },
-                11 => { // SetRiskThreshold
+                TAG_SET_RISK_THRESHOLD => { // SetRiskThreshold
                     let new_threshold = read_u128(&mut rest)?;
                     Ok(Instruction::SetRiskThreshold { new_threshold })
                 },
-                12 => { // UpdateAdmin
+                TAG_UPDATE_ADMIN => { // UpdateAdmin
                     let new_admin = read_pubkey(&mut rest)?;
                     Ok(Instruction::UpdateAdmin { new_admin })
                 },
-                13 => { // CloseSlab
+                TAG_CLOSE_SLAB => { // CloseSlab
                     Ok(Instruction::CloseSlab)
                 },
-                14 => { // UpdateConfig
+                TAG_UPDATE_CONFIG => { // UpdateConfig
                     let funding_horizon_slots = read_u64(&mut rest)?;
                     let funding_k_bps = read_u64(&mut rest)?;
                     let funding_inv_scale_notional_e6 = read_u128(&mut rest)?;
@@ -1244,30 +1251,30 @@ pub mod ix {
                         thresh_step_bps, thresh_alpha_bps, thresh_min, thresh_max, thresh_min_step,
                     })
                 },
-                15 => { // SetMaintenanceFee
+                TAG_SET_MAINTENANCE_FEE => { // SetMaintenanceFee
                     let new_fee = read_u128(&mut rest)?;
                     Ok(Instruction::SetMaintenanceFee { new_fee })
                 },
-                16 => { // SetOracleAuthority
+                TAG_SET_ORACLE_AUTHORITY => { // SetOracleAuthority
                     let new_authority = read_pubkey(&mut rest)?;
                     Ok(Instruction::SetOracleAuthority { new_authority })
                 },
-                17 => { // PushOraclePrice
+                TAG_PUSH_ORACLE_PRICE => { // PushOraclePrice
                     let price_e6 = read_u64(&mut rest)?;
                     let timestamp = read_i64(&mut rest)?;
                     Ok(Instruction::PushOraclePrice { price_e6, timestamp })
                 },
-                18 => { // SetOraclePriceCap
+                TAG_SET_ORACLE_PRICE_CAP => { // SetOraclePriceCap
                     let max_change_e2bps = read_u64(&mut rest)?;
                     Ok(Instruction::SetOraclePriceCap { max_change_e2bps })
                 },
-                19 => Ok(Instruction::ResolveMarket),
-                20 => Ok(Instruction::WithdrawInsurance),
-                21 => { // AdminForceClose
+                TAG_RESOLVE_MARKET => Ok(Instruction::ResolveMarket),
+                TAG_WITHDRAW_INSURANCE => Ok(Instruction::WithdrawInsurance),
+                TAG_ADMIN_FORCE_CLOSE => { // AdminForceClose
                     let target_idx = read_u16(&mut rest)?;
                     Ok(Instruction::AdminForceClose { target_idx })
                 },
-                22 => { // UpdateRiskParams
+                TAG_UPDATE_RISK_PARAMS => { // UpdateRiskParams
                     let initial_margin_bps = read_u64(&mut rest)?;
                     let maintenance_margin_bps = read_u64(&mut rest)?;
                     // Optional: trading_fee_bps (backwards compatible — old clients send 17 bytes, new send 25)
@@ -1278,18 +1285,19 @@ pub mod ix {
                     };
                     Ok(Instruction::UpdateRiskParams { initial_margin_bps, maintenance_margin_bps, trading_fee_bps })
                 },
-                23 => Ok(Instruction::RenounceAdmin),
-                24 => Ok(Instruction::CreateInsuranceMint),
-                25 => { // DepositInsuranceLP
+                TAG_RENOUNCE_ADMIN => Ok(Instruction::RenounceAdmin),
+                TAG_CREATE_INSURANCE_MINT => Ok(Instruction::CreateInsuranceMint),
+                TAG_DEPOSIT_INSURANCE_LP => { // DepositInsuranceLP
                     let amount = read_u64(&mut rest)?;
                     Ok(Instruction::DepositInsuranceLP { amount })
                 },
-                26 => { // WithdrawInsuranceLP
+                TAG_WITHDRAW_INSURANCE_LP => { // WithdrawInsuranceLP
                     let lp_amount = read_u64(&mut rest)?;
                     Ok(Instruction::WithdrawInsuranceLP { lp_amount })
                 },
-                27 => Ok(Instruction::PauseMarket),
-                28 => Ok(Instruction::UnpauseMarket),
+                TAG_PAUSE_MARKET => Ok(Instruction::PauseMarket),
+                TAG_UNPAUSE_MARKET => Ok(Instruction::UnpauseMarket),
+                TAG_ACCEPT_ADMIN => Ok(Instruction::AcceptAdmin),
                 _ => Err(ProgramError::InvalidInstructionData),
             }
         }
@@ -1446,14 +1454,16 @@ pub mod state {
         pub bump: u8,
         pub _padding: [u8; 3], // _padding[0] = flags byte (bit 0: resolved, bit 1: paused)
         pub admin: [u8; 32],
+        /// Pending admin for two-step admin transfer. All zeros = no pending transfer.
+        pub pending_admin: [u8; 32],
         pub _reserved: [u8; 24], // [0..8]=nonce, [8..16]=last_thr_slot, [16..24]=dust_base
     }
 
     /// Offset of _reserved field in SlabHeader, derived from offset_of! for correctness.
     pub const RESERVED_OFF: usize = offset_of!(SlabHeader, _reserved);
 
-    // Portable compile-time assertion that RESERVED_OFF is 48 (expected layout)
-    const _: [(); 48] = [(); RESERVED_OFF];
+    // Portable compile-time assertion that RESERVED_OFF is 80 (expected layout)
+    const _: [(); 80] = [(); RESERVED_OFF];
 
     #[repr(C)]
     #[derive(Clone, Copy, Pod, Zeroable)]
@@ -3204,6 +3214,7 @@ pub mod processor {
                     bump,
                     _padding: [0; 3],
                     admin: a_admin.key.to_bytes(),
+                    pending_admin: [0; 32],
                     _reserved: [0; 24],
                 };
                 state::write_header(&mut data, &new_header);
@@ -4228,11 +4239,21 @@ pub mod processor {
                 let header = state::read_header(&data);
                 require_admin(header.admin, a_admin.key)?;
 
+                // Bounds: threshold is in e18 units representing a percentage.
+                // Min: 0 (disabled). Max: 100% = 1e18 (full risk reduction).
+                const MAX_THRESHOLD: u128 = 1_000_000_000_000_000_000; // 100% in e18
+                if new_threshold > MAX_THRESHOLD {
+                    return Err(ProgramError::InvalidInstructionData);
+                }
+
                 let engine = zc::engine_mut(&mut data)?;
                 engine.set_risk_reduction_threshold(new_threshold);
             }
 
             Instruction::UpdateAdmin { new_admin } => {
+                // Two-step admin transfer: Step 1 — PROPOSE new admin.
+                // Current admin proposes; new admin must call AcceptAdmin to complete.
+                // This prevents accidental lockout from admin key typos.
                 accounts::expect_len(accounts, 2)?;
                 let a_admin = &accounts[0];
                 let a_slab = &accounts[1];
@@ -4247,7 +4268,12 @@ pub mod processor {
                 let mut header = state::read_header(&data);
                 require_admin(header.admin, a_admin.key)?;
 
-                header.admin = new_admin.to_bytes();
+                // Cannot propose the zero address
+                if new_admin == Pubkey::default() {
+                    return Err(ProgramError::InvalidInstructionData);
+                }
+
+                header.pending_admin = new_admin.to_bytes();
                 state::write_header(&mut data, &header);
             }
 
@@ -4368,6 +4394,13 @@ pub mod processor {
 
                 let header = state::read_header(&data);
                 require_admin(header.admin, a_admin.key)?;
+
+                // Cap: max 0.01% per slot ≈ 43% per day at 400ms slots.
+                // 0.01% = 1e14 in e18 units. This prevents griefing by malicious admin.
+                const MAX_FEE_PER_SLOT: u128 = 100_000_000_000_000; // 0.01% in e18
+                if new_fee > MAX_FEE_PER_SLOT {
+                    return Err(ProgramError::InvalidInstructionData);
+                }
 
                 let engine = zc::engine_mut(&mut data)?;
                 engine.params.maintenance_fee_per_slot = percolator::U128::new(new_fee);
@@ -5034,6 +5067,37 @@ pub mod processor {
 
                 state::set_paused(&mut data, false);
                 msg!("Market unpaused by admin");
+            }
+
+            Instruction::AcceptAdmin => {
+                // Two-step admin transfer: Step 2 — pending admin accepts.
+                accounts::expect_len(accounts, 2)?;
+                let a_new_admin = &accounts[0];
+                let a_slab = &accounts[1];
+
+                accounts::expect_signer(a_new_admin)?;
+                accounts::expect_writable(a_slab)?;
+
+                let mut data = state::slab_data_mut(a_slab)?;
+                slab_guard(program_id, a_slab, &data)?;
+                require_initialized(&data)?;
+
+                let mut header = state::read_header(&data);
+
+                // Must have a pending admin proposal
+                if header.pending_admin == [0u8; 32] {
+                    return Err(ProgramError::InvalidInstructionData);
+                }
+
+                // Signer must be the pending admin
+                if header.pending_admin != a_new_admin.key.to_bytes() {
+                    return Err(ProgramError::InvalidInstructionData);
+                }
+
+                header.admin = header.pending_admin;
+                header.pending_admin = [0u8; 32];
+                state::write_header(&mut data, &header);
+                msg!("Admin transfer accepted");
             }
         }
         Ok(())
