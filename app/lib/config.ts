@@ -15,30 +15,37 @@ function getNetwork(): Network {
   return "devnet";
 }
 
-/** Get RPC URL — uses /api/rpc proxy on client, direct Helius on server */
-function getRpcUrl(network: Network): string {
-  // Client-side: use RPC proxy (API key stays server-side)
+/** Get RPC endpoint — absolute /api/rpc on client, direct RPC on server */
+export function getRpcEndpoint(): string {
   if (typeof window !== "undefined") {
-    return "/api/rpc";
+    return new URL("/api/rpc", window.location.origin).toString();
   }
-  
-  // Server-side: use direct Helius URL (for SSR/SSG)
+
+  const explicit = process.env.NEXT_PUBLIC_HELIUS_RPC_URL?.trim();
+  if (explicit) return explicit;
+
   const apiKey = process.env.HELIUS_API_KEY ?? process.env.NEXT_PUBLIC_HELIUS_API_KEY ?? "";
-  return network === "mainnet"
-    ? `https://mainnet.helius-rpc.com/?api-key=${apiKey}`
-    : `https://devnet.helius-rpc.com/?api-key=${apiKey}`;
+  if (apiKey) {
+    const net = process.env.NEXT_PUBLIC_DEFAULT_NETWORK?.trim();
+    const network = net === "mainnet" ? "mainnet" : "devnet";
+    return network === "mainnet"
+      ? `https://mainnet.helius-rpc.com/?api-key=${apiKey}`
+      : `https://devnet.helius-rpc.com/?api-key=${apiKey}`;
+  }
+
+  return process.env.NEXT_PUBLIC_SOLANA_RPC_URL ?? "https://api.devnet.solana.com";
 }
 
 const CONFIGS = {
   mainnet: {
-    get rpcUrl() { return getRpcUrl("mainnet"); },
+    get rpcUrl() { return getRpcEndpoint(); },
     programId: "GM8zjJ8LTBMv9xEsverh6H6wLyevgMHEJXcEzyY3rY24",
     matcherProgramId: "DHP6DtwXP1yJsz8YzfoeigRFPB979gzmumkmCxDLSkUX",
     crankWallet: "",  // TODO: set mainnet crank wallet
     explorerUrl: "https://solscan.io",
   },
   devnet: {
-    get rpcUrl() { return getRpcUrl("devnet"); },
+    get rpcUrl() { return getRpcEndpoint(); },
     programId: "FxfD37s1AZTeWfFQps9Zpebi2dNQ9QSSDtfMKdbsfKrD",
     matcherProgramId: "4HcGCsyjAqnFua5ccuXyt8KRRQzKFbGTJkVChpS7Yfzy",
     crankWallet: "2JaSzRYrf44fPpQBtRJfnCEgThwCmvpFd3FCXi45VXxm",
