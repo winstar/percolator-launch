@@ -12,12 +12,22 @@ describe("wallet helpers", () => {
     expect(getInstalledWalletIds(detector)).toEqual([]);
   });
 
-  it("returns the configured Privy wallet list", () => {
-    expect(getPrivyWalletList()).toEqual([
+  it("returns installed-first Privy wallet list when wallets detected", () => {
+    expect(getPrivyWalletList(["phantom", "backpack"])).toEqual([
+      "phantom",
+      "backpack",
       "detected_solana_wallets",
+      "solflare",
+      "wallet_connect",
+    ]);
+  });
+
+  it("returns fallback Privy wallet list when none detected", () => {
+    expect(getPrivyWalletList()).toEqual([
       "phantom",
       "solflare",
       "backpack",
+      "detected_solana_wallets",
       "wallet_connect",
     ]);
   });

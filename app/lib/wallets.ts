@@ -5,19 +5,21 @@ export type InstalledWalletDetector = {
 };
 
 const ORDER: (keyof InstalledWalletDetector)[] = ["phantom", "solflare", "backpack"];
+const DEFAULT_WALLETS: string[] = [...ORDER];
 
 export function getInstalledWalletIds(detector: InstalledWalletDetector): string[] {
   return ORDER.filter((key) => detector[key]);
 }
 
-export function getPrivyWalletList(): string[] {
-  return [
-    "detected_solana_wallets",
-    "phantom",
-    "solflare",
-    "backpack",
-    "wallet_connect",
-  ];
+export function getPrivyWalletList(installedWalletIds: string[] = []): string[] {
+  const installed = installedWalletIds.filter((id) => DEFAULT_WALLETS.includes(id));
+  const suggestions = DEFAULT_WALLETS.filter((id) => !installed.includes(id));
+
+  if (installed.length > 0) {
+    return [...installed, "detected_solana_wallets", ...suggestions, "wallet_connect"];
+  }
+
+  return [...DEFAULT_WALLETS, "detected_solana_wallets", "wallet_connect"];
 }
 
 export function defaultWalletDetector(): InstalledWalletDetector {

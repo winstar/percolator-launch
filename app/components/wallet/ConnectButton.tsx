@@ -58,6 +58,9 @@ const ConnectButtonInner: FC = () => {
   const installedWalletIds = useMemo(() => {
     return getInstalledWalletIds(defaultWalletDetector());
   }, []);
+  const privyWalletList = useMemo(() => {
+    return getPrivyWalletList(installedWalletIds);
+  }, [installedWalletIds]);
 
   const embeddedWallet = useMemo(() => {
     return user?.linkedAccounts?.find(
@@ -91,7 +94,7 @@ const ConnectButtonInner: FC = () => {
     (walletList?: string[]) => {
       if (connectWallet) {
         connectWallet({
-          walletList: walletList ?? getPrivyWalletList(),
+          walletList: walletList ?? privyWalletList,
           walletChainType: "solana-only",
         });
       } else {
@@ -205,7 +208,7 @@ const ConnectButtonInner: FC = () => {
           ))}
           <div className="h-px bg-[var(--border)] my-1" />
           <button
-            onClick={() => handleConnect(getPrivyWalletList())}
+            onClick={() => handleConnect(privyWalletList)}
             className="w-full px-3 py-1.5 text-left text-[13px] text-[var(--text-secondary)] hover:bg-[var(--accent)]/[0.06] rounded-sm transition-colors"
           >
             More wallets
