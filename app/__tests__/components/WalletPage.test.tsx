@@ -20,7 +20,6 @@ vi.mock("@/lib/config", () => ({
   explorerAccountUrl: (addr: string) => `https://explorer.solana.com/account/${addr}?cluster=devnet`,
   getRpcEndpoint: () => "https://api.devnet.solana.com",
 }));
-
 let privyAvailable = true;
 let privyState = {
   ready: true,
@@ -67,13 +66,6 @@ vi.mock("@privy-io/react-auth/solana", () => ({
 vi.mock("@/components/ui/ScrollReveal", () => ({
   ScrollReveal: ({ children }: any) => <div>{children}</div>,
 }));
-
-vi.mock("@/lib/wallets", () => ({
-  defaultWalletDetector: () => ({ phantom: true, solflare: false, backpack: false }),
-  getInstalledWalletIds: () => ["phantom"],
-  getPrivyWalletList: () => ["phantom", "detected_solana_wallets", "wallet_connect"],
-}));
-
 import WalletPage from "../../app/wallet/page";
 
 describe("WalletPage", () => {

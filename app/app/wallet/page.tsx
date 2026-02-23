@@ -11,7 +11,6 @@ import { CopyableAddress } from "@/components/ui/CopyableAddress";
 import { InfoBanner } from "@/components/ui/InfoBanner";
 import { usePrivyAvailable } from "@/hooks/usePrivySafe";
 import { getConfig } from "@/lib/config";
-import { defaultWalletDetector, getInstalledWalletIds, getPrivyWalletList } from "@/lib/wallets";
 import { ConnectButton } from "@/components/wallet/ConnectButton";
 
 type WalletLinkedAccount = Extract<LinkedAccountWithMetadata, { type: "wallet" }>;
@@ -54,12 +53,6 @@ function WalletPageInner() {
 
   const network = useMemo(() => getConfig().network, []);
 
-  const installedWalletIds = useMemo(
-    () => getInstalledWalletIds(defaultWalletDetector()),
-    []
-  );
-  const walletList = useMemo(() => getPrivyWalletList(installedWalletIds), [installedWalletIds]);
-
   const activeWallet = useMemo(() => {
     if (!wallets.length) return null;
     return wallets.find((w) => !w.standardWallet?.name?.toLowerCase().includes("privy")) || wallets[0];
@@ -74,11 +67,11 @@ function WalletPageInner() {
 
   const handleConnect = useCallback(() => {
     if (connectWallet) {
-      connectWallet({ walletList, walletChainType: "solana-only" });
+      connectWallet({ walletChainType: "solana-only" });
     } else {
       login();
     }
-  }, [connectWallet, login, walletList]);
+  }, [connectWallet, login]);
 
   if (!ready) {
     return (

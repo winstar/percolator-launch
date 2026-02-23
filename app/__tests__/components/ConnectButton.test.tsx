@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, fireEvent } from "@testing-library/react";
 
 vi.mock("@/lib/config", () => ({
@@ -26,24 +26,21 @@ vi.mock("next/link", () => ({
 
 vi.mock("@/hooks/usePrivySafe", () => ({ usePrivyAvailable: () => true }));
 
-vi.mock("@/lib/wallets", () => ({
-  defaultWalletDetector: () => ({ phantom: true, solflare: true, backpack: false }),
-  getInstalledWalletIds: () => ["phantom", "solflare"],
-  getPrivyWalletList: () => ["detected_solana_wallets", "phantom", "solflare", "wallet_connect"],
-}));
-
 const mockLogout = vi.fn();
+const mockLogin = vi.fn();
+const mockExportWallet = vi.fn();
+
+let privyState = {
+  ready: true,
+  authenticated: true,
+  user: { linkedAccounts: [] },
+  logout: mockLogout,
+  login: mockLogin,
+  exportWallet: mockExportWallet,
+};
 
 vi.mock("@privy-io/react-auth", () => ({
-  usePrivy: () => ({
-    ready: true,
-    authenticated: true,
-    user: { linkedAccounts: [] },
-    logout: mockLogout,
-    login: vi.fn(),
-    connectWallet: vi.fn(),
-    exportWallet: vi.fn(),
-  }),
+  usePrivy: () => privyState,
 }));
 
 vi.mock("@privy-io/react-auth/solana", () => ({
@@ -54,10 +51,32 @@ vi.mock("@privy-io/react-auth/solana", () => ({
 import { ConnectButton } from "@/components/wallet/ConnectButton";
 
 describe("ConnectButton", () => {
+  beforeEach(() => {
+    mockLogin.mockClear();
+    privyState = {
+      ready: true,
+      authenticated: true,
+      user: { linkedAccounts: [] },
+      logout: mockLogout,
+      login: mockLogin,
+      exportWallet: mockExportWallet,
+    };
+  });
+
   it("shows manage actions when authenticated", () => {
     const { getByRole, getByText } = render(<ConnectButton />);
     fireEvent.click(getByRole("button", { name: /wallet:/i }));
     expect(getByText("Manage Wallet")).toBeTruthy();
     expect(getByText("Disconnect")).toBeTruthy();
+  });
+
+  it("uses Privy login for unauthenticated users", () => {
+    privyState = { ...privyState, authenticated: false };
+    const { getByRole } = render(<ConnectButton />);
+    fireEvent.click(getByRole("button", { name: /connect wallet/i }));
+    expect(mockLogin).toHaveBeenCalledWith({
+      loginMethods: ["wallet", "email"],
+      walletChainType: "solana-only",
+    });
   });
 });
