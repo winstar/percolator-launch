@@ -1,8 +1,11 @@
 "use client";
 
 import { FC, useCallback, useMemo, useState, useRef, useEffect } from "react";
-import { usePrivy } from "@privy-io/react-auth";
-import { useWallets } from "@privy-io/react-auth/solana";
+import Link from "next/link";
+import { usePrivy, type LinkedAccountWithMetadata, type WalletListEntry } from "@privy-io/react-auth";
+import { useFundWallet, useWallets } from "@privy-io/react-auth/solana";
+import { getConfig } from "@/lib/config";
+import { defaultWalletDetector, getInstalledWalletIds, getPrivyWalletList } from "@/lib/wallets";
 import { usePrivyAvailable } from "@/hooks/usePrivySafe";
 
 /**
@@ -32,8 +35,9 @@ export const ConnectButton: FC = () => {
  * Inner component that uses Privy hooks. Only rendered when PrivyProvider is mounted.
  */
 const ConnectButtonInner: FC = () => {
-  const { ready, authenticated, login, logout } = usePrivy();
+  const { ready, authenticated, login, logout, connectWallet, exportWallet, user } = usePrivy();
   const { wallets } = useWallets();
+  const { fundWallet } = useFundWallet();
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -49,6 +53,22 @@ const ConnectButtonInner: FC = () => {
     return `${addr.slice(0, 4)}...${addr.slice(-4)}`;
   }, [activeWallet]);
 
+  const network = useMemo(() => getConfig().network, []);
+
+  const installedWalletIds = useMemo(() => {
+    return getInstalledWalletIds(defaultWalletDetector());
+  }, []);
+  const privyWalletList = useMemo(() => {
+    return getPrivyWalletList(installedWalletIds);
+  }, [installedWalletIds]);
+
+  const embeddedWallet = useMemo(() => {
+    return user?.linkedAccounts?.find(isEmbeddedSolanaWallet);
+  }, [user]);
+
+  const canExport = !!exportWallet && !!embeddedWallet && ready && authenticated;
+  const canFund = !!fundWallet && !!activeWallet && network === "mainnet";
+
   // Close menu on outside click
   useEffect(() => {
     if (!menuOpen) return;
@@ -62,12 +82,23 @@ const ConnectButtonInner: FC = () => {
   }, [menuOpen]);
 
   const handleClick = useCallback(() => {
-    if (!authenticated) {
-      login();
-    } else {
-      setMenuOpen((v) => !v);
-    }
-  }, [authenticated, login]);
+    setMenuOpen((v) => !v);
+  }, []);
+
+  const handleConnect = useCallback(
+    (walletList?: WalletListEntry[]) => {
+      if (connectWallet) {
+        connectWallet({
+          walletList: walletList ?? privyWalletList,
+          walletChainType: "solana-only",
+        });
+      } else {
+        login();
+      }
+      setMenuOpen(false);
+    },
+    [connectWallet, login]
+  );
 
   if (!ready) {
     return (
@@ -101,6 +132,13 @@ const ConnectButtonInner: FC = () => {
             {activeWallet?.address}
           </div>
           <div className="h-px bg-[var(--border)] my-1" />
+          <Link
+            href="/wallet"
+            onClick={() => setMenuOpen(false)}
+            className="block w-full px-3 py-1.5 text-left text-[13px] text-[var(--text-secondary)] hover:bg-[var(--accent)]/[0.06] rounded-sm transition-colors"
+          >
+            Manage Wallet
+          </Link>
           <button
             onClick={() => {
               navigator.clipboard.writeText(activeWallet?.address ?? "");
@@ -109,6 +147,28 @@ const ConnectButtonInner: FC = () => {
             className="w-full px-3 py-1.5 text-left text-[13px] text-[var(--text-secondary)] hover:bg-[var(--accent)]/[0.06] rounded-sm transition-colors"
           >
             Copy address
+          </button>
+          <button
+            onClick={async () => {
+              if (!canFund || !activeWallet) return;
+              await fundWallet({ address: activeWallet.address });
+              setMenuOpen(false);
+            }}
+            disabled={!canFund}
+            className="w-full px-3 py-1.5 text-left text-[13px] text-[var(--text-secondary)] hover:bg-[var(--accent)]/[0.06] rounded-sm transition-colors disabled:opacity-40"
+          >
+            Add funds
+          </button>
+          <button
+            onClick={async () => {
+              if (!canExport) return;
+              await exportWallet({ address: embeddedWallet?.address });
+              setMenuOpen(false);
+            }}
+            disabled={!canExport}
+            className="w-full px-3 py-1.5 text-left text-[13px] text-[var(--text-secondary)] hover:bg-[var(--accent)]/[0.06] rounded-sm transition-colors disabled:opacity-40"
+          >
+            Export key
           </button>
           <button
             onClick={() => {
@@ -121,6 +181,45 @@ const ConnectButtonInner: FC = () => {
           </button>
         </div>
       )}
+
+      {menuOpen && !authenticated && (
+        <div className="absolute right-0 top-full mt-1 min-w-[180px] rounded-md border border-[var(--border)] bg-[var(--bg)] p-1 shadow-lg z-50">
+          <div className="px-3 py-2 text-[11px] text-[var(--text-muted)] uppercase tracking-wide">
+            Installed wallets
+          </div>
+          {installedWalletIds.length === 0 && (
+            <div className="px-3 pb-2 text-[12px] text-[var(--text-muted)]">
+              No wallets detected
+            </div>
+          )}
+          {installedWalletIds.map((id) => (
+            <button
+              key={id}
+              onClick={() => handleConnect([id])}
+              className="w-full px-3 py-1.5 text-left text-[13px] text-[var(--text-secondary)] hover:bg-[var(--accent)]/[0.06] rounded-sm transition-colors"
+            >
+              {id === "phantom" ? "Phantom" : id === "solflare" ? "Solflare" : "Backpack"}
+            </button>
+          ))}
+          <div className="h-px bg-[var(--border)] my-1" />
+          <button
+            onClick={() => handleConnect(privyWalletList)}
+            className="w-full px-3 py-1.5 text-left text-[13px] text-[var(--text-secondary)] hover:bg-[var(--accent)]/[0.06] rounded-sm transition-colors"
+          >
+            More wallets
+          </button>
+        </div>
+      )}
     </div>
   );
 };
+
+type WalletLinkedAccount = Extract<LinkedAccountWithMetadata, { type: "wallet" }>;
+
+function isEmbeddedSolanaWallet(account: LinkedAccountWithMetadata): account is WalletLinkedAccount {
+  return (
+    account.type === "wallet" &&
+    account.walletClientType === "privy" &&
+    account.chainType === "solana"
+  );
+}

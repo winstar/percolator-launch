@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getRpcEndpoint } from "@/lib/config";
 
 export const dynamic = "force-dynamic";
 
@@ -14,11 +15,7 @@ export const dynamic = "force-dynamic";
  *   });
  */
 
-const HELIUS_API_KEY = process.env.HELIUS_API_KEY ?? process.env.NEXT_PUBLIC_HELIUS_API_KEY ?? "";
-const NETWORK = process.env.NEXT_PUBLIC_DEFAULT_NETWORK?.trim() ?? "devnet";
-const RPC_URL = NETWORK === "mainnet"
-  ? `https://mainnet.helius-rpc.com/?api-key=${HELIUS_API_KEY}`
-  : `https://devnet.helius-rpc.com/?api-key=${HELIUS_API_KEY}`;
+const RPC_URL = getRpcEndpoint();
 
 /**
  * Allowlist of JSON-RPC methods that may be proxied to Helius.

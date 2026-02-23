@@ -92,11 +92,7 @@ function useWalletCompatInner() {
 export function useConnectionCompat() {
   const connection = useMemo(() => {
     const url = getConfig().rpcUrl;
-    const rpc =
-      !url || !url.startsWith("http")
-        ? "https://api.devnet.solana.com"
-        : url;
-    return new Connection(rpc, "confirmed");
+    return new Connection(url, "confirmed");
   }, []);
 
   return { connection };
