@@ -41,8 +41,18 @@ function serializeValue(value: unknown): unknown {
     // Capture any custom properties (e.g., code, statusCode)
     for (const key of Object.getOwnPropertyNames(value)) {
       if (!(key in obj)) {
-        obj[key] = (value as unknown as Record<string, unknown>)[key];
+        obj[key] = serializeValue((value as unknown as Record<string, unknown>)[key]);
       }
+    }
+    return obj;
+  }
+  if (Array.isArray(value)) {
+    return value.map(serializeValue);
+  }
+  if (value !== null && typeof value === "object") {
+    const obj: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(value)) {
+      obj[k] = serializeValue(v);
     }
     return obj;
   }
@@ -66,7 +76,7 @@ function serializeContext(context: LogContext): LogContext {
 function formatPretty(entry: LogEntry): string {
   const timestamp = new Date(entry.timestamp).toISOString();
   const level = entry.level.toUpperCase().padEnd(5);
-  const contextStr = entry.context ? ` ${JSON.stringify(entry.context)}` : "";
+  const contextStr = entry.context ? ` ${JSON.stringify(entry.context, (_key, val) => typeof val === "bigint" ? val.toString() : val)}` : "";
   
   return `[${timestamp}] ${level} [${entry.service}] ${entry.message}${contextStr}`;
 }
@@ -85,8 +95,10 @@ export function createLogger(service: string): Logger {
     };
 
     if (isProd) {
-      // JSON output in production
-      console.log(JSON.stringify(entry));
+      // JSON output in production (BigInt-safe replacer as safety net)
+      console.log(JSON.stringify(entry, (_key, val) =>
+        typeof val === "bigint" ? val.toString() : val
+      ));
     } else {
       // Pretty output in development
       console.log(formatPretty(entry));

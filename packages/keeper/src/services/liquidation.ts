@@ -86,6 +86,9 @@ export class LiquidationService {
   // BC1: Signature replay protection
   private recentSignatures = new Map<string, number>(); // signature -> timestamp
   private readonly signatureTTLMs = 60_000; // 60 seconds
+  // PERC-134: Exponential backoff on consecutive scan failures
+  private consecutiveFailures = 0;
+  private readonly maxBackoffMs = 300_000; // 5 minutes max backoff
 
   constructor(oracleService: OracleService, intervalMs = 60_000) {
     this.oracleService = oracleService;
@@ -308,7 +311,7 @@ export class LiquidationService {
             if (equity > 0n) {
               const marginRatioBps = equity * BPS_MULTIPLIER / notional;
               if (marginRatioBps >= freshParams.maintenanceMarginBps) {
-                logger.warn("Race condition: account no longer undercollateralized", { accountIndex: accountIdx, slabAddress: slabAddress.toBase58(), marginRatioBps });
+                logger.warn("Race condition: account no longer undercollateralized", { accountIndex: accountIdx, slabAddress: slabAddress.toBase58(), marginRatioBps: Number(marginRatioBps) });
                 return null;
               }
             }
@@ -464,14 +467,14 @@ export class LiquidationService {
     if (this.timer) return;
     logger.info("Liquidation service starting", { intervalMs: this.intervalMs });
 
-    this.timer = setInterval(async () => {
-      // Overlap guard: skip if previous cycle is still running (mirrors CrankService pattern)
+    const runCycle = async () => {
+      // Overlap guard: skip if previous cycle is still running
       if (this._scanning) return;
       this._scanning = true;
       try {
-        // Snapshot the market map to avoid iteration issues if markets are added/removed
         const marketsSnapshot = new Map(getMarkets());
         const result = await this.scanAndLiquidateAll(marketsSnapshot);
+        this.consecutiveFailures = 0; // Reset on success
         if (result.candidates > 0) {
           logger.info("Liquidation scan complete", { 
             scanned: result.scanned, 
@@ -480,14 +483,25 @@ export class LiquidationService {
           });
         }
       } catch (err) {
+        this.consecutiveFailures++;
+        const backoff = Math.min(
+          this.intervalMs * Math.pow(2, this.consecutiveFailures - 1),
+          this.maxBackoffMs,
+        );
         logger.error("Liquidation cycle failed", {
           error: err instanceof Error ? err.message : String(err),
-          stack: err instanceof Error ? err.stack : undefined,
+          consecutiveFailures: this.consecutiveFailures,
+          nextRetryMs: Math.round(backoff),
         });
+        // Schedule delayed retry instead of waiting for next fixed interval
+        if (backoff > this.intervalMs) {
+          setTimeout(runCycle, backoff - this.intervalMs);
+        }
       } finally {
         this._scanning = false;
       }
-    }, this.intervalMs);
+    };
+    this.timer = setInterval(runCycle, this.intervalMs);
   }
 
   stop(): void {
