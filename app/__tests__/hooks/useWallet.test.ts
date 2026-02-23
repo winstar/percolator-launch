@@ -28,6 +28,10 @@ vi.mock("@privy-io/react-auth/solana", () => ({
   useSignTransaction: () => mockUseSignTransaction(),
 }));
 
+vi.mock("@/hooks/usePrivySafe", () => ({
+  usePrivyAvailable: () => true,
+}));
+
 vi.mock("@/lib/config", () => ({
   getConfig: () => ({
     rpcUrl: "https://example.com/api/rpc",
