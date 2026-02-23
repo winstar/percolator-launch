@@ -5,8 +5,6 @@ import { PrivyProvider, usePrivy } from "@privy-io/react-auth";
 import { toSolanaWalletConnectors } from "@privy-io/react-auth/solana";
 import { SentryUserContext } from "@/components/providers/SentryUserContext";
 import { PrivyLoginContext } from "@/hooks/usePrivySafe";
-import { getConfig } from "@/lib/config";
-import { defaultWalletDetector, getInstalledWalletIds, getPrivyWalletList } from "@/lib/wallets";
 
 /**
  * Client-only Privy provider wrapper. Loaded via next/dynamic with ssr:false
@@ -16,18 +14,9 @@ const PrivyProviderClient: FC<{ appId: string; children: ReactNode }> = ({
   appId,
   children,
 }) => {
-  const rpcUrl = useMemo(() => {
-    const url = getConfig().rpcUrl;
-    if (!url || !url.startsWith("http")) return "https://api.devnet.solana.com";
-    return url;
-  }, []);
-
   const solanaConnectors = useMemo(() => toSolanaWalletConnectors(), []);
-  const installedWalletIds = useMemo(
-    () => getInstalledWalletIds(defaultWalletDetector()),
-    []
-  );
-  const walletList = useMemo(() => getPrivyWalletList(installedWalletIds), [installedWalletIds]);
+  const walletConnectCloudProjectId =
+    process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID;
 
   return (
     <PrivyProvider
@@ -36,9 +25,9 @@ const PrivyProviderClient: FC<{ appId: string; children: ReactNode }> = ({
         appearance: {
           walletChainType: "solana-only",
           showWalletLoginFirst: true,
-          walletList,
         },
         loginMethods: ["wallet", "email"],
+        walletConnectCloudProjectId,
         externalWallets: {
           solana: {
             connectors: solanaConnectors,
