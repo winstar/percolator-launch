@@ -30,7 +30,21 @@ function getRateLimit(ip: string): { remaining: number; reset: number } {
 }
 
 export function middleware(request: NextRequest) {
-  const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+  // Extract client IP respecting TRUSTED_PROXY_DEPTH env var.
+  // - TRUSTED_PROXY_DEPTH=0: Ignore X-Forwarded-For (direct exposure, no proxy)
+  // - TRUSTED_PROXY_DEPTH=1: One proxy layer (Vercel, Cloudflare) — use last IP
+  // - TRUSTED_PROXY_DEPTH=2: Two proxy layers — use second-to-last IP
+  // This prevents IP spoofing attacks via forged X-Forwarded-For headers.
+  const PROXY_DEPTH = Math.max(0, Number(process.env.TRUSTED_PROXY_DEPTH ?? 1));
+  let ip = "unknown";
+  if (PROXY_DEPTH > 0) {
+    const forwarded = request.headers.get("x-forwarded-for");
+    if (forwarded) {
+      const ips = forwarded.split(",").map((s) => s.trim());
+      const idx = Math.max(0, ips.length - PROXY_DEPTH);
+      ip = ips[idx] ?? "unknown";
+    }
+  }
   const isApi = request.nextUrl.pathname.startsWith("/api/");
 
   if (isApi) {

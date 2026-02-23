@@ -61,7 +61,7 @@ const CONFIGS = {
     get rpcUrl() { return getRpcEndpoint(); },
     programId: "GM8zjJ8LTBMv9xEsverh6H6wLyevgMHEJXcEzyY3rY24",
     matcherProgramId: "DHP6DtwXP1yJsz8YzfoeigRFPB979gzmumkmCxDLSkUX",
-    crankWallet: "",  // TODO: set mainnet crank wallet
+    crankWallet: "",  // TODO: Deploy keeper bot to mainnet and set address (Issue #244)
     explorerUrl: "https://solscan.io",
   },
   devnet: {
@@ -79,10 +79,52 @@ const CONFIGS = {
   },
 } as const;
 
+/**
+ * Validate mainnet configuration safety.
+ * Throws descriptive error if mainnet is selected but not fully configured.
+ * Issue #244: Mainnet keeper bot and address setup required before production launch.
+ */
+function validateMainnetConfig(
+  config: (typeof CONFIGS)[keyof typeof CONFIGS],
+  network: Network
+): void {
+  if (network !== "mainnet") return;
+
+  const crankWallet = config.crankWallet as string;
+  if (!crankWallet || crankWallet.trim() === "") {
+    throw new Error(
+      "Mainnet Configuration Error: crankWallet not set. " +
+      "Keeper bot must be deployed to mainnet before production use. " +
+      "See Issue #244 for deployment requirements."
+    );
+  }
+
+  const matcherProgramId = config.matcherProgramId as string;
+  if (!matcherProgramId || matcherProgramId.trim() === "") {
+    throw new Error(
+      "Mainnet Configuration Error: matcherProgramId not set. " +
+      "Matcher program must be deployed to mainnet before production use."
+    );
+  }
+
+  const programId = config.programId as string;
+  if (!programId || programId.trim() === "") {
+    throw new Error(
+      "Mainnet Configuration Error: programId not set. " +
+      "Core program must be deployed to mainnet before production use."
+    );
+  }
+}
+
 export function getConfig() {
   const network = getNetwork();
+  const baseConfig = CONFIGS[network];
+
+  // Fail fast on unsafe mainnet configuration (Issue #244)
+  validateMainnetConfig(baseConfig, network);
+
   return {
-    ...CONFIGS[network],
+    ...baseConfig,
     network,
     // Default slab size — variable sizes now supported via SLAB_TIERS
     slabSize: 992_560,
