@@ -93,7 +93,7 @@ export function useConnectionCompat() {
   const connection = useMemo(() => {
     const url = getConfig().rpcUrl;
     const rpc =
-      !url
+      !url || !url.startsWith("http")
         ? "https://api.devnet.solana.com"
         : url;
     return new Connection(rpc, "confirmed");
