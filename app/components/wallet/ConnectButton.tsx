@@ -2,7 +2,7 @@
 
 import { FC, useCallback, useMemo, useState, useRef, useEffect } from "react";
 import Link from "next/link";
-import { usePrivy } from "@privy-io/react-auth";
+import { usePrivy, type LinkedAccountWithMetadata, type WalletListEntry } from "@privy-io/react-auth";
 import { useFundWallet, useWallets } from "@privy-io/react-auth/solana";
 import { getConfig } from "@/lib/config";
 import { defaultWalletDetector, getInstalledWalletIds, getPrivyWalletList } from "@/lib/wallets";
@@ -63,12 +63,7 @@ const ConnectButtonInner: FC = () => {
   }, [installedWalletIds]);
 
   const embeddedWallet = useMemo(() => {
-    return user?.linkedAccounts?.find(
-      (account: any) =>
-        account?.type === "wallet" &&
-        account?.walletClientType === "privy" &&
-        account?.chainType === "solana"
-    );
+    return user?.linkedAccounts?.find(isEmbeddedSolanaWallet);
   }, [user]);
 
   const canExport = !!exportWallet && !!embeddedWallet && ready && authenticated;
@@ -91,7 +86,7 @@ const ConnectButtonInner: FC = () => {
   }, []);
 
   const handleConnect = useCallback(
-    (walletList?: string[]) => {
+    (walletList?: WalletListEntry[]) => {
       if (connectWallet) {
         connectWallet({
           walletList: walletList ?? privyWalletList,
@@ -218,3 +213,13 @@ const ConnectButtonInner: FC = () => {
     </div>
   );
 };
+
+type WalletLinkedAccount = Extract<LinkedAccountWithMetadata, { type: "wallet" }>;
+
+function isEmbeddedSolanaWallet(account: LinkedAccountWithMetadata): account is WalletLinkedAccount {
+  return (
+    account.type === "wallet" &&
+    account.walletClientType === "privy" &&
+    account.chainType === "solana"
+  );
+}

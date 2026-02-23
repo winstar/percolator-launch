@@ -1,3 +1,5 @@
+import type { WalletListEntry } from "@privy-io/react-auth";
+
 export type InstalledWalletDetector = {
   phantom: boolean;
   solflare: boolean;
@@ -5,21 +7,23 @@ export type InstalledWalletDetector = {
 };
 
 const ORDER: (keyof InstalledWalletDetector)[] = ["phantom", "solflare", "backpack"];
-const DEFAULT_WALLETS: string[] = [...ORDER];
+const DEFAULT_WALLETS: WalletListEntry[] = ["phantom", "solflare", "backpack"];
+const DETECTED_ENTRY: WalletListEntry = "detected_solana_wallets";
+const WALLET_CONNECT_ENTRY: WalletListEntry = "wallet_connect";
 
-export function getInstalledWalletIds(detector: InstalledWalletDetector): string[] {
-  return ORDER.filter((key) => detector[key]);
+export function getInstalledWalletIds(detector: InstalledWalletDetector): WalletListEntry[] {
+  return ORDER.filter((key) => detector[key]) as WalletListEntry[];
 }
 
-export function getPrivyWalletList(installedWalletIds: string[] = []): string[] {
+export function getPrivyWalletList(installedWalletIds: WalletListEntry[] = []): WalletListEntry[] {
   const installed = installedWalletIds.filter((id) => DEFAULT_WALLETS.includes(id));
   const suggestions = DEFAULT_WALLETS.filter((id) => !installed.includes(id));
 
   if (installed.length > 0) {
-    return [...installed, "detected_solana_wallets", ...suggestions, "wallet_connect"];
+    return [...installed, DETECTED_ENTRY, ...suggestions, WALLET_CONNECT_ENTRY];
   }
 
-  return [...DEFAULT_WALLETS, "detected_solana_wallets", "wallet_connect"];
+  return [...DEFAULT_WALLETS, DETECTED_ENTRY, WALLET_CONNECT_ENTRY];
 }
 
 export function defaultWalletDetector(): InstalledWalletDetector {
