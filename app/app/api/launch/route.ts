@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { PublicKey } from "@solana/web3.js";
 import { SLAB_TIERS, type SlabTierKey } from "@percolator/core";
+import { getRpcEndpoint } from "@/lib/config";
 
 export const dynamic = 'force-dynamic';
 
@@ -69,8 +70,7 @@ export async function POST(req: NextRequest) {
     let symbol = mint.slice(0, 4).toUpperCase();
     let decimals = 6;
 
-    const rpcUrl = process.env.NEXT_PUBLIC_HELIUS_RPC_URL
-      ?? `https://devnet.helius-rpc.com/?api-key=${process.env.HELIUS_API_KEY ?? process.env.NEXT_PUBLIC_HELIUS_API_KEY ?? ""}`;
+    const rpcUrl = getRpcEndpoint();
 
     try {
       // Get decimals from RPC

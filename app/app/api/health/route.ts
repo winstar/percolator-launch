@@ -1,15 +1,12 @@
 import { NextResponse } from "next/server";
+import { getRpcEndpoint } from "@/lib/config";
 export const dynamic = "force-dynamic";
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL ||
   "https://percolator-api1-production.up.railway.app";
 
-const RPC_URL =
-  process.env.HELIUS_API_KEY
-    ? `https://devnet.helius-rpc.com/?api-key=${process.env.HELIUS_API_KEY}`
-    : process.env.NEXT_PUBLIC_SOLANA_RPC_URL ||
-      "https://api.devnet.solana.com";
+const RPC_URL = getRpcEndpoint();
 
 async function checkWithTimeout(
   url: string,

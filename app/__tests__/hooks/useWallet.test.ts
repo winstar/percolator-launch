@@ -30,7 +30,7 @@ vi.mock("@privy-io/react-auth/solana", () => ({
 
 vi.mock("@/lib/config", () => ({
   getConfig: () => ({
-    rpcUrl: "https://api.devnet.solana.com",
+    rpcUrl: "https://example.com/api/rpc",
     network: "devnet",
     programId: "test",
   }),
@@ -128,9 +128,8 @@ describe("useWalletCompat", () => {
 });
 
 describe("useConnectionCompat", () => {
-  it("should return a Connection object", () => {
+  it("should use the configured RPC endpoint", () => {
     const { result } = renderHook(() => useConnectionCompat());
-    expect(result.current.connection).toBeDefined();
-    expect(result.current.connection.rpcEndpoint).toContain("solana.com");
+    expect((result.current.connection as any)._rpcEndpoint).toBe("https://example.com/api/rpc");
   });
 });
