@@ -6,6 +6,7 @@ import { toSolanaWalletConnectors } from "@privy-io/react-auth/solana";
 import { SentryUserContext } from "@/components/providers/SentryUserContext";
 import { PrivyLoginContext } from "@/hooks/usePrivySafe";
 import { getConfig } from "@/lib/config";
+import { getPrivyWalletList } from "@/lib/wallets";
 
 /**
  * Client-only Privy provider wrapper. Loaded via next/dynamic with ssr:false
@@ -30,6 +31,7 @@ const PrivyProviderClient: FC<{ appId: string; children: ReactNode }> = ({
         appearance: {
           walletChainType: "solana-only",
           showWalletLoginFirst: true,
+          walletList: getPrivyWalletList(),
         },
         loginMethods: ["wallet", "email"],
         externalWallets: {
