@@ -17,6 +17,7 @@ const navLinks = [
   { href: "/markets", label: "Markets" },
   { href: "/create", label: "Create" },
   { href: "/portfolio", label: "Portfolio" },
+  { href: "/wallet", label: "Wallet" },
   { href: "/my-markets", label: "Admin" },
   { href: "/guide", label: "Guide" },
   { href: "/agents", label: "Agents" },
