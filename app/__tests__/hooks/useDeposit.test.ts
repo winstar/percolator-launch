@@ -15,9 +15,9 @@ import { PublicKey } from "@solana/web3.js";
 import { useDeposit } from "../../hooks/useDeposit";
 
 // Mock dependencies
-vi.mock("@solana/wallet-adapter-react", () => ({
-  useConnection: vi.fn(),
-  useWallet: vi.fn(),
+vi.mock("@/hooks/useWalletCompat", () => ({
+  useConnectionCompat: vi.fn(),
+  useWalletCompat: vi.fn(),
 }));
 
 vi.mock("@/components/providers/SlabProvider", () => ({
@@ -36,7 +36,7 @@ vi.mock("@percolator/core", async () => {
   };
 });
 
-import { useConnection, useWallet } from "@solana/wallet-adapter-react";
+import { useConnectionCompat, useWalletCompat } from "@/hooks/useWalletCompat";
 import { useSlabState } from "@/components/providers/SlabProvider";
 import { sendTx } from "@/lib/tx";
 import { getAta } from "@percolator/core";
@@ -66,11 +66,15 @@ describe("useDeposit", () => {
       }),
     };
 
-    // Mock wallet
+    // Mock wallet — shape must match useWalletCompat return value:
+    // { publicKey, connected, connecting, wallet, signTransaction, disconnect }
     mockWallet = {
       publicKey: mockWalletPubkey,
-      signTransaction: vi.fn(),
       connected: true,
+      connecting: false,
+      wallet: { address: mockWalletPubkey.toBase58() },
+      signTransaction: vi.fn(),
+      disconnect: vi.fn(),
     };
 
     // Mock slab state
@@ -82,8 +86,8 @@ describe("useDeposit", () => {
       programId: mockProgramId,
     };
 
-    (useConnection as any).mockReturnValue({ connection: mockConnection });
-    (useWallet as any).mockReturnValue(mockWallet);
+    ( useConnectionCompat as any).mockReturnValue({ connection: mockConnection });
+    ( useWalletCompat as any).mockReturnValue(mockWallet);
     (useSlabState as any).mockReturnValue(mockSlabState);
     (sendTx as any).mockResolvedValue({ signature: "mock-signature" });
     (getAta as any).mockResolvedValue(mockUserAta);
@@ -291,7 +295,7 @@ describe("useDeposit", () => {
 
   describe("Error Handling", () => {
     it("should throw error if wallet not connected", async () => {
-      (useWallet as any).mockReturnValue({ publicKey: null, connected: false });
+      ( useWalletCompat as any).mockReturnValue({ publicKey: null, connected: false, connecting: false, wallet: null, signTransaction: undefined, disconnect: vi.fn() });
 
       const { result } = renderHook(() => useDeposit(mockSlabAddress));
 
