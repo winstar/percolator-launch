@@ -1,7 +1,7 @@
 "use client";
 
 import { FC, ReactNode, useMemo } from "react";
-import { PrivyProvider, usePrivy } from "@privy-io/react-auth";
+import { PrivyProvider, usePrivy, type WalletListEntry } from "@privy-io/react-auth";
 import { toSolanaWalletConnectors } from "@privy-io/react-auth/solana";
 import { SentryUserContext } from "@/components/providers/SentryUserContext";
 import { PrivyLoginContext } from "@/hooks/usePrivySafe";
@@ -17,6 +17,10 @@ const PrivyProviderClient: FC<{ appId: string; children: ReactNode }> = ({
   const solanaConnectors = useMemo(() => toSolanaWalletConnectors(), []);
   const walletConnectCloudProjectId =
     process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID;
+  const walletList = useMemo<WalletListEntry[]>(
+    () => ["phantom", "solflare", "backpack", "jupiter", "detected_solana_wallets"],
+    []
+  );
 
   return (
     <PrivyProvider
@@ -25,6 +29,7 @@ const PrivyProviderClient: FC<{ appId: string; children: ReactNode }> = ({
         appearance: {
           walletChainType: "solana-only",
           showWalletLoginFirst: true,
+          walletList,
         },
         loginMethods: ["wallet", "email"],
         walletConnectCloudProjectId,

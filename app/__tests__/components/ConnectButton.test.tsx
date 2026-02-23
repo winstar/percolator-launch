@@ -11,11 +11,6 @@ vi.mock("next/link", () => ({
 
 vi.mock("@/hooks/usePrivySafe", () => ({ usePrivyAvailable: () => true }));
 
-vi.mock("@/lib/wallets", () => ({
-  defaultWalletDetector: () => ({ phantom: true, solflare: true, backpack: false }),
-  getInstalledWalletIds: () => ["phantom", "solflare"],
-}));
-
 const mockLogout = vi.fn();
 const mockLogin = vi.fn();
 const mockConnectWallet = vi.fn();
@@ -66,14 +61,10 @@ describe("ConnectButton", () => {
 
   it("offers email login and preselects installed wallet", () => {
     privyState = { ...privyState, authenticated: false };
-    const { getByRole, getByText } = render(<ConnectButton />);
+    const { getByRole } = render(<ConnectButton />);
     fireEvent.click(getByRole("button", { name: /connect wallet/i }));
-    fireEvent.click(getByText("Continue with email"));
-    expect(mockLogin).toHaveBeenCalledWith({ loginMethods: ["email"] });
-    fireEvent.click(getByRole("button", { name: /connect wallet/i }));
-    fireEvent.click(getByText("Phantom"));
     expect(mockLogin).toHaveBeenCalledWith({
-      loginMethods: ["wallet"],
+      loginMethods: ["wallet", "email"],
       walletChainType: "solana-only",
     });
   });

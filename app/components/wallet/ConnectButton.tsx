@@ -5,7 +5,6 @@ import Link from "next/link";
 import { usePrivy, type LinkedAccountWithMetadata } from "@privy-io/react-auth";
 import { useFundWallet, useWallets } from "@privy-io/react-auth/solana";
 import { getConfig } from "@/lib/config";
-import { defaultWalletDetector, getInstalledWalletIds } from "@/lib/wallets";
 import { usePrivyAvailable } from "@/hooks/usePrivySafe";
 
 /**
@@ -55,10 +54,6 @@ const ConnectButtonInner: FC = () => {
 
   const network = useMemo(() => getConfig().network, []);
 
-  const installedWalletIds = useMemo(() => {
-    return getInstalledWalletIds(defaultWalletDetector());
-  }, []);
-
   const embeddedWallet = useMemo(() => {
     return user?.linkedAccounts?.find(isEmbeddedSolanaWallet);
   }, [user]);
@@ -79,19 +74,12 @@ const ConnectButtonInner: FC = () => {
   }, [menuOpen]);
 
   const handleClick = useCallback(() => {
+    if (!authenticated) {
+      login({ loginMethods: ["wallet", "email"], walletChainType: "solana-only" });
+      return;
+    }
     setMenuOpen((v) => !v);
-  }, []);
-
-  const handleWalletLogin = useCallback(
-    (walletOnly = false) => {
-      login({
-        loginMethods: walletOnly ? ["wallet"] : ["wallet", "email"],
-        walletChainType: "solana-only",
-      });
-      setMenuOpen(false);
-    },
-    [login]
-  );
+  }, [authenticated, login]);
 
   if (!ready) {
     return (
@@ -175,43 +163,7 @@ const ConnectButtonInner: FC = () => {
         </div>
       )}
 
-      {menuOpen && !authenticated && (
-        <div className="absolute right-0 top-full mt-1 min-w-[180px] rounded-md border border-[var(--border)] bg-[var(--bg)] p-1 shadow-lg z-50">
-          <div className="px-3 py-2 text-[11px] text-[var(--text-muted)] uppercase tracking-wide">
-            Installed wallets
-          </div>
-          {installedWalletIds.length === 0 && (
-            <div className="px-3 pb-2 text-[12px] text-[var(--text-muted)]">
-              No wallets detected
-            </div>
-          )}
-          {installedWalletIds.map((id) => (
-            <button
-              key={id}
-              onClick={() => handleWalletLogin(true)}
-              className="w-full px-3 py-1.5 text-left text-[13px] text-[var(--text-secondary)] hover:bg-[var(--accent)]/[0.06] rounded-sm transition-colors"
-            >
-              {id === "phantom" ? "Phantom" : id === "solflare" ? "Solflare" : "Backpack"}
-            </button>
-          ))}
-          <div className="h-px bg-[var(--border)] my-1" />
-          <button
-            onClick={() => {
-              login({ loginMethods: ["email"] });
-              setMenuOpen(false);
-            }}
-            className="w-full px-3 py-1.5 text-left text-[13px] text-[var(--text-secondary)] hover:bg-[var(--accent)]/[0.06] rounded-sm transition-colors"
-          >
-            Continue with email
-          </button>
-          <button
-            onClick={() => handleWalletLogin(true)}
-            className="w-full px-3 py-1.5 text-left text-[13px] text-[var(--text-secondary)] hover:bg-[var(--accent)]/[0.06] rounded-sm transition-colors"
-          >
-            More wallets
-          </button>
-        </div>
-      )}
+      {menuOpen && !authenticated && null}
     </div>
   );
 };
