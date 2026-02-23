@@ -24,6 +24,12 @@ vi.mock("next/link", () => ({
   ),
 }));
 
+let mockSearchParams = new URLSearchParams();
+
+vi.mock("next/navigation", () => ({
+  useSearchParams: () => mockSearchParams,
+}));
+
 vi.mock("@/hooks/usePrivySafe", () => ({ usePrivyAvailable: () => true }));
 
 const mockLogout = vi.fn();
@@ -53,6 +59,7 @@ import { ConnectButton } from "@/components/wallet/ConnectButton";
 describe("ConnectButton", () => {
   beforeEach(() => {
     mockLogin.mockClear();
+    mockSearchParams = new URLSearchParams();
     privyState = {
       ready: true,
       authenticated: true,
@@ -78,5 +85,13 @@ describe("ConnectButton", () => {
       loginMethods: ["wallet", "email"],
       walletChainType: "solana-only",
     });
+  });
+
+  it("shows a Solflare deep-link in debug mode when unauthenticated", () => {
+    privyState = { ...privyState, authenticated: false };
+    mockSearchParams = new URLSearchParams("walletDebug=1");
+    const { getByRole } = render(<ConnectButton />);
+    const link = getByRole("link", { name: /Open in Solflare/i });
+    expect(link.getAttribute("href")).toContain("solflare.com/ul/v1/browse/");
   });
 });

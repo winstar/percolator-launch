@@ -2,10 +2,12 @@
 
 import { FC, useCallback, useMemo, useState, useRef, useEffect } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { usePrivy, type LinkedAccountWithMetadata } from "@privy-io/react-auth";
 import { useFundWallet, useWallets } from "@privy-io/react-auth/solana";
 import { getConfig } from "@/lib/config";
 import { usePrivyAvailable } from "@/hooks/usePrivySafe";
+import { buildSolflareBrowseUrl } from "@/lib/solflare";
 
 /**
  * Privy-backed wallet connect button — replaces WalletMultiButton.
@@ -37,6 +39,7 @@ const ConnectButtonInner: FC = () => {
   const { ready, authenticated, login, logout, exportWallet, user } = usePrivy();
   const { wallets } = useWallets();
   const { fundWallet } = useFundWallet();
+  const searchParams = useSearchParams();
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -81,6 +84,13 @@ const ConnectButtonInner: FC = () => {
     setMenuOpen((v) => !v);
   }, [authenticated, login]);
 
+  const debugFlag = searchParams?.get("walletDebug") ?? "";
+  const showDebug = DEBUG_ENABLED.has(debugFlag.toLowerCase());
+  const solflareBrowseUrl =
+    showDebug && typeof window !== "undefined"
+      ? buildSolflareBrowseUrl(window.location.href, window.location.origin)
+      : "";
+
   if (!ready) {
     return (
       <button
@@ -106,6 +116,17 @@ const ConnectButtonInner: FC = () => {
       >
         {authenticated ? displayAddress : "Connect"}
       </button>
+
+      {!authenticated && showDebug && solflareBrowseUrl ? (
+        <a
+          href={solflareBrowseUrl}
+          target="_blank"
+          rel="noreferrer"
+          className="mt-2 block text-[11px] text-[var(--text-secondary)] hover:text-[var(--text)]"
+        >
+          Open in Solflare
+        </a>
+      ) : null}
 
       {menuOpen && authenticated && (
         <div className="absolute right-0 top-full mt-1 min-w-[160px] rounded-md border border-[var(--border)] bg-[var(--bg)] p-1 shadow-lg z-50">
@@ -169,6 +190,8 @@ const ConnectButtonInner: FC = () => {
 };
 
 type WalletLinkedAccount = Extract<LinkedAccountWithMetadata, { type: "wallet" }>;
+
+const DEBUG_ENABLED = new Set(["1", "true", "yes"]);
 
 function isEmbeddedSolanaWallet(account: LinkedAccountWithMetadata): account is WalletLinkedAccount {
   return (

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useCallback } from "react";
+import { Suspense, useEffect, useMemo, useCallback } from "react";
 import { usePrivy, type LinkedAccountWithMetadata } from "@privy-io/react-auth";
 import { useFundWallet, useWallets } from "@privy-io/react-auth/solana";
 import { ScrollReveal } from "@/components/ui/ScrollReveal";
@@ -12,6 +12,7 @@ import { InfoBanner } from "@/components/ui/InfoBanner";
 import { usePrivyAvailable } from "@/hooks/usePrivySafe";
 import { getConfig } from "@/lib/config";
 import { ConnectButton } from "@/components/wallet/ConnectButton";
+import { WalletDebugPanel } from "@/components/wallet/WalletDebugPanel";
 
 type WalletLinkedAccount = Extract<LinkedAccountWithMetadata, { type: "wallet" }>;
 
@@ -286,6 +287,9 @@ function WalletLayout({ children }: { children: React.ReactNode }) {
           </div>
         </ScrollReveal>
         {children}
+        <Suspense fallback={null}>
+          <WalletDebugPanel />
+        </Suspense>
       </div>
     </div>
   );
