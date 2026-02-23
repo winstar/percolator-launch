@@ -662,7 +662,7 @@ export function maxAccountIndex(dataLen: number): number {
  */
 export function parseAccount(data: Uint8Array, idx: number): Account {
   const maxIdx = maxAccountIndex(data.length);
-  if (idx < 0 || idx >= maxIdx) {
+  if (!Number.isInteger(idx) || idx < 0 || idx >= maxIdx) {
     throw new Error(`Account index out of range: ${idx} (max: ${maxIdx - 1})`);
   }
 
