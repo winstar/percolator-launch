@@ -5858,9 +5858,13 @@ pub mod processor {
 
                 // Read spot price from the DEX pool
                 let remaining = &accounts[3..];
+                // Use the DEX pool's pubkey as the expected feed ID so the
+                // DEX reader's address check passes (prevents the all-zeros
+                // sentinel from hard-failing in Hyperp mode).
+                let dex_feed_id = a_dex_pool.key.to_bytes();
                 let dex_price = oracle::read_engine_price_e6(
                     a_dex_pool,
-                    &[0u8; 32], // empty feed_id — DEX reading doesn't need it
+                    &dex_feed_id,
                     clock.unix_timestamp,
                     3600, // 1hr staleness for DEX (permissive — circuit breaker handles the rest)
                     0,    // no confidence check for DEX
@@ -5916,4 +5920,3 @@ pub mod entrypoint {
 pub mod risk {
     pub use percolator::{RiskEngine, RiskParams, RiskError, NoOpMatcher, MatchingEngine, TradeExecution};
 }
-
