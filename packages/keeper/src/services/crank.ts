@@ -23,6 +23,8 @@ interface MarketCrankState {
   isActive: boolean;
   /** Number of consecutive discoveries where this market was missing */
   missingDiscoveryCount: number;
+  /** Permanently skip — market is not initialized on-chain (error 0x4) */
+  permanentlySkipped?: boolean;
 }
 
 /** Process items in batches with delay between batches.
@@ -128,6 +130,12 @@ export class CrankService {
         const state = this.markets.get(key)!;
         state.market = market;
         state.missingDiscoveryCount = 0;
+        // Re-enable permanently skipped markets on rediscovery (may have been initialized since)
+        if (state.permanentlySkipped) {
+          state.permanentlySkipped = false;
+          state.consecutiveFailures = 0;
+          logger.info("Re-enabling previously skipped market", { slabAddress: key });
+        }
       }
     }
 
@@ -220,6 +228,19 @@ export class CrankService {
     } catch (err) {
       state.failureCount++;
       state.consecutiveFailures++;
+
+      // Detect NotInitialized (error 0x4) — permanently skip these markets
+      const errMsg = err instanceof Error ? err.message : String(err);
+      if (errMsg.includes("custom program error: 0x4")) {
+        state.permanentlySkipped = true;
+        state.isActive = false;
+        logger.warn("Market not initialized on-chain, permanently skipping", {
+          slabAddress,
+          programId: market.programId.toBase58(),
+        });
+        return false;
+      }
+
       // Mark inactive after 10 consecutive failures regardless of lifetime success
       if (state.consecutiveFailures >= 10) {
         state.isActive = false;
@@ -261,6 +282,10 @@ export class CrankService {
 
     // H5: Crank all discovered markets, not just admin-oracle ones
     for (const [slabAddress, state] of this.markets) {
+      if (state.permanentlySkipped) {
+        skipped++;
+        continue;
+      }
       if (state.consecutiveFailures > MAX_CONSECUTIVE_FAILURES) {
         skipped++;
         continue;

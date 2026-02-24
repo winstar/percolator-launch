@@ -6,7 +6,7 @@ vi.mock("@/lib/config", () => ({
     network: "devnet",
     rpcUrl: "https://api.devnet.solana.com",
     programId: "FxfD37s1AZTeWfFQps9Zpebi2dNQ9QSSDtfMKdbsfKrD",
-    matcherProgramId: "4HcGCsyjAqnFua5ccuXyt8KRRQzKFbGTJkVChpS7Yfzy",
+    matcherProgramId: "FmTx5yi62Y3h1ATkxm8ujLNNCwYcc2LTmWRFFWN31Af",
     crankWallet: "2JaSzRYrf44fPpQBtRJfnCEgThwCmvpFd3FCXi45VXxm",
     explorerUrl: "https://explorer.solana.com",
     slabSize: 992560,

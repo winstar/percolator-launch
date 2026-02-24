@@ -53,7 +53,7 @@ import {
 
 // Use public devnet RPC to avoid Helius rate limits (crank service uses the Helius key)
 const RPC = "https://api.devnet.solana.com";
-const MATCHER_PROGRAM_ID = new PublicKey("4HcGCsyjAqnFua5ccuXyt8KRRQzKFbGTJkVChpS7Yfzy");
+const MATCHER_PROGRAM_ID = new PublicKey("FmTx5yi62Y3h1ATkxm8ujLNNCwYcc2LTmWRFFWN31Af");
 const MATCHER_CTX_SIZE = 320;
 
 const TIERS = [
