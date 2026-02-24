@@ -111,6 +111,20 @@ describe("ConnectButton", () => {
     });
   });
 
+  it("offers email login fallback on mobile when no injected wallet", () => {
+    Object.defineProperty(window.navigator, "userAgent", {
+      value: "Mozilla/5.0 (iPhone; CPU iPhone OS 17_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
+      configurable: true,
+    });
+    privyState = { ...privyState, authenticated: false };
+    const { getByRole } = render(<ConnectButton />);
+    fireEvent.click(getByRole("button", { name: /use email instead/i }));
+    expect(mockLogin).toHaveBeenCalledWith({
+      loginMethods: ["email"],
+      walletChainType: "solana-only",
+    });
+  });
+
   it("shows a Solflare deep-link in debug mode when unauthenticated", () => {
     privyState = { ...privyState, authenticated: false };
     mockSearchParams = new URLSearchParams("walletDebug=1");

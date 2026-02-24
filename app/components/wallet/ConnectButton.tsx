@@ -132,6 +132,17 @@ const ConnectButtonInner: FC = () => {
         {authenticated ? displayAddress : fallbackLabel}
       </button>
 
+      {!authenticated && shouldUseWalletConnectFallback ? (
+        <button
+          type="button"
+          onClick={() => login({ loginMethods: ["email"], walletChainType: "solana-only" })}
+          className="mt-2 block text-[11px] text-[var(--text-secondary)] hover:text-[var(--text)]"
+          aria-label="Use email instead"
+        >
+          Use email instead
+        </button>
+      ) : null}
+
       {!authenticated && showDebug && solflareBrowseUrl ? (
         <a
           href={solflareBrowseUrl}
