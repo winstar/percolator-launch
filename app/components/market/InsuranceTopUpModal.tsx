@@ -291,11 +291,11 @@ export const InsuranceTopUpModal: FC<InsuranceTopUpModalProps> = ({
                         style={{ fontFamily: "var(--font-mono)" }}
                       >
                         {lpState.lpSupply > 0n
-                          ? (
+                          ? Math.round(
                               (parseFloat(amount) * 1e6 * Number(lpState.lpSupply)) /
                               Number(lpState.insuranceBalance || 1n)
                             ).toLocaleString(undefined, { maximumFractionDigits: 2 })
-                          : (parseFloat(amount) * 1e6).toLocaleString()}{" "}
+                          : Math.round(parseFloat(amount) * 1e6).toLocaleString()}{" "}
                         LP
                       </span>
                     </div>

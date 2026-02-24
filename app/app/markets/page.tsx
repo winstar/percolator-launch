@@ -483,14 +483,14 @@ function MarketsPageInner() {
                   
                   // Display values (USD or tokens)
                   const oiDisplay = showUsd && lastPrice != null
-                    ? formatNum((Number(oiTokensRaw) / 1e6) * lastPrice)
+                    ? formatNum(Math.round((Number(oiTokensRaw) / 1e6) * lastPrice * 100) / 100)
                     : formatTokenAmount(oiTokensRaw);
                   const insuranceDisplay = showUsd && lastPrice != null
-                    ? formatNum((Number(insuranceTokensRaw) / 1e6) * lastPrice)
+                    ? formatNum(Math.round((Number(insuranceTokensRaw) / 1e6) * lastPrice * 100) / 100)
                     : formatTokenAmount(insuranceTokensRaw);
                   const volumeDisplay = volume24hRaw != null
                     ? (showUsd && lastPrice != null
-                        ? formatNum((Number(volume24hRaw) / 1e6) * lastPrice)
+                        ? formatNum(Math.round((Number(volume24hRaw) / 1e6) * lastPrice * 100) / 100)
                         : formatTokenAmount(volume24hRaw))
                     : null;
 

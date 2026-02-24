@@ -220,6 +220,34 @@ export async function sendTx({
         tx.partialSign(...signers);
       }
 
+      // Pre-sign simulation: catch program errors before the user signs.
+      // This gives a clear error message instead of a cryptic post-sign failure.
+      // We pass existing signers for account-creation txs; wallet sig is not
+      // needed since simulateTransaction with signers array skips sig verify.
+      try {
+        const simResult = await connection.simulateTransaction(tx, signers.length > 0 ? signers : undefined);
+        if (simResult.value.err) {
+          const logs = simResult.value.logs ?? [];
+          // Extract the most useful log line (program error or custom message)
+          const errorLog = logs
+            .filter((l: string) => l.includes("Error") || l.includes("failed") || l.includes("Program log:"))
+            .slice(-3)
+            .join("\n");
+          throw new Error(
+            `Transaction simulation failed: ${JSON.stringify(simResult.value.err)}` +
+            (errorLog ? `\n${errorLog}` : "")
+          );
+        }
+      } catch (simError) {
+        // If it's our own simulation error, rethrow with clear message
+        if (simError instanceof Error && simError.message.startsWith("Transaction simulation failed")) {
+          throw simError;
+        }
+        // Otherwise RPC error during simulation — log but don't block
+        // (the tx may still succeed; skipPreflight: false will catch it again)
+        console.warn("[sendTx] Pre-sign simulation failed (non-blocking):", simError);
+      }
+
       const signed = await wallet.signTransaction(tx);
 
       lastSignature = await connection.sendRawTransaction(signed.serialize(), {
