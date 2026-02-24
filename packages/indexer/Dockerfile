@@ -19,7 +19,7 @@ RUN pnpm install --frozen-lockfile
 
 # Build shared and core first
 RUN pnpm --filter @percolator/shared build
-RUN pnpm --filter @percolator/core build
+RUN pnpm --filter @percolator/sdk build
 
 # Build indexer
 RUN pnpm --filter @percolator/indexer build

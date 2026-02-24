@@ -9,7 +9,7 @@ WORKDIR /app
 # Copy workspace config and root package files
 COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
 
-# Copy shared, core, and indexer packages
+# Copy shared, sdk, and indexer packages
 COPY packages/shared ./packages/shared
 COPY packages/core ./packages/core
 COPY packages/indexer ./packages/indexer
@@ -17,9 +17,9 @@ COPY packages/indexer ./packages/indexer
 # Install all dependencies
 RUN pnpm install --frozen-lockfile
 
-# Build shared and core first
+# Build shared and sdk first
 RUN pnpm --filter @percolator/shared build
-RUN pnpm --filter @percolator/core build
+RUN pnpm --filter @percolator/sdk build
 
 # Build indexer
 RUN pnpm --filter @percolator/indexer build
