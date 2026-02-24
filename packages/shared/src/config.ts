@@ -20,7 +20,9 @@ export const config = {
     "FwfBKZXbYr4vTK23bMFkbgKq3npJ3MSDxEaKmq9Aj4Qn",
     "g9msRSV3sJmmE3r5Twn9HuBsxzuuRGTjKCVTKudm9in",
   ].join(",")).split(",").filter(Boolean),
-  crankKeypair: env.CRANK_KEYPAIR ?? "",
+  // NOTE: Private key is NOT stored in config anymore.
+  // Use getSealedSigner() from signer.ts to get signing capability.
+  // Raw key material never exposed; only sign() interface provided.
   supabaseUrl: env.SUPABASE_URL ?? "",
   supabaseKey: env.SUPABASE_KEY ?? "",
   supabaseServiceRoleKey: env.SUPABASE_SERVICE_ROLE_KEY ?? "",

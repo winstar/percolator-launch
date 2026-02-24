@@ -6,22 +6,21 @@
  * Deploy to Railway, run locally, or use as a systemd service.
  *
  * Env vars:
- *   SOLANA_RPC_URL   — RPC endpoint (default: devnet)
- *   CRANK_KEYPAIR    — Base58-encoded private key
+ *   NETWORK          — devnet | testnet | mainnet (REQUIRED)
+ *   SOLANA_RPC_URL   — RPC endpoint (validated for network)
+ *   CRANK_KEYPAIR    — Base58-encoded or JSON-array private key
  *   CRANK_INTERVAL_MS — Interval between crank cycles (default: 30000)
- *   PROGRAM_ID       — Percolator program ID
+ *   PROGRAM_ID       — Percolator program ID (REQUIRED)
  */
 
 import {
   Connection,
-  Keypair,
   PublicKey,
   Transaction,
   ComputeBudgetProgram,
   SYSVAR_CLOCK_PUBKEY,
   sendAndConfirmTransaction,
 } from "@solana/web3.js";
-import * as bs58 from "bs58";
 import {
   encodeKeeperCrank,
   encodePushOraclePrice,
@@ -33,44 +32,39 @@ import {
   derivePythPushOraclePDA,
   type DiscoveredMarket,
 } from "../packages/core/src/index.js";
+import { getSealedSigner, getCrankPublicKey } from "../packages/shared/src/signer.js";
+import { ensureNetworkConfigValid, validateNetworkConfig } from "../packages/shared/src/networkValidation.js";
 
 // ---------------------------------------------------------------------------
-// Config
+// Validation & Config
 // ---------------------------------------------------------------------------
 
-const RPC_URL =
-  process.env.SOLANA_RPC_URL ||
-  process.env.SOLANA_RPC_URL ?? `https://devnet.helius-rpc.com/?api-key=${process.env.HELIUS_API_KEY ?? ""}`;
+// Validate network configuration (prevents mainnet accidents)
+ensureNetworkConfigValid(process.env);
+const networkConfig = validateNetworkConfig(process.env);
+
+const RPC_URL = networkConfig.rpcUrl;
 const CRANK_INTERVAL_MS = Number(process.env.CRANK_INTERVAL_MS) || 30_000;
 const DISCOVERY_INTERVAL_MS = 60_000;
 const PRIORITY_FEE = 50_000;
 const ALL_ZEROS = new PublicKey("11111111111111111111111111111111");
 
-function loadKeypair(): Keypair {
-  const raw = process.env.CRANK_KEYPAIR;
-  if (!raw) {
-    console.error("❌ CRANK_KEYPAIR env var is required (base58 encoded private key)");
-    process.exit(1);
-  }
-  try {
-    return Keypair.fromSecretKey(bs58.default.decode(raw));
-  } catch {
-    // Try JSON array format as fallback
-    try {
-      return Keypair.fromSecretKey(Uint8Array.from(JSON.parse(raw)));
-    } catch {
-      console.error("❌ Invalid CRANK_KEYPAIR — must be base58 or JSON array");
-      process.exit(1);
-    }
-  }
-}
-
-const PROGRAM_ID = new PublicKey(
-  process.env.PROGRAM_ID || "EXsr2Tfz8ntWYP3vgCStdknFBoafvJQugJKAh4nFdo8f",
-);
+const PROGRAM_ID = new PublicKey(networkConfig.programIds[0]);
 
 const connection = new Connection(RPC_URL, "confirmed");
-const payer = loadKeypair();
+
+// Load sealed signer (private key never exposed)
+const signer = getSealedSigner();
+const crankPublicKey = getCrankPublicKey();
+
+console.log(`
+✅ Crank Service Initialized
+   Network: ${process.env.NETWORK}
+   RPC: ${RPC_URL}
+   Program: ${PROGRAM_ID.toBase58()}
+   Crank: ${crankPublicKey}
+   Interval: ${CRANK_INTERVAL_MS}ms
+`);
 
 // ---------------------------------------------------------------------------
 // Helpers
