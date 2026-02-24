@@ -1,12 +1,19 @@
 import "dotenv/config";
 import { validateEnv } from "./validation.js";
+import { validateNetworkConfig, ensureNetworkConfigValid } from "./networkValidation.js";
 
-// Validate environment variables at startup
+// Validate network configuration at startup (prevents mainnet accidents)
+ensureNetworkConfigValid(process.env);
+
+// Validate environment variables
 const env = validateEnv();
+const networkConfig = validateNetworkConfig(process.env);
 
 export const config = {
-  rpcUrl: env.RPC_URL ?? `https://devnet.helius-rpc.com/?api-key=${env.HELIUS_API_KEY ?? ""}`,
-  programId: env.PROGRAM_ID ?? "FxfD37s1AZTeWfFQps9Zpebi2dNQ9QSSDtfMKdbsfKrD",
+  // Network is validated above; use the validated RPC URL
+  rpcUrl: networkConfig.rpcUrl,
+  // PROGRAM_ID is required and validated above
+  programId: networkConfig.programIds[0],
   /** Comma-separated list of all program IDs to scan for markets */
   allProgramIds: (env.ALL_PROGRAM_IDS ?? [
     "FxfD37s1AZTeWfFQps9Zpebi2dNQ9QSSDtfMKdbsfKrD",
