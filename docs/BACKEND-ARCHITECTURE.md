@@ -336,9 +336,14 @@ docker-compose logs -f api
 ## Production (Railway)
 
 Each service has its own Dockerfile:
-- `Dockerfile.api`
-- `Dockerfile.keeper`
-- `Dockerfile.indexer`
+- `Dockerfile.api` (root) or `packages/api/Dockerfile`
+- `packages/keeper/Dockerfile`
+- `Dockerfile.indexer` (root) or `packages/indexer/Dockerfile`
+
+> **Note:** The `docker-compose.yml` uses the `packages/*/Dockerfile` paths.
+> Stale root Dockerfiles (`Dockerfile`, `Dockerfile.server`, `Dockerfile.keeper`)
+> and the duplicate `services/keeper/` and `services/oracle/` directories were
+> removed in the Phase 4 repo-split cleanup.
 
 Services share environment variables. Required for all three: `RPC_URL`, `HELIUS_API_KEY`, `SUPABASE_URL`, `SUPABASE_KEY`. Keeper additionally requires `CRANK_KEYPAIR`.
 
