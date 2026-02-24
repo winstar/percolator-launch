@@ -36,7 +36,7 @@ export const ConnectButton: FC = () => {
  * Inner component that uses Privy hooks. Only rendered when PrivyProvider is mounted.
  */
 const ConnectButtonInner: FC = () => {
-  const { ready, authenticated, login, logout, exportWallet, user } = usePrivy();
+  const { ready, authenticated, login, logout, exportWallet, user, connectWallet } = usePrivy();
   const { wallets } = useWallets();
   const { fundWallet } = useFundWallet();
   const searchParams = useSearchParams();
@@ -63,6 +63,11 @@ const ConnectButtonInner: FC = () => {
 
   const canExport = !!exportWallet && !!embeddedWallet && ready && authenticated;
   const canFund = !!fundWallet && !!activeWallet && network === "mainnet";
+  const userAgent = typeof navigator !== "undefined" ? navigator.userAgent : "";
+  const isMobileUserAgent = MOBILE_UA_REGEX.test(userAgent);
+  const isSolflareInAppUserAgent = SOLFLARE_UA_REGEX.test(userAgent);
+  const hasInjectedWallet = hasInjectedSolanaWallet();
+  const shouldUseWalletConnectFallback = !authenticated && isMobileUserAgent && !hasInjectedWallet;
 
   // Close menu on outside click
   useEffect(() => {
@@ -78,11 +83,21 @@ const ConnectButtonInner: FC = () => {
 
   const handleClick = useCallback(() => {
     if (!authenticated) {
-      login({ loginMethods: ["wallet", "email"], walletChainType: "solana-only" });
+      if (shouldUseWalletConnectFallback && connectWallet) {
+        connectWallet({ walletList: ["wallet_connect"], walletChainType: "solana-only" });
+      } else {
+        login({ loginMethods: ["wallet", "email"], walletChainType: "solana-only" });
+      }
       return;
     }
     setMenuOpen((v) => !v);
-  }, [authenticated, login]);
+  }, [authenticated, connectWallet, login, shouldUseWalletConnectFallback]);
+
+  const fallbackLabel = shouldUseWalletConnectFallback
+    ? isSolflareInAppUserAgent
+      ? "Continue with Solflare"
+      : "Connect with WalletConnect"
+    : "Connect";
 
   const debugFlag = searchParams?.get("walletDebug") ?? "";
   const showDebug = DEBUG_ENABLED.has(debugFlag.toLowerCase());
@@ -112,9 +127,9 @@ const ConnectButtonInner: FC = () => {
             ? "text-[var(--accent)] border-[var(--accent)]/30 bg-[var(--accent)]/[0.06] hover:bg-[var(--accent)]/[0.12]"
             : "text-white border-[var(--accent)] bg-[var(--accent)]/20 hover:bg-[var(--accent)]/30",
         ].join(" ")}
-        aria-label={authenticated ? `Wallet: ${displayAddress}` : "Connect wallet"}
+        aria-label={authenticated ? `Wallet: ${displayAddress}` : fallbackLabel}
       >
-        {authenticated ? displayAddress : "Connect"}
+        {authenticated ? displayAddress : fallbackLabel}
       </button>
 
       {!authenticated && showDebug && solflareBrowseUrl ? (
@@ -192,11 +207,30 @@ const ConnectButtonInner: FC = () => {
 type WalletLinkedAccount = Extract<LinkedAccountWithMetadata, { type: "wallet" }>;
 
 const DEBUG_ENABLED = new Set(["1", "true", "yes"]);
+const MOBILE_UA_REGEX = /Mobi|Android|iPhone|iPad|iPod/i;
+const SOLFLARE_UA_REGEX = /Solflare/i;
 
 function isEmbeddedSolanaWallet(account: LinkedAccountWithMetadata): account is WalletLinkedAccount {
   return (
     account.type === "wallet" &&
     account.walletClientType === "privy" &&
     account.chainType === "solana"
+  );
+}
+
+function hasInjectedSolanaWallet(): boolean {
+  if (typeof window === "undefined") return false;
+  const win = window as unknown as {
+    solana?: { isPhantom?: boolean; isSolflare?: boolean };
+    phantom?: { solana?: { isPhantom?: boolean } };
+    solflare?: { isSolflare?: boolean };
+    backpack?: { isBackpack?: boolean };
+  };
+
+  return !!(
+    win.solana ||
+    win.phantom?.solana ||
+    win.solflare ||
+    win.backpack
   );
 }

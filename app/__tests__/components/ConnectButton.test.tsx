@@ -35,6 +35,9 @@ vi.mock("@/hooks/usePrivySafe", () => ({ usePrivyAvailable: () => true }));
 const mockLogout = vi.fn();
 const mockLogin = vi.fn();
 const mockExportWallet = vi.fn();
+const mockConnectWallet = vi.fn();
+
+const originalUserAgent = navigator.userAgent;
 
 let privyState = {
   ready: true,
@@ -42,6 +45,7 @@ let privyState = {
   user: { linkedAccounts: [] },
   logout: mockLogout,
   login: mockLogin,
+  connectWallet: mockConnectWallet,
   exportWallet: mockExportWallet,
 };
 
@@ -59,13 +63,19 @@ import { ConnectButton } from "@/components/wallet/ConnectButton";
 describe("ConnectButton", () => {
   beforeEach(() => {
     mockLogin.mockClear();
+    mockConnectWallet.mockClear();
     mockSearchParams = new URLSearchParams();
+    Object.defineProperty(window.navigator, "userAgent", {
+      value: originalUserAgent,
+      configurable: true,
+    });
     privyState = {
       ready: true,
       authenticated: true,
       user: { linkedAccounts: [] },
       logout: mockLogout,
       login: mockLogin,
+      connectWallet: mockConnectWallet,
       exportWallet: mockExportWallet,
     };
   });
@@ -80,9 +90,23 @@ describe("ConnectButton", () => {
   it("uses Privy login for unauthenticated users", () => {
     privyState = { ...privyState, authenticated: false };
     const { getByRole } = render(<ConnectButton />);
-    fireEvent.click(getByRole("button", { name: /connect wallet/i }));
+    fireEvent.click(getByRole("button", { name: /connect/i }));
     expect(mockLogin).toHaveBeenCalledWith({
       loginMethods: ["wallet", "email"],
+      walletChainType: "solana-only",
+    });
+  });
+
+  it("uses WalletConnect fallback on mobile when no injected wallet", () => {
+    Object.defineProperty(window.navigator, "userAgent", {
+      value: "Mozilla/5.0 (iPhone; CPU iPhone OS 17_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
+      configurable: true,
+    });
+    privyState = { ...privyState, authenticated: false };
+    const { getByRole } = render(<ConnectButton />);
+    fireEvent.click(getByRole("button", { name: /connect with walletconnect/i }));
+    expect(mockConnectWallet).toHaveBeenCalledWith({
+      walletList: ["wallet_connect"],
       walletChainType: "solana-only",
     });
   });
