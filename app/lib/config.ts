@@ -67,7 +67,7 @@ const CONFIGS = {
   devnet: {
     get rpcUrl() { return getRpcEndpoint(); },
     programId: "FxfD37s1AZTeWfFQps9Zpebi2dNQ9QSSDtfMKdbsfKrD",
-    matcherProgramId: "4HcGCsyjAqnFua5ccuXyt8KRRQzKFbGTJkVChpS7Yfzy",
+    matcherProgramId: "FmTx5yi62Y3h1ATkxm8ujLNNCwYcc2LTmWRFFWN31Af",
     crankWallet: "2JaSzRYrf44fPpQBtRJfnCEgThwCmvpFd3FCXi45VXxm",
     explorerUrl: "https://explorer.solana.com",
     // Multiple program deployments for different slab sizes
