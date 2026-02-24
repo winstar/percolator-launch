@@ -345,7 +345,7 @@ async function main() {
     pushCrankTx.add(buildIx({ programId: PROGRAM_ID, keys: crankKeys, data: crankData }));
     await sendAndConfirmTransaction(connection, pushCrankTx, [payer], {
       commitment: "confirmed",
-      skipPreflight: true,
+      skipPreflight: false,
     });
     console.log(`  Initial price pushed: ${INITIAL_PRICE_E6} (e6)`);
   } else {
@@ -378,7 +378,7 @@ async function main() {
       crankTx.add(buildIx({ programId: PROGRAM_ID, keys: crankKeys, data: crankData }));
       await sendAndConfirmTransaction(connection, crankTx, [payer], {
         commitment: "confirmed",
-        skipPreflight: true,
+        skipPreflight: false,
       });
       console.log("  Initial crank with Pyth oracle succeeded");
     }
