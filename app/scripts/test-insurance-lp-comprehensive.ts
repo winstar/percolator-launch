@@ -66,15 +66,15 @@ const RPC_URL = 'https://api.devnet.solana.com';
 // All 3 program tiers and their test markets
 const TIERS = {
   small: {
-    programId: '4dvCZrrPHmimQLDUBLme5CRqa81nGVLzGMwKUAPfXKih',
+    programId: 'FxfD37s1AZTeWfFQps9Zpebi2dNQ9QSSDtfMKdbsfKrD',
     slab: 'ACp47TrdPCT5qH5pFUfpoavbsY8D8jSHQxRXnbUpLaCH',
   },
   medium: {
-    programId: 'p9F84kJm39fQP3AwZSta2tB7oudUKPQd7zFuNHR7vas',
+    programId: 'FwfBKZXbYr4vTK23bMFkbgKq3npJ3MSDxEaKmq9Aj4Qn',
     slab: '4xMdY8R1xRFYABBybcoJsyUVSkXdowSQ5yM5ytUopyF9',
   },
   large: {
-    programId: '6oLLu8wLe6tmEkcGhHfNXNEBZFgKBzcZFheNtgJvZQaS',
+    programId: 'g9msRSV3sJmmE3r5Twn9HuBsxzuuRGTjKCVTKudm9in',
     slab: '6rj9uzukVQmZuaUwDhmCoR77PfxadpqQP4w2zGvqwfqG',
   },
 };
