@@ -10,7 +10,7 @@ vi.mock('@percolator/sdk', () => ({
 
 vi.mock('@percolator/shared', () => ({
   config: {
-    allProgramIds: ['4dvCZrrPHmimQLDUBLme5CRqa81nGVLzGMwKUAPfXKih'],
+    allProgramIds: ['FxfD37s1AZTeWfFQps9Zpebi2dNQ9QSSDtfMKdbsfKrD'],
   },
   createLogger: vi.fn(() => ({
     info: vi.fn(),
@@ -60,8 +60,8 @@ vi.mock('@percolator/shared', () => ({
 import { TradeIndexerPolling } from '../../src/services/TradeIndexer.js';
 import * as shared from '@percolator/shared';
 
-const SLAB = '4dvCZrrPHmimQLDUBLme5CRqa81nGVLzGMwKUAPfXKih';
-const PROGRAM_ID = '4dvCZrrPHmimQLDUBLme5CRqa81nGVLzGMwKUAPfXKih';
+const SLAB = 'FxfD37s1AZTeWfFQps9Zpebi2dNQ9QSSDtfMKdbsfKrD';
+const PROGRAM_ID = 'FxfD37s1AZTeWfFQps9Zpebi2dNQ9QSSDtfMKdbsfKrD';
 const TRADER = 'So11111111111111111111111111111111111111112';
 // Valid base58 signature (88 chars)
 const VALID_SIG = '5VERv8NMvzbJMEkV8xnrLkEaWRtSz9CosKDYjCJjBRnbJLgp8uirBgmQpjKhoR4tjF3ZpRzrFmBV6UjKdiSZkQUW';
