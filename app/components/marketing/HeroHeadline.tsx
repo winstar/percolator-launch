@@ -32,20 +32,17 @@ export function HeroHeadline() {
         style={{ fontFamily: "var(--font-heading)" }}
       >
         <span
-          className="hero-line block text-white"
-          style={{ opacity: prefersReduced ? 1 : 0 }}
+          className={`hero-line block text-white ${prefersReduced ? '' : 'gsap-fade'}`}
         >
           Any Token.
         </span>
         <span
-          className="hero-line block text-white"
-          style={{ opacity: prefersReduced ? 1 : 0 }}
+          className={`hero-line block text-white ${prefersReduced ? '' : 'gsap-fade'}`}
         >
           Any Market.
         </span>
         <span
-          className="hero-line block bg-gradient-to-r from-purple-400 via-violet-300 to-cyan-400 bg-clip-text text-transparent"
-          style={{ opacity: prefersReduced ? 1 : 0 }}
+          className={`hero-line block bg-gradient-to-r from-purple-400 via-violet-300 to-cyan-400 bg-clip-text text-transparent ${prefersReduced ? '' : 'gsap-fade'}`}
         >
           Permissionless.
         </span>

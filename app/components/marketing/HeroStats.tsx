@@ -58,13 +58,13 @@ export function HeroStats({
   return (
     <div
       ref={ref}
-      className="flex flex-wrap items-center gap-x-6 gap-y-2"
-      style={{ opacity: prefersReduced ? 1 : 0, fontFamily: "var(--font-heading)" }}
+      className="gsap-fade grid grid-cols-2 gap-x-6 gap-y-2 md:flex md:flex-wrap md:items-center"
+      style={{ fontFamily: "var(--font-heading)" }}
     >
       {stats.map((s, i) => (
         <div key={s.label} className="flex items-center gap-2 text-[13px]">
           {i > 0 && (
-            <span className="mr-2 hidden text-white/10 sm:inline">|</span>
+            <span className="mr-2 hidden text-white/10 md:inline">|</span>
           )}
           <span className="text-white/40">{s.label}</span>
           {s.value}

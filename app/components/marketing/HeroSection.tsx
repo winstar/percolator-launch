@@ -120,8 +120,7 @@ export function HeroSection() {
         <div className="flex flex-col gap-6">
           {/* Eyebrow badge */}
           <div
-            className="hero-fade"
-            style={{ opacity: prefersReduced ? 1 : 0 }}
+            className={`hero-fade ${prefersReduced ? '' : 'gsap-fade'}`}
           >
             <div className="inline-flex items-center gap-2 rounded-full border border-purple-500/40 bg-purple-500/10 px-3 py-1">
               <span className="relative flex h-2 w-2">
@@ -148,8 +147,7 @@ export function HeroSection() {
 
           {/* Subheadline */}
           <p
-            className="hero-fade max-w-[520px] text-base leading-relaxed text-white/60 sm:text-lg"
-            style={{ opacity: prefersReduced ? 1 : 0 }}
+            className={`hero-fade max-w-[520px] text-base leading-relaxed text-white/60 sm:text-lg ${prefersReduced ? '' : 'gsap-fade'}`}
           >
             Deploy a perpetual futures market for any Solana token.
             <br />
@@ -173,8 +171,7 @@ export function HeroSection() {
 
           {/* Social proof bar */}
           <div
-            className="hero-fade flex flex-wrap items-center gap-4 text-[12px] text-white/30"
-            style={{ opacity: prefersReduced ? 1 : 0 }}
+            className={`hero-fade flex flex-wrap items-center gap-4 text-[12px] text-white/30 ${prefersReduced ? '' : 'gsap-fade'}`}
           >
             <span className="flex items-center gap-1.5">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" className="text-white/20">

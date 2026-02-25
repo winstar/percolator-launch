@@ -23,9 +23,8 @@ export function HeroCtaGroup() {
     <div ref={ref} className="flex flex-wrap items-center gap-3">
       <Link
         href="/create"
-        className="hero-cta group relative inline-flex items-center gap-2 rounded-xl bg-purple-600 px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-purple-500"
+        className={`hero-cta group relative inline-flex items-center gap-2 rounded-xl bg-purple-600 px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-purple-500 ${prefersReduced ? '' : 'gsap-fade'}`}
         style={{
-          opacity: prefersReduced ? 1 : 0,
           boxShadow:
             "0 0 20px rgba(124,58,237,0.4), 0 0 60px rgba(124,58,237,0.15)",
         }}
@@ -48,16 +47,14 @@ export function HeroCtaGroup() {
 
       <Link
         href="/markets"
-        className="hero-cta inline-flex items-center rounded-xl border border-white/20 bg-white/5 px-6 py-3 text-sm font-semibold text-white transition-colors hover:border-purple-400 hover:bg-white/10"
-        style={{ opacity: prefersReduced ? 1 : 0 }}
+        className={`hero-cta inline-flex items-center rounded-xl border border-white/20 bg-white/5 px-6 py-3 text-sm font-semibold text-white transition-colors hover:border-purple-400 hover:bg-white/10 ${prefersReduced ? '' : 'gsap-fade'}`}
       >
         Trade Now
       </Link>
 
       <Link
         href="#how-it-works"
-        className="hero-cta text-sm font-medium text-cyan-400 underline underline-offset-4 transition-colors hover:text-cyan-300"
-        style={{ opacity: prefersReduced ? 1 : 0 }}
+        className={`hero-cta text-sm font-medium text-cyan-400 underline underline-offset-4 transition-colors hover:text-cyan-300 ${prefersReduced ? '' : 'gsap-fade'}`}
       >
         Earn as Creator
       </Link>
