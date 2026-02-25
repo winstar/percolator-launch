@@ -951,6 +951,133 @@ declare function isToken2022(tokenProgramId: PublicKey): boolean;
  */
 declare function isStandardToken(tokenProgramId: PublicKey): boolean;
 
+/**
+ * @module stake
+ * Percolator Insurance LP Staking program — instruction encoders, PDA derivation, and account specs.
+ *
+ * Program: percolator-stake (dcccrypto/percolator-stake)
+ * Deployed devnet: 4mJ8Cas... (TODO: confirm full address from devops)
+ */
+
+/** Percolator Stake program ID (devnet). Update for mainnet. */
+declare const STAKE_PROGRAM_ID: PublicKey;
+declare const STAKE_IX: {
+    readonly InitPool: 0;
+    readonly Deposit: 1;
+    readonly Withdraw: 2;
+    readonly FlushToInsurance: 3;
+    readonly UpdateConfig: 4;
+    readonly TransferAdmin: 5;
+    readonly AdminSetOracleAuthority: 6;
+    readonly AdminSetRiskThreshold: 7;
+    readonly AdminSetMaintenanceFee: 8;
+    readonly AdminResolveMarket: 9;
+    readonly AdminWithdrawInsurance: 10;
+    readonly AdminSetInsurancePolicy: 11;
+};
+/** Derive the stake pool PDA for a given slab (market). */
+declare function deriveStakePool(slab: PublicKey, programId?: PublicKey): [PublicKey, number];
+/** Derive the vault authority PDA (signs CPI, owns LP mint + vault). */
+declare function deriveStakeVaultAuth(pool: PublicKey, programId?: PublicKey): [PublicKey, number];
+/** Derive the per-user deposit PDA (tracks cooldown, deposit time). */
+declare function deriveDepositPda(pool: PublicKey, user: PublicKey, programId?: PublicKey): [PublicKey, number];
+/** Tag 0: InitPool — create stake pool for a slab. */
+declare function encodeStakeInitPool(cooldownSlots: bigint | number, depositCap: bigint | number): Buffer;
+/** Tag 1: Deposit — deposit collateral, receive LP tokens. */
+declare function encodeStakeDeposit(amount: bigint | number): Buffer;
+/** Tag 2: Withdraw — burn LP tokens, receive collateral (subject to cooldown). */
+declare function encodeStakeWithdraw(lpAmount: bigint | number): Buffer;
+/** Tag 3: FlushToInsurance — move collateral from stake vault to wrapper insurance. */
+declare function encodeStakeFlushToInsurance(amount: bigint | number): Buffer;
+/** Tag 4: UpdateConfig — update cooldown and/or deposit cap. */
+declare function encodeStakeUpdateConfig(newCooldownSlots?: bigint | number, newDepositCap?: bigint | number): Buffer;
+/** Tag 5: TransferAdmin — transfer wrapper admin to pool PDA. */
+declare function encodeStakeTransferAdmin(): Buffer;
+/** Tag 6: AdminSetOracleAuthority — forward to wrapper via CPI. */
+declare function encodeStakeAdminSetOracleAuthority(newAuthority: PublicKey): Buffer;
+/** Tag 7: AdminSetRiskThreshold — forward to wrapper via CPI. */
+declare function encodeStakeAdminSetRiskThreshold(newThreshold: bigint | number): Buffer;
+/** Tag 8: AdminSetMaintenanceFee — forward to wrapper via CPI. */
+declare function encodeStakeAdminSetMaintenanceFee(newFee: bigint | number): Buffer;
+/** Tag 9: AdminResolveMarket — forward to wrapper via CPI. */
+declare function encodeStakeAdminResolveMarket(): Buffer;
+/** Tag 10: AdminWithdrawInsurance — withdraw insurance after market resolution. */
+declare function encodeStakeAdminWithdrawInsurance(amount: bigint | number): Buffer;
+/** Tag 11: AdminSetInsurancePolicy — set withdrawal policy on wrapper. */
+declare function encodeStakeAdminSetInsurancePolicy(authority: PublicKey, minWithdrawBase: bigint | number, maxWithdrawBps: number, cooldownSlots: bigint | number): Buffer;
+interface StakeAccounts {
+    /** InitPool accounts */
+    initPool: {
+        admin: PublicKey;
+        slab: PublicKey;
+        pool: PublicKey;
+        lpMint: PublicKey;
+        vault: PublicKey;
+        vaultAuth: PublicKey;
+        collateralMint: PublicKey;
+        percolatorProgram: PublicKey;
+    };
+}
+/**
+ * Build account keys for InitPool instruction.
+ * Returns array of {pubkey, isSigner, isWritable} in the order the program expects.
+ */
+declare function initPoolAccounts(a: StakeAccounts['initPool']): {
+    pubkey: PublicKey;
+    isSigner: boolean;
+    isWritable: boolean;
+}[];
+/**
+ * Build account keys for Deposit instruction.
+ */
+declare function depositAccounts(a: {
+    user: PublicKey;
+    pool: PublicKey;
+    userCollateralAta: PublicKey;
+    vault: PublicKey;
+    lpMint: PublicKey;
+    userLpAta: PublicKey;
+    vaultAuth: PublicKey;
+    depositPda: PublicKey;
+}): {
+    pubkey: PublicKey;
+    isSigner: boolean;
+    isWritable: boolean;
+}[];
+/**
+ * Build account keys for Withdraw instruction.
+ */
+declare function withdrawAccounts(a: {
+    user: PublicKey;
+    pool: PublicKey;
+    userLpAta: PublicKey;
+    lpMint: PublicKey;
+    vault: PublicKey;
+    userCollateralAta: PublicKey;
+    vaultAuth: PublicKey;
+    depositPda: PublicKey;
+}): {
+    pubkey: PublicKey;
+    isSigner: boolean;
+    isWritable: boolean;
+}[];
+/**
+ * Build account keys for FlushToInsurance instruction.
+ */
+declare function flushToInsuranceAccounts(a: {
+    caller: PublicKey;
+    pool: PublicKey;
+    vault: PublicKey;
+    vaultAuth: PublicKey;
+    slab: PublicKey;
+    wrapperVault: PublicKey;
+    percolatorProgram: PublicKey;
+}): {
+    pubkey: PublicKey;
+    isSigner: boolean;
+    isWritable: boolean;
+}[];
+
 interface BuildIxParams {
     programId: PublicKey;
     keys: AccountMeta[];
@@ -1157,4 +1284,4 @@ declare function getMatcherProgramId(network?: Network): PublicKey;
  */
 declare function getCurrentNetwork(): Network;
 
-export { ACCOUNTS_CLOSE_ACCOUNT, ACCOUNTS_CLOSE_SLAB, ACCOUNTS_CREATE_INSURANCE_MINT, ACCOUNTS_DEPOSIT_COLLATERAL, ACCOUNTS_DEPOSIT_INSURANCE_LP, ACCOUNTS_INIT_LP, ACCOUNTS_INIT_MARKET, ACCOUNTS_INIT_USER, ACCOUNTS_KEEPER_CRANK, ACCOUNTS_LIQUIDATE_AT_ORACLE, ACCOUNTS_PAUSE_MARKET, ACCOUNTS_PUSH_ORACLE_PRICE, ACCOUNTS_RESOLVE_MARKET, ACCOUNTS_SET_MAINTENANCE_FEE, ACCOUNTS_SET_ORACLE_AUTHORITY, ACCOUNTS_SET_RISK_THRESHOLD, ACCOUNTS_TOPUP_INSURANCE, ACCOUNTS_TRADE_CPI, ACCOUNTS_TRADE_NOCPI, ACCOUNTS_UNPAUSE_MARKET, ACCOUNTS_UPDATE_ADMIN, ACCOUNTS_UPDATE_CONFIG, ACCOUNTS_WITHDRAW_COLLATERAL, ACCOUNTS_WITHDRAW_INSURANCE, ACCOUNTS_WITHDRAW_INSURANCE_LP, type Account, AccountKind, type AccountSpec, type AdminForceCloseArgs, type BuildIxParams, CTX_VAMM_OFFSET, type CloseAccountArgs, type DepositCollateralArgs, type DepositInsuranceLPArgs, type DexPoolInfo, type DexType, type DiscoveredMarket, type EngineState, IX_TAG, type InitLPArgs, type InitMarketArgs, type InitUserArgs, type InsuranceFund, type KeeperCrankArgs, type LiquidateAtOracleArgs, MARK_PRICE_EMA_ALPHA_E6, MARK_PRICE_EMA_WINDOW_SLOTS, METEORA_DLMM_PROGRAM_ID, type MarketConfig, type Network, PERCOLATOR_ERRORS, PROGRAM_IDS, PUMPSWAP_PROGRAM_ID, PYTH_PUSH_ORACLE_PROGRAM_ID, PYTH_RECEIVER_PROGRAM_ID, PYTH_SOLANA_FEEDS, type PriceRouterResult, type PriceSource, type PriceSourceType, type PushOraclePriceArgs, RAYDIUM_CLMM_PROGRAM_ID, type RiskParams, SLAB_TIERS, type SetMaintenanceFeeArgs, type SetOracleAuthorityArgs, type SetOraclePriceCapArgs, type SetPythOracleArgs, type SetRiskThresholdArgs, type SimulateOrSendParams, type SlabHeader, type SlabTierKey, TOKEN_2022_PROGRAM_ID, type TopUpInsuranceArgs, type TradeCpiArgs, type TradeNoCpiArgs, type TxResult, type UpdateAdminArgs, type UpdateConfigArgs, type UpdateRiskParamsArgs, VAMM_MAGIC, ValidationError, type VammMatcherParams, WELL_KNOWN, type WithdrawCollateralArgs, type WithdrawInsuranceLPArgs, buildAccountMetas, buildIx, computeDexSpotPriceE6, computeEmaMarkPrice, computeEstimatedEntryPrice, computeFundingRateAnnualized, computeLiqPrice, computeMarkPnl, computeMaxLeverage, computePnlPercent, computePreTradeLiqPrice, computeRequiredMargin, computeTradingFee, computeVammQuote, concatBytes, decodeError, deriveInsuranceLpMint, deriveLpPda, derivePythPriceUpdateAccount, derivePythPushOraclePDA, deriveVaultAuthority, detectDexType, detectLayout, detectTokenProgram, discoverMarkets, encBool, encI128, encI64, encPubkey, encU128, encU16, encU32, encU64, encU8, encodeAdminForceClose, encodeCloseAccount, encodeCloseSlab, encodeCreateInsuranceMint, encodeDepositCollateral, encodeDepositInsuranceLP, encodeInitLP, encodeInitMarket, encodeInitUser, encodeKeeperCrank, encodeLiquidateAtOracle, encodePauseMarket, encodePushOraclePrice, encodeRenounceAdmin, encodeResolveMarket, encodeSetMaintenanceFee, encodeSetOracleAuthority, encodeSetOraclePriceCap, encodeSetPythOracle, encodeSetRiskThreshold, encodeTopUpInsurance, encodeTradeCpi, encodeTradeNoCpi, encodeUnpauseMarket, encodeUpdateAdmin, encodeUpdateConfig, encodeUpdateHyperpMark, encodeUpdateMarkPrice, encodeUpdateRiskParams, encodeWithdrawCollateral, encodeWithdrawInsurance, encodeWithdrawInsuranceLP, fetchSlab, fetchTokenAccount, formatResult, getAta, getAtaSync, getCurrentNetwork, getErrorHint, getErrorName, getMatcherProgramId, getProgramId, isAccountUsed, isStandardToken, isToken2022, maxAccountIndex, parseAccount, parseAllAccounts, parseConfig, parseDexPool, parseEngine, parseErrorFromLogs, parseHeader, parseParams, parseUsedIndices, readLastThrUpdateSlot, readNonce, resolvePrice, simulateOrSend, slabDataSize, validateAmount, validateBps, validateI128, validateI64, validateIndex, validatePublicKey, validateU128, validateU16, validateU64 };
+export { ACCOUNTS_CLOSE_ACCOUNT, ACCOUNTS_CLOSE_SLAB, ACCOUNTS_CREATE_INSURANCE_MINT, ACCOUNTS_DEPOSIT_COLLATERAL, ACCOUNTS_DEPOSIT_INSURANCE_LP, ACCOUNTS_INIT_LP, ACCOUNTS_INIT_MARKET, ACCOUNTS_INIT_USER, ACCOUNTS_KEEPER_CRANK, ACCOUNTS_LIQUIDATE_AT_ORACLE, ACCOUNTS_PAUSE_MARKET, ACCOUNTS_PUSH_ORACLE_PRICE, ACCOUNTS_RESOLVE_MARKET, ACCOUNTS_SET_MAINTENANCE_FEE, ACCOUNTS_SET_ORACLE_AUTHORITY, ACCOUNTS_SET_RISK_THRESHOLD, ACCOUNTS_TOPUP_INSURANCE, ACCOUNTS_TRADE_CPI, ACCOUNTS_TRADE_NOCPI, ACCOUNTS_UNPAUSE_MARKET, ACCOUNTS_UPDATE_ADMIN, ACCOUNTS_UPDATE_CONFIG, ACCOUNTS_WITHDRAW_COLLATERAL, ACCOUNTS_WITHDRAW_INSURANCE, ACCOUNTS_WITHDRAW_INSURANCE_LP, type Account, AccountKind, type AccountSpec, type AdminForceCloseArgs, type BuildIxParams, CTX_VAMM_OFFSET, type CloseAccountArgs, type DepositCollateralArgs, type DepositInsuranceLPArgs, type DexPoolInfo, type DexType, type DiscoveredMarket, type EngineState, IX_TAG, type InitLPArgs, type InitMarketArgs, type InitUserArgs, type InsuranceFund, type KeeperCrankArgs, type LiquidateAtOracleArgs, MARK_PRICE_EMA_ALPHA_E6, MARK_PRICE_EMA_WINDOW_SLOTS, METEORA_DLMM_PROGRAM_ID, type MarketConfig, type Network, PERCOLATOR_ERRORS, PROGRAM_IDS, PUMPSWAP_PROGRAM_ID, PYTH_PUSH_ORACLE_PROGRAM_ID, PYTH_RECEIVER_PROGRAM_ID, PYTH_SOLANA_FEEDS, type PriceRouterResult, type PriceSource, type PriceSourceType, type PushOraclePriceArgs, RAYDIUM_CLMM_PROGRAM_ID, type RiskParams, SLAB_TIERS, STAKE_IX, STAKE_PROGRAM_ID, type SetMaintenanceFeeArgs, type SetOracleAuthorityArgs, type SetOraclePriceCapArgs, type SetPythOracleArgs, type SetRiskThresholdArgs, type SimulateOrSendParams, type SlabHeader, type SlabTierKey, type StakeAccounts, TOKEN_2022_PROGRAM_ID, type TopUpInsuranceArgs, type TradeCpiArgs, type TradeNoCpiArgs, type TxResult, type UpdateAdminArgs, type UpdateConfigArgs, type UpdateRiskParamsArgs, VAMM_MAGIC, ValidationError, type VammMatcherParams, WELL_KNOWN, type WithdrawCollateralArgs, type WithdrawInsuranceLPArgs, buildAccountMetas, buildIx, computeDexSpotPriceE6, computeEmaMarkPrice, computeEstimatedEntryPrice, computeFundingRateAnnualized, computeLiqPrice, computeMarkPnl, computeMaxLeverage, computePnlPercent, computePreTradeLiqPrice, computeRequiredMargin, computeTradingFee, computeVammQuote, concatBytes, decodeError, depositAccounts, deriveDepositPda, deriveInsuranceLpMint, deriveLpPda, derivePythPriceUpdateAccount, derivePythPushOraclePDA, deriveStakePool, deriveStakeVaultAuth, deriveVaultAuthority, detectDexType, detectLayout, detectTokenProgram, discoverMarkets, encBool, encI128, encI64, encPubkey, encU128, encU16, encU32, encU64, encU8, encodeAdminForceClose, encodeCloseAccount, encodeCloseSlab, encodeCreateInsuranceMint, encodeDepositCollateral, encodeDepositInsuranceLP, encodeInitLP, encodeInitMarket, encodeInitUser, encodeKeeperCrank, encodeLiquidateAtOracle, encodePauseMarket, encodePushOraclePrice, encodeRenounceAdmin, encodeResolveMarket, encodeSetMaintenanceFee, encodeSetOracleAuthority, encodeSetOraclePriceCap, encodeSetPythOracle, encodeSetRiskThreshold, encodeStakeAdminResolveMarket, encodeStakeAdminSetInsurancePolicy, encodeStakeAdminSetMaintenanceFee, encodeStakeAdminSetOracleAuthority, encodeStakeAdminSetRiskThreshold, encodeStakeAdminWithdrawInsurance, encodeStakeDeposit, encodeStakeFlushToInsurance, encodeStakeInitPool, encodeStakeTransferAdmin, encodeStakeUpdateConfig, encodeStakeWithdraw, encodeTopUpInsurance, encodeTradeCpi, encodeTradeNoCpi, encodeUnpauseMarket, encodeUpdateAdmin, encodeUpdateConfig, encodeUpdateHyperpMark, encodeUpdateMarkPrice, encodeUpdateRiskParams, encodeWithdrawCollateral, encodeWithdrawInsurance, encodeWithdrawInsuranceLP, fetchSlab, fetchTokenAccount, flushToInsuranceAccounts, formatResult, getAta, getAtaSync, getCurrentNetwork, getErrorHint, getErrorName, getMatcherProgramId, getProgramId, initPoolAccounts, isAccountUsed, isStandardToken, isToken2022, maxAccountIndex, parseAccount, parseAllAccounts, parseConfig, parseDexPool, parseEngine, parseErrorFromLogs, parseHeader, parseParams, parseUsedIndices, readLastThrUpdateSlot, readNonce, resolvePrice, simulateOrSend, slabDataSize, validateAmount, validateBps, validateI128, validateI64, validateIndex, validatePublicKey, validateU128, validateU16, validateU64, withdrawAccounts };
