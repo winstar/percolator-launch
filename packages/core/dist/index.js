@@ -2076,7 +2076,7 @@ import { PublicKey as PublicKey9 } from "@solana/web3.js";
 var PROGRAM_IDS = {
   devnet: {
     percolator: "FxfD37s1AZTeWfFQps9Zpebi2dNQ9QSSDtfMKdbsfKrD",
-    matcher: "FmTx5yi62Y3h1ATkxm8ujLNNCwYcc2LTmWRFFWN31Af"
+    matcher: "GTRgyTDfrMvBubALAqtHuQwT8tbGyXid7svXZKtWfC9k"
   },
   mainnet: {
     percolator: "GM8zjJ8LTBMv9xEsverh6H6wLyevgMHEJXcEzyY3rY24",

@@ -142,7 +142,7 @@ export function useVAMM(slabAddress: string) {
         });
 
         // 2. InitLP on percolator
-        // NOTE: The new reference AMM matcher (FmTx5yi...) does NOT have an
+        // NOTE: The new reference AMM matcher (GTRgy...) does NOT have an
         // InitVamm (Tag 2) instruction. It only has Tag 0 (CPI matcher call).
         // The AMM reads LP config from context bytes 64..68 (spread_bps u16 +
         // max_fill_pct u16), using defaults (30 bps spread, 100% fill) when
