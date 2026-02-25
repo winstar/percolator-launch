@@ -86,9 +86,15 @@ export async function getAllRepos(): Promise<RepoData[]> {
     const live =
       result.status === "fulfilled" ? result.value : null;
 
-    if (live) return live;
+    if (live) {
+      // Merge fallback description when GitHub returns null (e.g. forks)
+      return {
+        ...live,
+        description: live.description ?? REPO_DESCRIPTIONS[name] ?? null,
+      };
+    }
 
-    // Fallback: return static data
+    // Fallback: return static data with a fixed date (avoid misleading "Updated 0m ago")
     return {
       name,
       description: REPO_DESCRIPTIONS[name] ?? null,
@@ -96,7 +102,7 @@ export async function getAllRepos(): Promise<RepoData[]> {
       stargazers_count: 0,
       forks_count: 0,
       open_issues_count: 0,
-      updated_at: new Date().toISOString(),
+      updated_at: "", // empty signals "no live data available"
       html_url: `https://github.com/dcccrypto/${name}`,
     };
   });
@@ -104,6 +110,7 @@ export async function getAllRepos(): Promise<RepoData[]> {
 
 /** Format "Updated X ago" from ISO date string */
 export function timeAgo(dateStr: string): string {
+  if (!dateStr) return "";
   const diff = Date.now() - new Date(dateStr).getTime();
   const minutes = Math.floor(diff / 60000);
   if (minutes < 60) return `${minutes}m ago`;

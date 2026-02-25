@@ -68,8 +68,12 @@ export const RepoCard: FC<Props> = ({ repo }) => {
             </svg>
             {repo.open_issues_count}
           </span>
-          <span>·</span>
-          <span>Updated {timeAgo(repo.updated_at)}</span>
+          {timeAgo(repo.updated_at) && (
+            <>
+              <span>·</span>
+              <span>Updated {timeAgo(repo.updated_at)}</span>
+            </>
+          )}
         </div>
         <span className="text-[var(--text-muted)] transition-colors group-hover:text-[var(--text)]">
           →
