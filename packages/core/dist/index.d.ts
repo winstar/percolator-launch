@@ -1162,7 +1162,7 @@ declare function resolvePrice(mint: string, signal?: AbortSignal): Promise<Price
 declare const PROGRAM_IDS: {
     readonly devnet: {
         readonly percolator: "FxfD37s1AZTeWfFQps9Zpebi2dNQ9QSSDtfMKdbsfKrD";
-        readonly matcher: "FmTx5yi62Y3h1ATkxm8ujLNNCwYcc2LTmWRFFWN31Af";
+        readonly matcher: "GTRgyTDfrMvBubALAqtHuQwT8tbGyXid7svXZKtWfC9k";
     };
     readonly mainnet: {
         readonly percolator: "GM8zjJ8LTBMv9xEsverh6H6wLyevgMHEJXcEzyY3rY24";

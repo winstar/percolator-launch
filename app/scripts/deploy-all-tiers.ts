@@ -53,7 +53,7 @@ import {
 
 // Use public devnet RPC to avoid Helius rate limits (crank service uses the Helius key)
 const RPC = "https://api.devnet.solana.com";
-const MATCHER_PROGRAM_ID = new PublicKey("FmTx5yi62Y3h1ATkxm8ujLNNCwYcc2LTmWRFFWN31Af");
+const MATCHER_PROGRAM_ID = new PublicKey("GTRgyTDfrMvBubALAqtHuQwT8tbGyXid7svXZKtWfC9k");
 const MATCHER_CTX_SIZE = 320;
 
 const TIERS = [
@@ -173,7 +173,7 @@ async function deployMarket(tier: typeof TIERS[0], mintPk: PublicKey, payerAta: 
   const [lpPda] = deriveLpPda(PROGRAM_ID, slabKp.publicKey, 0);
 
   // Create matcher context account (owned by matcher program).
-  // The new reference AMM matcher (FmTx5yi...) does NOT require an InitVamm
+  // The new reference AMM matcher (GTRgyTD...) does NOT require an InitVamm
   // instruction — it only has one instruction (Tag 0, the CPI matcher call).
   // The AMM reads LP config from the context account's user-data region
   // (bytes 64..320) and falls back to defaults (30 bps spread, 100% fill)

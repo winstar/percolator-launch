@@ -13,7 +13,7 @@
 | Percolator (Small) | `FxfD37s1AZTeWfFQps9Zpebi2dNQ9QSSDtfMKdbsfKrD` | 256 slots |
 | Percolator (Medium) | `FwfBKZXbYr4vTK23bMFkbgKq3npJ3MSDxEaKmq9Aj4Qn` | 1024 slots |
 | Percolator (Large) | `g9msRSV3sJmmE3r5Twn9HuBsxzuuRGTjKCVTKudm9in` | 4096 slots |
-| Matcher | `FmTx5yi62Y3h1ATkxm8ujLNNCwYcc2LTmWRFFWN31Af` | — |
+| Matcher | `GTRgyTDfrMvBubALAqtHuQwT8tbGyXid7svXZKtWfC9k` | — |
 
 ### Mainnet
 
