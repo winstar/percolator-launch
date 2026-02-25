@@ -122,9 +122,9 @@ async function main() {
   );
   await send(mintToTx, [payer], `Minted 1M tokens to ${payerAta.toBase58().slice(0, 12)}...`);
 
-  // 3. Create slab account (micro tier — cheapest)
+  // 3. Create slab account (small tier — smallest available)
   console.log("Step 3: Create slab");
-  const tier = SLAB_TIERS.micro;
+  const tier = SLAB_TIERS.small;
   const slabKp = Keypair.generate();
   const slabRent = await conn.getMinimumBalanceForRentExemption(tier.dataSize);
   console.log(`   Slab rent: ${slabRent / LAMPORTS_PER_SOL} SOL (${tier.label}, ${tier.dataSize} bytes)`);
