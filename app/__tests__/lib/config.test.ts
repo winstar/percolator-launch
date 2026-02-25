@@ -46,7 +46,8 @@ describe("Mainnet Configuration Validation", () => {
     
     const config = getConfig();
     expect(config.crankWallet).toBeTruthy();
-    expect(config.crankWallet).toHaveLength(44); // Base58 address length
+    expect(config.crankWallet.length).toBeGreaterThanOrEqual(32); // Base58 address: 32-44 chars
+    expect(config.crankWallet.length).toBeLessThanOrEqual(44);
   });
 
   it("should have valid devnet matcherProgramId", () => {
@@ -56,7 +57,8 @@ describe("Mainnet Configuration Validation", () => {
     
     const config = getConfig();
     expect(config.matcherProgramId).toBeTruthy();
-    expect(config.matcherProgramId).toHaveLength(44); // Base58 address length
+    expect(config.matcherProgramId.length).toBeGreaterThanOrEqual(32); // Base58 address: 32-44 chars
+    expect(config.matcherProgramId.length).toBeLessThanOrEqual(44);
   });
 });
 
