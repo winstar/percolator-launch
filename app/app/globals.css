@@ -507,6 +507,48 @@ input[type="range"]:focus-visible::-webkit-slider-thumb {
   to { transform: rotate(360deg); }
 }
 
+/* ─── Hero Refresh Animations (PERC-158) ─── */
+@keyframes market-card-float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-8px); }
+}
+
+.animate-market-card-float {
+  animation: market-card-float 4s ease-in-out infinite;
+  will-change: transform;
+}
+
+@keyframes hero-particle-rise {
+  0% { transform: translateY(0) translateX(0); opacity: 0; }
+  10% { opacity: var(--particle-opacity, 0.3); }
+  90% { opacity: var(--particle-opacity, 0.3); }
+  100% { transform: translateY(-100vh) translateX(var(--particle-drift, 20px)); opacity: 0; }
+}
+
+.hero-particle {
+  animation: hero-particle-rise var(--particle-duration, 10s) ease-in-out infinite;
+  animation-delay: var(--particle-delay, 0s);
+}
+
+@keyframes chip-float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-6px); }
+}
+
+@keyframes chip-float-reverse {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(6px); }
+}
+
+.hero-chip-float {
+  animation: chip-float 3.5s ease-in-out infinite;
+}
+
+.hero-chip-float-reverse {
+  animation: chip-float-reverse 3.5s ease-in-out infinite;
+  animation-delay: 1.5s;
+}
+
 /* ─── Reduced Motion ─── */
 @media (prefers-reduced-motion: reduce) {
   html {
