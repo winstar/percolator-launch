@@ -11,6 +11,7 @@ export default defineConfig({
       "test/errors.test.ts",
       "test/discovery.test.ts",
       "test/price-router.test.ts",
+      "src/solana/__tests__/stake.test.ts",
     ],
   },
 });

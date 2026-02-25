@@ -326,12 +326,12 @@ function encodeSetPythOracle(args) {
 }
 var PYTH_RECEIVER_PROGRAM_ID = "rec5EKMGg6MxZYaMdyBfgwp4d5rB9T1VQH5pJv5LtFJ";
 async function derivePythPriceUpdateAccount(feedId, shardId = 0) {
-  const { PublicKey: PublicKey10 } = await import("@solana/web3.js");
+  const { PublicKey: PublicKey11 } = await import("@solana/web3.js");
   const shardBuf = new Uint8Array(2);
   new DataView(shardBuf.buffer).setUint16(0, shardId, true);
-  const [pda] = PublicKey10.findProgramAddressSync(
+  const [pda] = PublicKey11.findProgramAddressSync(
     [shardBuf, feedId],
-    new PublicKey10(PYTH_RECEIVER_PROGRAM_ID)
+    new PublicKey11(PYTH_RECEIVER_PROGRAM_ID)
   );
   return pda.toBase58();
 }
@@ -1545,6 +1545,182 @@ function isStandardToken(tokenProgramId) {
   return tokenProgramId.equals(TOKEN_PROGRAM_ID3);
 }
 
+// src/solana/stake.ts
+import { PublicKey as PublicKey7, SystemProgram as SystemProgram2, SYSVAR_RENT_PUBKEY as SYSVAR_RENT_PUBKEY2, SYSVAR_CLOCK_PUBKEY as SYSVAR_CLOCK_PUBKEY2 } from "@solana/web3.js";
+import { TOKEN_PROGRAM_ID as TOKEN_PROGRAM_ID4 } from "@solana/spl-token";
+var STAKE_PROGRAM_ID = new PublicKey7(
+  "4mJ8CasWfJCGEjGNaJThNfFfUWJTfZLBwz6qmUGqxVMc"
+);
+var STAKE_IX = {
+  InitPool: 0,
+  Deposit: 1,
+  Withdraw: 2,
+  FlushToInsurance: 3,
+  UpdateConfig: 4,
+  TransferAdmin: 5,
+  AdminSetOracleAuthority: 6,
+  AdminSetRiskThreshold: 7,
+  AdminSetMaintenanceFee: 8,
+  AdminResolveMarket: 9,
+  AdminWithdrawInsurance: 10,
+  AdminSetInsurancePolicy: 11
+};
+function deriveStakePool(slab, programId = STAKE_PROGRAM_ID) {
+  return PublicKey7.findProgramAddressSync(
+    [Buffer.from("stake_pool"), slab.toBuffer()],
+    programId
+  );
+}
+function deriveStakeVaultAuth(pool, programId = STAKE_PROGRAM_ID) {
+  return PublicKey7.findProgramAddressSync(
+    [Buffer.from("vault_auth"), pool.toBuffer()],
+    programId
+  );
+}
+function deriveDepositPda(pool, user, programId = STAKE_PROGRAM_ID) {
+  return PublicKey7.findProgramAddressSync(
+    [Buffer.from("deposit"), pool.toBuffer(), user.toBuffer()],
+    programId
+  );
+}
+function u64Le(v) {
+  const buf = Buffer.alloc(8);
+  buf.writeBigUInt64LE(BigInt(v));
+  return buf;
+}
+function u128Le(v) {
+  const buf = Buffer.alloc(16);
+  const big = BigInt(v);
+  buf.writeBigUInt64LE(big & 0xFFFFFFFFFFFFFFFFn, 0);
+  buf.writeBigUInt64LE(big >> 64n, 8);
+  return buf;
+}
+function u16Le(v) {
+  const buf = Buffer.alloc(2);
+  buf.writeUInt16LE(v);
+  return buf;
+}
+function encodeStakeInitPool(cooldownSlots, depositCap) {
+  return Buffer.concat([
+    Buffer.from([STAKE_IX.InitPool]),
+    u64Le(cooldownSlots),
+    u64Le(depositCap)
+  ]);
+}
+function encodeStakeDeposit(amount) {
+  return Buffer.concat([Buffer.from([STAKE_IX.Deposit]), u64Le(amount)]);
+}
+function encodeStakeWithdraw(lpAmount) {
+  return Buffer.concat([Buffer.from([STAKE_IX.Withdraw]), u64Le(lpAmount)]);
+}
+function encodeStakeFlushToInsurance(amount) {
+  return Buffer.concat([Buffer.from([STAKE_IX.FlushToInsurance]), u64Le(amount)]);
+}
+function encodeStakeUpdateConfig(newCooldownSlots, newDepositCap) {
+  return Buffer.concat([
+    Buffer.from([STAKE_IX.UpdateConfig]),
+    Buffer.from([newCooldownSlots != null ? 1 : 0]),
+    u64Le(newCooldownSlots ?? 0n),
+    Buffer.from([newDepositCap != null ? 1 : 0]),
+    u64Le(newDepositCap ?? 0n)
+  ]);
+}
+function encodeStakeTransferAdmin() {
+  return Buffer.from([STAKE_IX.TransferAdmin]);
+}
+function encodeStakeAdminSetOracleAuthority(newAuthority) {
+  return Buffer.concat([
+    Buffer.from([STAKE_IX.AdminSetOracleAuthority]),
+    newAuthority.toBuffer()
+  ]);
+}
+function encodeStakeAdminSetRiskThreshold(newThreshold) {
+  return Buffer.concat([
+    Buffer.from([STAKE_IX.AdminSetRiskThreshold]),
+    u128Le(newThreshold)
+  ]);
+}
+function encodeStakeAdminSetMaintenanceFee(newFee) {
+  return Buffer.concat([
+    Buffer.from([STAKE_IX.AdminSetMaintenanceFee]),
+    u128Le(newFee)
+  ]);
+}
+function encodeStakeAdminResolveMarket() {
+  return Buffer.from([STAKE_IX.AdminResolveMarket]);
+}
+function encodeStakeAdminWithdrawInsurance(amount) {
+  return Buffer.concat([
+    Buffer.from([STAKE_IX.AdminWithdrawInsurance]),
+    u64Le(amount)
+  ]);
+}
+function encodeStakeAdminSetInsurancePolicy(authority, minWithdrawBase, maxWithdrawBps, cooldownSlots) {
+  return Buffer.concat([
+    Buffer.from([STAKE_IX.AdminSetInsurancePolicy]),
+    authority.toBuffer(),
+    u64Le(minWithdrawBase),
+    u16Le(maxWithdrawBps),
+    u64Le(cooldownSlots)
+  ]);
+}
+function initPoolAccounts(a) {
+  return [
+    { pubkey: a.admin, isSigner: true, isWritable: true },
+    { pubkey: a.slab, isSigner: false, isWritable: false },
+    { pubkey: a.pool, isSigner: false, isWritable: true },
+    { pubkey: a.lpMint, isSigner: false, isWritable: true },
+    { pubkey: a.vault, isSigner: false, isWritable: true },
+    { pubkey: a.vaultAuth, isSigner: false, isWritable: false },
+    { pubkey: a.collateralMint, isSigner: false, isWritable: false },
+    { pubkey: a.percolatorProgram, isSigner: false, isWritable: false },
+    { pubkey: TOKEN_PROGRAM_ID4, isSigner: false, isWritable: false },
+    { pubkey: SystemProgram2.programId, isSigner: false, isWritable: false },
+    { pubkey: SYSVAR_RENT_PUBKEY2, isSigner: false, isWritable: false }
+  ];
+}
+function depositAccounts(a) {
+  return [
+    { pubkey: a.user, isSigner: true, isWritable: false },
+    { pubkey: a.pool, isSigner: false, isWritable: true },
+    { pubkey: a.userCollateralAta, isSigner: false, isWritable: true },
+    { pubkey: a.vault, isSigner: false, isWritable: true },
+    { pubkey: a.lpMint, isSigner: false, isWritable: true },
+    { pubkey: a.userLpAta, isSigner: false, isWritable: true },
+    { pubkey: a.vaultAuth, isSigner: false, isWritable: false },
+    { pubkey: a.depositPda, isSigner: false, isWritable: true },
+    { pubkey: TOKEN_PROGRAM_ID4, isSigner: false, isWritable: false },
+    { pubkey: SYSVAR_CLOCK_PUBKEY2, isSigner: false, isWritable: false },
+    { pubkey: SystemProgram2.programId, isSigner: false, isWritable: false }
+  ];
+}
+function withdrawAccounts(a) {
+  return [
+    { pubkey: a.user, isSigner: true, isWritable: false },
+    { pubkey: a.pool, isSigner: false, isWritable: true },
+    { pubkey: a.userLpAta, isSigner: false, isWritable: true },
+    { pubkey: a.lpMint, isSigner: false, isWritable: true },
+    { pubkey: a.vault, isSigner: false, isWritable: true },
+    { pubkey: a.userCollateralAta, isSigner: false, isWritable: true },
+    { pubkey: a.vaultAuth, isSigner: false, isWritable: false },
+    { pubkey: a.depositPda, isSigner: false, isWritable: true },
+    { pubkey: TOKEN_PROGRAM_ID4, isSigner: false, isWritable: false },
+    { pubkey: SYSVAR_CLOCK_PUBKEY2, isSigner: false, isWritable: false }
+  ];
+}
+function flushToInsuranceAccounts(a) {
+  return [
+    { pubkey: a.caller, isSigner: true, isWritable: false },
+    { pubkey: a.pool, isSigner: false, isWritable: true },
+    { pubkey: a.vault, isSigner: false, isWritable: true },
+    { pubkey: a.vaultAuth, isSigner: false, isWritable: false },
+    { pubkey: a.slab, isSigner: false, isWritable: true },
+    { pubkey: a.wrapperVault, isSigner: false, isWritable: true },
+    { pubkey: a.percolatorProgram, isSigner: false, isWritable: false },
+    { pubkey: TOKEN_PROGRAM_ID4, isSigner: false, isWritable: false }
+  ];
+}
+
 // src/runtime/tx.ts
 import {
   TransactionInstruction,
@@ -1731,7 +1907,7 @@ function computeMaxLeverage(initialMarginBps) {
 }
 
 // src/validation.ts
-import { PublicKey as PublicKey8 } from "@solana/web3.js";
+import { PublicKey as PublicKey9 } from "@solana/web3.js";
 var U16_MAX = 65535;
 var U64_MAX = BigInt("18446744073709551615");
 var I64_MIN = BigInt("-9223372036854775808");
@@ -1748,7 +1924,7 @@ var ValidationError = class extends Error {
 };
 function validatePublicKey(value, field) {
   try {
-    return new PublicKey8(value);
+    return new PublicKey9(value);
   } catch {
     throw new ValidationError(
       field,
@@ -2048,7 +2224,7 @@ async function resolvePrice(mint, signal) {
 }
 
 // src/config/program-ids.ts
-import { PublicKey as PublicKey9 } from "@solana/web3.js";
+import { PublicKey as PublicKey10 } from "@solana/web3.js";
 var PROGRAM_IDS = {
   devnet: {
     percolator: "FxfD37s1AZTeWfFQps9Zpebi2dNQ9QSSDtfMKdbsfKrD",
@@ -2062,22 +2238,22 @@ var PROGRAM_IDS = {
 };
 function getProgramId(network) {
   if (process.env.PROGRAM_ID) {
-    return new PublicKey9(process.env.PROGRAM_ID);
+    return new PublicKey10(process.env.PROGRAM_ID);
   }
   const targetNetwork = network ?? process.env.NETWORK ?? "devnet";
   const programId = PROGRAM_IDS[targetNetwork].percolator;
-  return new PublicKey9(programId);
+  return new PublicKey10(programId);
 }
 function getMatcherProgramId(network) {
   if (process.env.MATCHER_PROGRAM_ID) {
-    return new PublicKey9(process.env.MATCHER_PROGRAM_ID);
+    return new PublicKey10(process.env.MATCHER_PROGRAM_ID);
   }
   const targetNetwork = network ?? process.env.NETWORK ?? "devnet";
   const programId = PROGRAM_IDS[targetNetwork].matcher;
   if (!programId) {
     throw new Error(`Matcher program not deployed on ${targetNetwork}`);
   }
-  return new PublicKey9(programId);
+  return new PublicKey10(programId);
 }
 function getCurrentNetwork() {
   const network = process.env.NETWORK?.toLowerCase();
@@ -2126,6 +2302,8 @@ export {
   PYTH_SOLANA_FEEDS,
   RAYDIUM_CLMM_PROGRAM_ID,
   SLAB_TIERS,
+  STAKE_IX,
+  STAKE_PROGRAM_ID,
   TOKEN_2022_PROGRAM_ID,
   VAMM_MAGIC,
   ValidationError,
@@ -2146,10 +2324,14 @@ export {
   computeVammQuote,
   concatBytes,
   decodeError,
+  depositAccounts,
+  deriveDepositPda,
   deriveInsuranceLpMint,
   deriveLpPda,
   derivePythPriceUpdateAccount,
   derivePythPushOraclePDA,
+  deriveStakePool,
+  deriveStakeVaultAuth,
   deriveVaultAuthority,
   detectDexType,
   detectLayout,
@@ -2184,6 +2366,18 @@ export {
   encodeSetOraclePriceCap,
   encodeSetPythOracle,
   encodeSetRiskThreshold,
+  encodeStakeAdminResolveMarket,
+  encodeStakeAdminSetInsurancePolicy,
+  encodeStakeAdminSetMaintenanceFee,
+  encodeStakeAdminSetOracleAuthority,
+  encodeStakeAdminSetRiskThreshold,
+  encodeStakeAdminWithdrawInsurance,
+  encodeStakeDeposit,
+  encodeStakeFlushToInsurance,
+  encodeStakeInitPool,
+  encodeStakeTransferAdmin,
+  encodeStakeUpdateConfig,
+  encodeStakeWithdraw,
   encodeTopUpInsurance,
   encodeTradeCpi,
   encodeTradeNoCpi,
@@ -2198,6 +2392,7 @@ export {
   encodeWithdrawInsuranceLP,
   fetchSlab,
   fetchTokenAccount,
+  flushToInsuranceAccounts,
   formatResult,
   getAta,
   getAtaSync,
@@ -2206,6 +2401,7 @@ export {
   getErrorName,
   getMatcherProgramId,
   getProgramId,
+  initPoolAccounts,
   isAccountUsed,
   isStandardToken,
   isToken2022,
@@ -2232,6 +2428,7 @@ export {
   validatePublicKey,
   validateU128,
   validateU16,
-  validateU64
+  validateU64,
+  withdrawAccounts
 };
 //# sourceMappingURL=index.js.map
