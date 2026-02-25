@@ -44,7 +44,7 @@ describe("config", () => {
       "FwfBKZXbYr4vTK23bMFkbgKq3npJ3MSDxEaKmq9Aj4Qn",
       "g9msRSV3sJmmE3r5Twn9HuBsxzuuRGTjKCVTKudm9in",
     ]);
-    expect(config.crankKeypair).toBe("");
+    // crankKeypair removed from config — use getSealedSigner() from signer.ts
     expect(config.supabaseUrl).toBe("");
     expect(config.supabaseKey).toBe("");
     expect(config.supabaseServiceRoleKey).toBe("");
@@ -81,7 +81,7 @@ describe("config", () => {
     expect(config.programId).toBe("CustomProgramId111111111111111111111111111");
     expect(config.allProgramIds).toEqual(["Prog1", "Prog2", "Prog3"]);
     expect(config.heliusApiKey).toBe("test-helius-key");
-    expect(config.crankKeypair).toBe("test-keypair");
+    // crankKeypair removed from config — use getSealedSigner() from signer.ts
     expect(config.supabaseUrl).toBe("https://test.supabase.co");
     expect(config.supabaseKey).toBe("test-supabase-key");
     expect(config.supabaseServiceRoleKey).toBe("test-service-role-key");

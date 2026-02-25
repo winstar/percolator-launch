@@ -13,7 +13,7 @@ initSentry("keeper");
 
 const logger = createLogger("keeper");
 
-if (!config.crankKeypair) {
+if (!process.env.CRANK_KEYPAIR) {
   throw new Error("CRANK_KEYPAIR must be set for keeper service");
 }
 

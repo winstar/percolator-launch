@@ -7,7 +7,12 @@
  */
 
 import { Keypair, Transaction, VersionedTransaction } from "@solana/web3.js";
-import bs58 from "bs58";
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+import _bs58 from "bs58";
+import nacl from "tweetnacl";
+
+// bs58 v6 types vary across module-resolution strategies; cast to avoid CI breakage
+const bs58: { encode(buf: Uint8Array): string; decode(str: string): Uint8Array } = _bs58 as any;
 
 /**
  * Sealed signer that never exposes the private key.
@@ -47,7 +52,7 @@ export function loadSealedKeypair(env: NodeJS.ProcessEnv): SealedSigner {
   let keypair: Keypair;
   try {
     // Try base58 format
-    const decoded = bs58.default.decode(rawKey);
+    const decoded = bs58.decode(rawKey);
     
     // Validate length (Solana keypair must be 64 bytes)
     if (decoded.length !== 64) {
@@ -116,7 +121,7 @@ function createSealedSigner(keypair: Keypair, auditEnabled: boolean): SealedSign
         );
       }
 
-      return keypair.signMessage(message);
+      return nacl.sign.detached(message, keypair.secretKey);
     },
   };
 }
