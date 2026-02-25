@@ -183,7 +183,7 @@ export class CrankService {
       }
 
       const connection = getConnection();
-      const keypair = loadKeypair(config.crankKeypair);
+      const keypair = loadKeypair(process.env.CRANK_KEYPAIR!);
       const programId = market.programId;
 
       const data = encodeKeeperCrank({ callerIdx: 65535, allowPanic: false });

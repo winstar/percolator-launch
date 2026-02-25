@@ -288,7 +288,7 @@ export class OracleService {
 
     try {
       const connection = getConnection();
-      const keypair = loadKeypair(config.crankKeypair);
+      const keypair = loadKeypair(process.env.CRANK_KEYPAIR!);
       const slabPubkey = new PublicKey(slabAddress);
       const programId = marketProgramId ?? new PublicKey(config.programId);
 
