@@ -23,6 +23,7 @@ const navLinks = [
   { href: "/agents", label: "Agents" },
   { href: "/report-bug", label: "Bugs" },
   { href: "/join", label: "Join Us" },
+  { href: "/developers", label: "Developers" },
 ];
 
 export const Header: FC = () => {
