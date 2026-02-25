@@ -39,6 +39,13 @@ function assertBuf(actual: Uint8Array, expected: number[], msg: string): void {
   }
 }
 
+function decI128Le(data: Uint8Array, offset: number): bigint {
+  let value = 0n;
+  for (let i = 0; i < 16; i++) value |= BigInt(data[offset + i]) << BigInt(i * 8);
+  if (value >= (1n << 127n)) value -= (1n << 128n);
+  return value;
+}
+
 console.log("Testing encode functions...\n");
 
 // Test encU8
@@ -359,12 +366,14 @@ console.log("\nTesting instruction encoders...\n");
 }
 
 // ── TradeCpiV2 ABI tests (PERC-164) ──
+const TRADE_CPI_V2_TAG = 35;
+assert(IX_TAG.TradeCpiV2 === TRADE_CPI_V2_TAG, "TradeCpiV2 IX_TAG parity");
 
 // Test TradeCpiV2 encoding (22 bytes: tag + u16 + u16 + i128 + u8)
 {
   const data = encodeTradeCpiV2({ lpIdx: 2, userIdx: 3, size: "1000000", bump: 254 });
   assert(data.length === 22, `TradeCpiV2 length: expected 22, got ${data.length}`);
-  assert(data[0] === 35, "TradeCpiV2 tag byte (35)");
+  assert(data[0] === TRADE_CPI_V2_TAG, "TradeCpiV2 tag byte (35)");
   assertBuf(data.subarray(1, 3), [2, 0], "TradeCpiV2 lpIdx");
   assertBuf(data.subarray(3, 5), [3, 0], "TradeCpiV2 userIdx");
   // i128 LE of 1000000 = 0x0F4240
@@ -381,7 +390,7 @@ console.log("\nTesting instruction encoders...\n");
 {
   const data = encodeTradeCpiV2({ lpIdx: 0, userIdx: 1, size: "-500", bump: 128 });
   assert(data.length === 22, "TradeCpiV2 negative length");
-  assert(data[0] === 35, "TradeCpiV2 negative tag");
+  assert(data[0] === TRADE_CPI_V2_TAG, "TradeCpiV2 negative tag");
   // i128 LE of -500
   assertBuf(
     data.subarray(5, 21),
@@ -433,17 +442,9 @@ console.log("\nTesting instruction encoders...\n");
   const userIdx = data[3] | (data[4] << 8);
   const bump = data[21];
 
-  // Decode i128 LE
-  let sizeVal = 0n;
-  for (let i = 0; i < 16; i++) {
-    sizeVal |= BigInt(data[5 + i]) << BigInt(i * 8);
-  }
-  // Sign-extend from 128 bits
-  if (sizeVal >= (1n << 127n)) {
-    sizeVal -= (1n << 128n);
-  }
+  const sizeVal = decI128Le(data, 5);
 
-  assert(tag === 35, "round-trip tag");
+  assert(tag === TRADE_CPI_V2_TAG, "round-trip tag");
   assert(lpIdx === 42, "round-trip lpIdx");
   assert(userIdx === 99, "round-trip userIdx");
   assert(sizeVal === -123456789n, `round-trip size: expected -123456789, got ${sizeVal}`);
@@ -459,11 +460,7 @@ console.log("\nTesting instruction encoders...\n");
   assert(data.length === 22, "TradeCpiV2 large-leverage length");
 
   // Decode back
-  let decoded = 0n;
-  for (let i = 0; i < 16; i++) {
-    decoded |= BigInt(data[5 + i]) << BigInt(i * 8);
-  }
-  if (decoded >= (1n << 127n)) decoded -= (1n << 128n);
+  const decoded = decI128Le(data, 5);
   assert(decoded === largeSize, `TradeCpiV2 large size round-trip: expected ${largeSize}, got ${decoded}`);
   console.log("✓ encodeTradeCpiV2 (boundary leverage)");
 }
