@@ -79,6 +79,13 @@ export const Footer: FC = () => {
             </a>
             <span className="h-3 w-px bg-[var(--border)]" />
             <Link
+              href="/developers"
+              className="flex items-center gap-1 transition-colors hover:text-[var(--accent)]"
+            >
+              developers
+            </Link>
+            <span className="h-3 w-px bg-[var(--border)]" />
+            <Link
               href="/report-bug"
               className="flex items-center gap-1 transition-colors hover:text-[var(--accent)]"
             >
