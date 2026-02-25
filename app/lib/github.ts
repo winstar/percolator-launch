@@ -90,7 +90,7 @@ export async function getAllRepos(): Promise<RepoData[]> {
       // Merge fallback description when GitHub returns null (e.g. forks)
       return {
         ...live,
-        description: live.description ?? REPO_DESCRIPTIONS[name] ?? null,
+        description: live.description || REPO_DESCRIPTIONS[name] || null,
       };
     }
 

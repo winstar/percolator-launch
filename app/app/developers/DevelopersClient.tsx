@@ -22,7 +22,7 @@ export const DevelopersClient: FC<Props> = ({ repos, isLive }) => {
         }}
       />
 
-      <div className="mx-auto max-w-7xl px-6 py-16 sm:py-24">
+      <div className="mx-auto max-w-7xl px-6 py-10 sm:py-16">
         {/* Hero */}
         <header className="mb-12 max-w-2xl">
           <span className="mb-4 inline-block rounded-full border border-white/[0.10] px-3 py-1 font-mono text-[11px] uppercase tracking-[0.2em] text-[var(--text-muted)]">

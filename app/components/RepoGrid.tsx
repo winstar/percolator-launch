@@ -39,7 +39,7 @@ export const RepoGrid: FC<Props> = ({ repos, isLive }) => {
             className={[
               "rounded-full border px-4 py-1.5 font-mono text-[13px] transition-all duration-150",
               active === f
-                ? "border-[rgba(124,58,237,0.40)] bg-[rgba(124,58,237,0.15)] text-[var(--text)]"
+                ? "border-[rgb(124,58,237)] bg-[rgba(124,58,237,0.20)] text-[var(--text)] shadow-[0_0_8px_rgba(124,58,237,0.15)]"
                 : "border-white/[0.08] bg-white/[0.04] text-[var(--text-secondary)] hover:border-white/[0.16] hover:text-[var(--text)]",
             ].join(" ")}
           >

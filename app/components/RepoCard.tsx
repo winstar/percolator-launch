@@ -14,23 +14,23 @@ export const RepoCard: FC<Props> = ({ repo }) => {
       href={repo.html_url}
       target="_blank"
       rel="noopener noreferrer"
-      className="group flex flex-col rounded-xl border border-white/[0.06] bg-[rgba(17,17,24,0.85)] p-6 backdrop-blur-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-[rgba(124,58,237,0.30)] hover:shadow-[0_0_24px_rgba(124,58,237,0.08)]"
+      className="group flex flex-col rounded-xl border border-white/[0.10] bg-[rgba(17,17,24,0.85)] p-6 backdrop-blur-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-[rgba(124,58,237,0.30)] hover:shadow-[0_0_24px_rgba(124,58,237,0.08)]"
     >
       {/* Row 1: Language + Stars */}
       <div className="mb-4 flex items-center justify-between">
         <RepoLanguageBadge language={repo.language} />
-        {repo.stargazers_count > 0 && (
-          <span className="flex items-center gap-1 font-mono text-[12px] text-[var(--text-muted)]">
-            <svg
-              className="h-3.5 w-3.5"
-              fill="currentColor"
-              viewBox="0 0 16 16"
-            >
-              <path d="M8 .25a.75.75 0 01.673.418l1.882 3.815 4.21.612a.75.75 0 01.416 1.279l-3.046 2.97.719 4.192a.75.75 0 01-1.088.791L8 12.347l-3.766 1.98a.75.75 0 01-1.088-.79l.72-4.194L.818 6.374a.75.75 0 01.416-1.28l4.21-.611L7.327.668A.75.75 0 018 .25z" />
-            </svg>
-            {repo.stargazers_count}
-          </span>
-        )}
+        <span className="flex items-center gap-1 font-mono text-[12px] text-[var(--text-muted)]">
+          <svg
+            className="h-3.5 w-3.5"
+            fill={repo.stargazers_count > 0 ? "currentColor" : "none"}
+            stroke="currentColor"
+            strokeWidth={repo.stargazers_count > 0 ? 0 : 1.5}
+            viewBox="0 0 16 16"
+          >
+            <path d="M8 .25a.75.75 0 01.673.418l1.882 3.815 4.21.612a.75.75 0 01.416 1.279l-3.046 2.97.719 4.192a.75.75 0 01-1.088.791L8 12.347l-3.766 1.98a.75.75 0 01-1.088-.79l.72-4.194L.818 6.374a.75.75 0 01.416-1.28l4.21-.611L7.327.668A.75.75 0 018 .25z" />
+          </svg>
+          {repo.stargazers_count}
+        </span>
       </div>
 
       {/* Repo name */}
@@ -43,7 +43,7 @@ export const RepoCard: FC<Props> = ({ repo }) => {
 
       {/* Description */}
       <p className="mb-5 line-clamp-2 text-sm leading-relaxed text-[var(--text-secondary)]">
-        {repo.description ?? (
+        {repo.description || (
           <span className="text-[var(--text-muted)]">No description</span>
         )}
       </p>
@@ -75,7 +75,7 @@ export const RepoCard: FC<Props> = ({ repo }) => {
             </>
           )}
         </div>
-        <span className="text-[var(--text-muted)] transition-colors group-hover:text-[var(--text)]">
+        <span className="text-[var(--text-muted)] transition-colors group-hover:text-[rgb(124,58,237)]">
           →
         </span>
       </div>
