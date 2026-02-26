@@ -28,7 +28,7 @@ export function getRpcEndpoint(): string {
   const explicit = process.env.NEXT_PUBLIC_HELIUS_RPC_URL?.trim();
   if (explicit) return explicit;
 
-  const apiKey = process.env.HELIUS_API_KEY ?? process.env.NEXT_PUBLIC_HELIUS_API_KEY ?? "";
+  const apiKey = process.env.HELIUS_API_KEY ?? "";
   if (apiKey) {
     const net = process.env.NEXT_PUBLIC_DEFAULT_NETWORK?.trim();
     const network = net === "mainnet" ? "mainnet" : "devnet";
@@ -47,7 +47,7 @@ export function getRpcEndpoint(): string {
  * Returns undefined if no Helius key is configured (disables WS subscriptions).
  */
 export function getWsEndpoint(): string | undefined {
-  const apiKey = process.env.NEXT_PUBLIC_HELIUS_API_KEY ?? "";
+  const apiKey = process.env.NEXT_PUBLIC_HELIUS_WS_API_KEY ?? process.env.NEXT_PUBLIC_HELIUS_API_KEY ?? "";
   if (!apiKey) return undefined;
 
   const net = getNetwork();

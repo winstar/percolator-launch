@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { getRpcEndpoint, getConfig } from "@/lib/config";
+import { getRpcEndpoint, getConfig, getWsEndpoint } from "@/lib/config";
 
 const originalEnv = { ...process.env };
 
@@ -84,6 +84,23 @@ describe("getRpcEndpoint", () => {
     expect(getRpcEndpoint()).toBe("https://devnet.helius-rpc.com/?api-key=abc");
   });
 
+  it("uses HELIUS_API_KEY on the server when explicit RPC URL is not set", () => {
+    clearWindow();
+    delete process.env.NEXT_PUBLIC_HELIUS_RPC_URL;
+    process.env.HELIUS_API_KEY = "server-key";
+    process.env.NEXT_PUBLIC_DEFAULT_NETWORK = "devnet";
+    expect(getRpcEndpoint()).toBe("https://devnet.helius-rpc.com/?api-key=server-key");
+  });
+
+  it("does not use NEXT_PUBLIC_HELIUS_API_KEY for server RPC fallback", () => {
+    clearWindow();
+    delete process.env.NEXT_PUBLIC_HELIUS_RPC_URL;
+    delete process.env.HELIUS_API_KEY;
+    process.env.NEXT_PUBLIC_HELIUS_API_KEY = "public-key";
+    delete process.env.NEXT_PUBLIC_SOLANA_RPC_URL;
+    expect(getRpcEndpoint()).toBe("https://api.devnet.solana.com");
+  });
+
   it("falls back to public devnet RPC when no Helius config provided", () => {
     clearWindow();
     delete process.env.NEXT_PUBLIC_HELIUS_RPC_URL;
@@ -91,5 +108,40 @@ describe("getRpcEndpoint", () => {
     delete process.env.NEXT_PUBLIC_HELIUS_API_KEY;
     delete process.env.NEXT_PUBLIC_SOLANA_RPC_URL;
     expect(getRpcEndpoint()).toBe("https://api.devnet.solana.com");
+  });
+});
+
+describe("getWsEndpoint", () => {
+  beforeEach(() => {
+    process.env = { ...originalEnv };
+  });
+
+  afterEach(() => {
+    process.env = { ...originalEnv };
+    vi.unstubAllGlobals();
+    clearWindow();
+  });
+
+  it("prefers NEXT_PUBLIC_HELIUS_WS_API_KEY when present", () => {
+    clearWindow();
+    process.env.NEXT_PUBLIC_DEFAULT_NETWORK = "devnet";
+    process.env.NEXT_PUBLIC_HELIUS_WS_API_KEY = "ws-key";
+    process.env.NEXT_PUBLIC_HELIUS_API_KEY = "legacy-key";
+    expect(getWsEndpoint()).toBe("wss://devnet.helius-rpc.com/?api-key=ws-key");
+  });
+
+  it("falls back to NEXT_PUBLIC_HELIUS_API_KEY for backward compatibility", () => {
+    clearWindow();
+    process.env.NEXT_PUBLIC_DEFAULT_NETWORK = "mainnet";
+    delete process.env.NEXT_PUBLIC_HELIUS_WS_API_KEY;
+    process.env.NEXT_PUBLIC_HELIUS_API_KEY = "legacy-key";
+    expect(getWsEndpoint()).toBe("wss://mainnet.helius-rpc.com/?api-key=legacy-key");
+  });
+
+  it("returns undefined when no public WS key is configured", () => {
+    clearWindow();
+    delete process.env.NEXT_PUBLIC_HELIUS_WS_API_KEY;
+    delete process.env.NEXT_PUBLIC_HELIUS_API_KEY;
+    expect(getWsEndpoint()).toBeUndefined();
   });
 });
