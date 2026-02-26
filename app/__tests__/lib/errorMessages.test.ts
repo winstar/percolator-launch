@@ -41,7 +41,7 @@ describe("humanizeError", () => {
 
   it("handles insufficient funds", () => {
     expect(humanizeError("insufficient funds for rent")).toContain(
-      "Insufficient token balance"
+      "Insufficient balance for transaction fees"
     );
   });
 

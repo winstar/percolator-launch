@@ -315,6 +315,12 @@ async function pollConfirmation(
  * which can falsely report "block height exceeded" when the tx
  * actually landed on-chain.
  */
+/**
+ * Estimate the total SOL cost of a transaction (rent-exempt minimums + fees).
+ * Returns the approximate lamports needed beyond what's already in the accounts.
+ */
+const MIN_SOL_BALANCE_LAMPORTS = 10_000_000; // 0.01 SOL safety buffer
+
 export async function sendTx({
   connection,
   wallet,
