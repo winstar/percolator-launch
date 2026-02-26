@@ -502,11 +502,11 @@ function buildTradeIx(
     userIdx: trader.idx,
     size,
   });
+  // PERC-199: clock sysvar removed — program uses Clock::get() syscall
   const tradeKeys = buildAccountMetas(ACCOUNTS_TRADE_CPI, [
     trader.keypair.publicKey,
     market.lpOwner.publicKey,
     market.slab.publicKey,
-    WELL_KNOWN.clock,
     market.slab.publicKey, // oracle = slab for admin oracle
     MATCHER_PROGRAM_ID,
     market.matcherCtxKp.publicKey,

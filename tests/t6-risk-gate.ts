@@ -337,7 +337,7 @@ async function main() {
     });
     const tradeKeys = buildAccountMetas(ACCOUNTS_TRADE_CPI, [
       trader.publicKey, lpOwner.publicKey, slab.publicKey,
-      WELL_KNOWN.clock, slab.publicKey,
+      slab.publicKey,
       MATCHER_PROGRAM_ID, matcherCtxKp.publicKey, lpPda,
     ]);
 
@@ -376,7 +376,7 @@ async function main() {
     });
     const tradeKeys = buildAccountMetas(ACCOUNTS_TRADE_CPI, [
       trader.publicKey, lpOwner.publicKey, slab.publicKey,
-      WELL_KNOWN.clock, slab.publicKey,
+      slab.publicKey,
       MATCHER_PROGRAM_ID, matcherCtxKp.publicKey, lpPda,
     ]);
 
@@ -412,7 +412,7 @@ async function main() {
     });
     const tradeKeys = buildAccountMetas(ACCOUNTS_TRADE_CPI, [
       trader.publicKey, lpOwner.publicKey, slab.publicKey,
-      WELL_KNOWN.clock, slab.publicKey,
+      slab.publicKey,
       MATCHER_PROGRAM_ID, matcherCtxKp.publicKey, lpPda,
     ]);
 
@@ -453,7 +453,7 @@ async function main() {
     });
     const tradeKeys = buildAccountMetas(ACCOUNTS_TRADE_CPI, [
       trader.publicKey, lpOwner.publicKey, slab.publicKey,
-      WELL_KNOWN.clock, slab.publicKey,
+      slab.publicKey,
       MATCHER_PROGRAM_ID, matcherCtxKp.publicKey, lpPda,
     ]);
 
@@ -481,7 +481,7 @@ async function main() {
       const tradeData = encodeTradeCpi({ lpIdx, userIdx: traderIdx, size });
       const tradeKeys = buildAccountMetas(ACCOUNTS_TRADE_CPI, [
         trader.publicKey, lpOwner.publicKey, slab.publicKey,
-        WELL_KNOWN.clock, slab.publicKey,
+        slab.publicKey,
         MATCHER_PROGRAM_ID, matcherCtxKp.publicKey, lpPda,
       ]);
       const tx = new Transaction();

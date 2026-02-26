@@ -232,14 +232,13 @@ export function useVAMM(slabAddress: string) {
         });
         instructions.push(crankIx);
 
-        // TradeCpi instruction
+        // TradeCpi instruction (PERC-199: clock sysvar removed — uses Clock::get() syscall)
         const tradeIx = buildIx({
           programId,
           keys: buildAccountMetas(ACCOUNTS_TRADE_CPI, [
             wallet.publicKey,
             lpAccount.account.owner,
             slabPk,
-            WELL_KNOWN.clock,
             oracleAccount,
             lpAccount.account.matcherProgram,
             lpAccount.account.matcherContext,

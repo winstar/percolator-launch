@@ -315,11 +315,11 @@ async function main() {
   console.log("Step 11: TradeCpi (open long)");
   const lpAccount = { owner: payer.publicKey, matcherProgram: MATCHER_PROGRAM_ID, matcherContext: matcherCtxKp.publicKey };
   const tradeData = encodeTradeCpi({ lpIdx: 0, userIdx: 1, size: (100_000_000n).toString() }); // 0.1 token notional
+  // PERC-199: clock sysvar removed from TradeCpi — program uses Clock::get() syscall
   const tradeKeys = buildAccountMetas(ACCOUNTS_TRADE_CPI, [
     payer.publicKey,
     lpAccount.owner,
     slabKp.publicKey,
-    WELL_KNOWN.clock,
     slabKp.publicKey, // oracle = slab for hyperp
     lpAccount.matcherProgram,
     lpAccount.matcherContext,

@@ -352,7 +352,6 @@ async function main() {
       trader.publicKey,      // user (signer)
       lpOwner.publicKey,     // lpOwner (not signer)
       slab.publicKey,        // slab
-      WELL_KNOWN.clock,      // clock
       slab.publicKey,        // oracle (admin oracle = slab)
       MATCHER_PROGRAM_ID,    // matcherProg
       matcherCtxKp.publicKey, // matcherCtx

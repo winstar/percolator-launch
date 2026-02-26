@@ -516,11 +516,11 @@ export class TestHarness {
       userIdx: user.accountIndex,
       size,
     });
+    // PERC-199: clock sysvar removed — program uses Clock::get() syscall
     const keys = buildAccountMetas(ACCOUNTS_TRADE_NOCPI, [
       user.keypair.publicKey,
       lp.keypair.publicKey,
       ctx.slab.publicKey,
-      WELL_KNOWN.clock,
       ctx.slab.publicKey, // oracle = slab for admin oracle
     ]);
 
