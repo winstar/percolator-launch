@@ -4,6 +4,7 @@ import { config, createLogger, initSentry, captureException, sendInfoAlert, crea
 import { OracleService } from "./services/oracle.js";
 import { CrankService } from "./services/crank.js";
 import { LiquidationService } from "./services/liquidation.js";
+import { validateKeeperEnvGuards } from "./env-guards.js";
 
 // Monitoring — alerts to Discord on threshold breaches
 export const monitors = createServiceMonitors("Keeper");
@@ -16,6 +17,8 @@ const logger = createLogger("keeper");
 if (!process.env.CRANK_KEYPAIR) {
   throw new Error("CRANK_KEYPAIR must be set for keeper service");
 }
+
+validateKeeperEnvGuards();
 
 logger.info("Keeper service starting");
 
