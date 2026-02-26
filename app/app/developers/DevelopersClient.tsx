@@ -89,10 +89,8 @@ export const DevelopersClient: FC<Props> = ({
           </a>
         </header>
 
-        {/* ★ Contributor Stats Bar */}
-        {contributorStats && (
-          <ContributorStatsBar stats={contributorStats} />
-        )}
+        {/* ★ Contributor Stats Bar — always render; shows — values when API returns null */}
+        <ContributorStatsBar stats={contributorStats} />
 
         {/* Repo Grid (with CI statuses for health badges) */}
         <RepoGrid repos={repos} isLive={isLive} ciStatuses={ciStatuses} />
