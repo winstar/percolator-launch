@@ -850,7 +850,6 @@ async function main() {
       userKp.publicKey,
       payer.publicKey,
       slab.publicKey,
-      WELL_KNOWN.clock,
       slab.publicKey,
     ]);
     const tradeTx = new Transaction().add(
@@ -901,7 +900,6 @@ async function main() {
       userKp.publicKey,
       payer.publicKey,
       slab.publicKey,
-      WELL_KNOWN.clock,
       slab.publicKey,
     ]);
     const tradeTx = new Transaction().add(

@@ -115,8 +115,8 @@ describe("Account orderings", () => {
     expect(ACCOUNTS_KEEPER_CRANK).toHaveLength(4);
   });
 
-  it("ACCOUNTS_TRADE_NOCPI has 5 accounts", () => {
-    expect(ACCOUNTS_TRADE_NOCPI).toHaveLength(5);
+  it("ACCOUNTS_TRADE_NOCPI has 4 accounts (PERC-199: clock removed)", () => {
+    expect(ACCOUNTS_TRADE_NOCPI).toHaveLength(4);
   });
 
   it("ACCOUNTS_LIQUIDATE_AT_ORACLE has 4 accounts", () => {
@@ -131,8 +131,8 @@ describe("Account orderings", () => {
     expect(ACCOUNTS_TOPUP_INSURANCE).toHaveLength(5);
   });
 
-  it("ACCOUNTS_TRADE_CPI has 8 accounts", () => {
-    expect(ACCOUNTS_TRADE_CPI).toHaveLength(8);
+  it("ACCOUNTS_TRADE_CPI has 7 accounts (PERC-199: clock removed)", () => {
+    expect(ACCOUNTS_TRADE_CPI).toHaveLength(7);
   });
 
   it("ACCOUNTS_SET_RISK_THRESHOLD has 2 accounts", () => {

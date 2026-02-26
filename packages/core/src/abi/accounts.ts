@@ -95,13 +95,12 @@ export const ACCOUNTS_KEEPER_CRANK: readonly AccountSpec[] = [
 ] as const;
 
 /**
- * TradeNoCpi: 5 accounts
+ * TradeNoCpi: 4 accounts (PERC-199: clock sysvar removed — uses Clock::get() syscall)
  */
 export const ACCOUNTS_TRADE_NOCPI: readonly AccountSpec[] = [
   { name: "user", signer: true, writable: true },
   { name: "lp", signer: true, writable: true },
   { name: "slab", signer: false, writable: true },
-  { name: "clock", signer: false, writable: false },
   { name: "oracle", signer: false, writable: false },
 ] as const;
 
@@ -142,13 +141,12 @@ export const ACCOUNTS_TOPUP_INSURANCE: readonly AccountSpec[] = [
 ] as const;
 
 /**
- * TradeCpi: 8 accounts
+ * TradeCpi: 7 accounts (PERC-199: clock sysvar removed — uses Clock::get() syscall)
  */
 export const ACCOUNTS_TRADE_CPI: readonly AccountSpec[] = [
   { name: "user", signer: true, writable: true },
   { name: "lpOwner", signer: false, writable: false },  // LP delegated to matcher - no signature needed
   { name: "slab", signer: false, writable: true },
-  { name: "clock", signer: false, writable: false },
   { name: "oracle", signer: false, writable: false },
   { name: "matcherProg", signer: false, writable: false },
   { name: "matcherCtx", signer: false, writable: true },

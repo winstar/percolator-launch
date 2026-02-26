@@ -240,7 +240,6 @@ async function main() {
     DEPLOYER_KP.publicKey,
     lpAccount.account.owner,
     slabKeypair.publicKey,
-    WELL_KNOWN.clock,
     slabKeypair.publicKey, // oracle = slab for admin oracle
     lpAccount.account.matcherProgram,
     lpAccount.account.matcherContext,

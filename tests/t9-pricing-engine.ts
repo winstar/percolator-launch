@@ -598,7 +598,6 @@ async function main() {
       userKp.publicKey,
       payer.publicKey, // LP owner
       slab.publicKey,
-      WELL_KNOWN.clock,
       slab.publicKey, // oracle = slab in admin mode
     ]);
     const tradeTx = new Transaction().add(

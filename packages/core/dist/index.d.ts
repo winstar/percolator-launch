@@ -490,7 +490,7 @@ declare const ACCOUNTS_WITHDRAW_COLLATERAL: readonly AccountSpec[];
  */
 declare const ACCOUNTS_KEEPER_CRANK: readonly AccountSpec[];
 /**
- * TradeNoCpi: 5 accounts
+ * TradeNoCpi: 4 accounts (PERC-199: clock sysvar removed — uses Clock::get() syscall)
  */
 declare const ACCOUNTS_TRADE_NOCPI: readonly AccountSpec[];
 /**
@@ -507,7 +507,7 @@ declare const ACCOUNTS_CLOSE_ACCOUNT: readonly AccountSpec[];
  */
 declare const ACCOUNTS_TOPUP_INSURANCE: readonly AccountSpec[];
 /**
- * TradeCpi: 8 accounts
+ * TradeCpi: 7 accounts (PERC-199: clock sysvar removed — uses Clock::get() syscall)
  */
 declare const ACCOUNTS_TRADE_CPI: readonly AccountSpec[];
 /**
