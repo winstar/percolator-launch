@@ -187,8 +187,35 @@ function MarketsPageInner() {
   }, [effectiveMarkets]);
   const tokenMetaMap = useMultiTokenMeta(allMints);
 
+  // Filter out empty/abandoned markets and flag bogus prices
+  // A market is "empty" if it has no meaningful data: no price, no volume, no OI
+  const activeMarkets = useMemo(() => {
+    return effectiveMarkets.filter((m) => {
+      // Check on-chain price
+      const hasOnChainPrice = m.onChain?.config
+        ? resolveMarketPriceE6(m.onChain.config) > 0n
+        : false;
+      // Check Supabase price
+      const hasSupabasePrice = (m.supabase?.last_price ?? 0) > 0;
+      // Check volume
+      const hasVolume = (m.supabase?.volume_24h ?? 0) > 0;
+      // Check OI
+      const hasOI = m.onChain
+        ? (m.onChain.engine?.totalOpenInterest ?? 0n) > 0n
+        : ((m.supabase?.total_open_interest ?? 0) > 0 ||
+           ((m.supabase?.open_interest_long ?? 0) + (m.supabase?.open_interest_short ?? 0)) > 0);
+
+      // Keep market if it has at least a price (on-chain or Supabase)
+      return hasOnChainPrice || hasSupabasePrice || hasVolume || hasOI;
+    });
+  }, [effectiveMarkets]);
+
+  // Cap bogus prices: if a resolved price is above $1M per unit, it's almost certainly
+  // a display error from corrupted on-chain data. We'll clamp these in the display layer.
+  const MAX_SANE_PRICE_USD = 1_000_000; // $1M — no Percolator market should exceed this
+
   const filtered = useMemo(() => {
-    let list = effectiveMarkets;
+    let list = activeMarkets;
     // Text search — matches on-chain symbol, name, slab address, OR mint address
     if (debouncedSearch.trim()) {
       const q = debouncedSearch.toLowerCase();
@@ -523,8 +550,10 @@ function MarketsPageInner() {
                       : { level: "empty" as const, label: "No data", insuranceRatio: 0, capitalRatio: 0 });
                   
                   // Price: prefer Supabase, fall back to oracle-mode-aware on-chain price
+                  // Cap bogus prices (corrupted on-chain data can produce $4.2T values)
                   const onChainPriceE6 = m.onChain ? resolveMarketPriceE6(m.onChain.config) : 0n;
-                  const lastPrice = m.supabase?.last_price ?? priceE6ToUsd(onChainPriceE6);
+                  const rawPrice = m.supabase?.last_price ?? priceE6ToUsd(onChainPriceE6);
+                  const lastPrice = rawPrice != null && rawPrice > MAX_SANE_PRICE_USD ? null : rawPrice;
                   const rawDecimals = tokenMetaMap.get(m.mintAddress)?.decimals ?? (m.supabase?.decimals ?? 6);
                   const mintDecimals = Math.min(Math.max(rawDecimals, 0), 18); // clamp to sane range
                   const tokenDivisor = 10 ** mintDecimals;

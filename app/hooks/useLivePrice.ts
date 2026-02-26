@@ -60,9 +60,11 @@ export function useLivePrice(): PriceState {
     // Use oracle-mode-aware price resolution (handles pyth-pinned, hyperp, and admin modes)
     const onChainE6 = resolveMarketPriceE6(mktConfig);
     if (onChainE6 === 0n) return;
+    const usd = Number(onChainE6) / 1_000_000;
+    // Cap bogus prices — corrupted on-chain data can produce $4.2T values
+    if (usd > 1_000_000) return;
     setState((prev) => {
       if (prev.price !== null) return prev;
-      const usd = Number(onChainE6) / 1_000_000;
       return { ...prev, price: usd, priceUsd: usd, priceE6: onChainE6, loading: false };
     });
   }, [mktConfig]);
