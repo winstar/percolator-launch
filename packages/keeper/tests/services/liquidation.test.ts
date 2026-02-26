@@ -121,6 +121,44 @@ import { LiquidationService } from '../../src/services/liquidation.js';
 import * as core from '@percolator/sdk';
 import * as shared from '@percolator/shared';
 
+// Zero key (all zeros) - used for Pyth-pinned oracleAuthority and Hyperp indexFeedId
+const ZERO_KEY = (() => {
+  const pk = new PublicKey(new Uint8Array(32));
+  return pk;
+})();
+
+function mockZeroKey() {
+  return {
+    toBase58: () => ZERO_KEY.toBase58(),
+    toBuffer: () => Buffer.alloc(32),
+    toBytes: () => new Uint8Array(32),
+    equals: (other: any) => {
+      if (!other) return false;
+      if (typeof other.toBase58 === 'function') {
+        return other.toBase58() === ZERO_KEY.toBase58();
+      }
+      return false;
+    },
+  };
+}
+
+function mockNonZeroKey(base58 = 'NonZero1111111111111111111111111111111111') {
+  return {
+    toBase58: () => base58,
+    toBuffer: () => Buffer.from(base58),
+    toBytes: () => {
+      const bytes = new Uint8Array(32);
+      bytes[0] = 1;
+      return bytes;
+    },
+    equals: (other: any) => {
+      if (!other) return false;
+      const otherStr = typeof other.toBase58 === 'function' ? other.toBase58() : String(other);
+      return otherStr === base58;
+    },
+  };
+}
+
 describe('LiquidationService', () => {
   let liquidationService: LiquidationService;
   let mockOracleService: any;
@@ -176,7 +214,10 @@ describe('LiquidationService', () => {
         maintenanceMarginBps: 500n,
       } as any);
       vi.mocked(core.parseConfig).mockReturnValue({
+        oracleAuthority: mockNonZeroKey(),
+        indexFeedId: mockZeroKey(), // Hyperp mode
         authorityPriceE6: 1_000_000n,
+        lastEffectivePriceE6: 1_000_000n,
         authorityTimestamp: BigInt(Math.floor(Date.now() / 1000)),
       } as any);
       vi.mocked(core.detectLayout).mockReturnValue({ accountsOffset: 0 } as any);
@@ -224,14 +265,17 @@ describe('LiquidationService', () => {
         maintenanceMarginBps: 500n,
       } as any);
       vi.mocked(core.parseConfig).mockReturnValue({
+        oracleAuthority: mockNonZeroKey(),
+        indexFeedId: mockNonZeroKey('FeedId111111111111111111111111111111111111'), // Admin oracle mode
         authorityPriceE6: 1_000_000n,
+        lastEffectivePriceE6: 0n, // No fallback price available
         authorityTimestamp: BigInt(Math.floor(Date.now() / 1000) - 120), // 2 minutes old (>60s)
       } as any);
       vi.mocked(core.detectLayout).mockReturnValue({ accountsOffset: 0 } as any);
 
       const candidates = await liquidationService.scanMarket(mockMarket as any);
 
-      expect(candidates).toHaveLength(0); // Skipped due to stale price
+      expect(candidates).toHaveLength(0); // Skipped due to stale price and no fallback
     });
   });
 
@@ -242,15 +286,8 @@ describe('LiquidationService', () => {
         programId: { toBase58: () => 'Program11111111111111111111111111111111' },
         config: {
           collateralMint: { toBase58: () => 'So11111111111111111111111111111111111111112' },
-          oracleAuthority: {
-            toBase58: () => '11111111111111111111111111111111',
-            equals: (other: any) => {
-              if (!other) return false;
-              const otherStr = typeof other.toBase58 === 'function' ? other.toBase58() : String(other);
-              return otherStr === '11111111111111111111111111111111';
-            },
-          },
-          indexFeedId: { toBytes: () => new Uint8Array(32).fill(0) },
+          oracleAuthority: mockNonZeroKey(),
+          indexFeedId: mockZeroKey(), // Hyperp mode
         },
         params: { maintenanceMarginBps: 500n },
         header: { admin: { toBase58: () => 'Admin111111111111111111111111111111111' } },
@@ -262,7 +299,10 @@ describe('LiquidationService', () => {
       vi.mocked(core.parseEngine).mockReturnValue({} as any);
       vi.mocked(core.parseParams).mockReturnValue({ maintenanceMarginBps: 500n } as any);
       vi.mocked(core.parseConfig).mockReturnValue({
+        oracleAuthority: mockNonZeroKey(),
+        indexFeedId: mockZeroKey(), // Hyperp mode
         authorityPriceE6: 1_000_000n,
+        lastEffectivePriceE6: 1_000_000n,
         authorityTimestamp: BigInt(Math.floor(Date.now() / 1000)),
       } as any);
       vi.mocked(core.parseUsedIndices).mockReturnValue([0]);
@@ -290,15 +330,8 @@ describe('LiquidationService', () => {
         programId: { toBase58: () => 'Program11111111111111111111111111111111' },
         config: {
           collateralMint: { toBase58: () => 'So11111111111111111111111111111111111111112' },
-          oracleAuthority: {
-            toBase58: () => '11111111111111111111111111111111',
-            equals: (other: any) => {
-              if (!other) return false;
-              const otherStr = typeof other.toBase58 === 'function' ? other.toBase58() : String(other);
-              return otherStr === '11111111111111111111111111111111';
-            },
-          },
-          indexFeedId: { toBytes: () => new Uint8Array(32).fill(0) },
+          oracleAuthority: mockNonZeroKey(),
+          indexFeedId: mockZeroKey(), // Hyperp mode
         },
         params: { maintenanceMarginBps: 500n },
         header: { admin: { toBase58: () => 'Admin111111111111111111111111111111111' } },
@@ -308,7 +341,10 @@ describe('LiquidationService', () => {
       vi.mocked(core.parseEngine).mockReturnValue({} as any);
       vi.mocked(core.parseParams).mockReturnValue({ maintenanceMarginBps: 500n } as any);
       vi.mocked(core.parseConfig).mockReturnValue({
+        oracleAuthority: mockNonZeroKey(),
+        indexFeedId: mockZeroKey(), // Hyperp mode
         authorityPriceE6: 1_000_000n,
+        lastEffectivePriceE6: 1_000_000n,
         authorityTimestamp: BigInt(Math.floor(Date.now() / 1000)),
       } as any);
       vi.mocked(core.parseUsedIndices).mockReturnValue([0]);
