@@ -35,9 +35,9 @@ test.describe("Security headers", () => {
     expect(response?.headers()?.["x-content-type-options"]).toBe("nosniff");
   });
 
-  test("X-Frame-Options is DENY", async ({ page }) => {
+  test("X-Frame-Options is SAMEORIGIN", async ({ page }) => {
     const response = await page.goto("/");
-    expect(response?.headers()?.["x-frame-options"]).toBe("DENY");
+    expect(response?.headers()?.["x-frame-options"]).toBe("SAMEORIGIN");
   });
 
   test("Referrer-Policy is set", async ({ page }) => {

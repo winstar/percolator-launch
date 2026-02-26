@@ -145,10 +145,16 @@ export default function Home() {
             return usd > MAX_PER_MARKET_USD ? 0 : usd; // discard absurd values
           };
 
+          // Filter out empty/abandoned markets (no price, no volume, no OI)
+          const activeData = data.filter((m) =>
+            (m.last_price ?? 0) > 0 ||
+            (m.volume_24h ?? 0) > 0 ||
+            (m.total_open_interest ?? 0) > 0
+          );
           setStats({
-            markets: data.length,
-            volume: data.reduce((s, m) => s + toUsd(Number(m.volume_24h || 0), m.decimals, m.last_price), 0),
-            insurance: data.reduce((s, m) => s + toUsd(Number(m.insurance_balance || 0), m.decimals, m.last_price), 0),
+            markets: activeData.length,
+            volume: activeData.reduce((s, m) => s + toUsd(Number(m.volume_24h || 0), m.decimals, m.last_price), 0),
+            insurance: activeData.reduce((s, m) => s + toUsd(Number(m.insurance_balance || 0), m.decimals, m.last_price), 0),
           });
           setStatsLoaded(true);
           // Convert to USD first, then sort by converted volume
