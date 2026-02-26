@@ -10,8 +10,9 @@ const nextConfig: NextConfig = {
       {
         source: "/(.*)",
         headers: [
-          // Clickjacking protection (bugs e887afc7 + 331e9377)
-          { key: "X-Frame-Options", value: "DENY" },
+          // Clickjacking protection — SAMEORIGIN allows Privy embedded wallet iframes
+          // (middleware also sets this; must agree to avoid double-header conflicts)
+          { key: "X-Frame-Options", value: "SAMEORIGIN" },
           // MIME sniffing protection
           { key: "X-Content-Type-Options", value: "nosniff" },
           // Referrer control
@@ -38,7 +39,7 @@ const nextConfig: NextConfig = {
               // Privy auth + embedded wallet iframe + wallet adapter popups/iframes
               "frame-src 'self' https://auth.privy.io https://embedded-wallets.privy.io https://phantom.app https://solflare.com",
               "worker-src 'self' blob:",
-              "frame-ancestors 'none'",
+              "frame-ancestors 'self' https://percolatorlaunch.com https://*.percolatorlaunch.com https://percolator-launch.vercel.app https://*.vercel.app",
             ].join("; "),
           },
         ],
