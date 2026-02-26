@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServiceClient } from "@/lib/supabase";
 import { PublicKey } from "@solana/web3.js";
+import { requireAuth, UNAUTHORIZED } from "@/lib/api-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -34,6 +35,10 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ slab: string }> }
 ) {
+  if (!requireAuth(req)) {
+    return UNAUTHORIZED;
+  }
+
   const { slab } = await params;
 
   // Validate slab address
