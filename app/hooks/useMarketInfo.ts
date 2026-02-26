@@ -21,9 +21,12 @@ export function useMarketInfo(slabAddress: string) {
           .from("markets_with_stats")
           .select("*")
           .eq("slab_address", slabAddress)
-          .single();
+          .maybeSingle();
         if (dbError) {
           setError(dbError.message);
+        } else if (!data) {
+          setMarket(null);
+          setError("Market not found");
         } else {
           setMarket(data);
           setError(null);
