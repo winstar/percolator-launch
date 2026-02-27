@@ -25,6 +25,7 @@ import {
   type Account,
 } from "@percolator/sdk";
 import { isMockSlab, getMockSlabState } from "@/lib/mock-trade-data";
+import { isMockMode } from "@/lib/mock-mode";
 
 export interface SlabState {
   /** The slab account address this provider is tracking */
@@ -72,8 +73,8 @@ export const SlabProvider: FC<{ children: ReactNode; slabAddress: string }> = ({
       return;
     }
 
-    // Mock data mode — use synthetic data for design testing
-    if (isMockSlab(slabAddress)) {
+    // Mock data mode — use synthetic data for design testing (opt-in only)
+    if (isMockMode() && isMockSlab(slabAddress)) {
       const mock = getMockSlabState(slabAddress);
       if (mock) {
         setState({
