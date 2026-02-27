@@ -101,10 +101,25 @@ export const SlabProvider: FC<{ children: ReactNode; slabAddress: string }> = ({
     }
     let cancelled = false;
 
+    // Current expected slab version — bump when program is upgraded with schema changes
+    const EXPECTED_SLAB_VERSION = 1;
+
     function parseSlab(data: Uint8Array, owner?: PublicKey) {
       if (cancelled) return;
       try {
         const header = parseHeader(data);
+
+        // Graceful version mismatch detection (bug #52f49b69)
+        if (header.version !== EXPECTED_SLAB_VERSION) {
+          setState((s) => ({
+            ...s,
+            loading: false,
+            error: `This market uses slab version ${header.version} but the current program expects version ${EXPECTED_SLAB_VERSION}. ` +
+              `The program was upgraded and this market needs migration. Please contact the market admin or create a new market.`,
+          }));
+          return;
+        }
+
         const config = parseConfig(data);
         const engine = parseEngine(data);
         const params = parseParams(data);

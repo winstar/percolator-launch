@@ -91,12 +91,24 @@ export function useTrade(slabAddress: string) {
           } catch { /* use existing price */ }
           if (priceE6 <= 0n) priceE6 = 1_000_000n;
 
+          // Use on-chain slot time instead of client Date.now() to avoid clock drift
+          // between client and validator causing signature verification failures
+          let oracleTimestamp: bigint;
+          try {
+            const slot = await connection.getSlot("confirmed");
+            const blockTime = await connection.getBlockTime(slot);
+            oracleTimestamp = BigInt(blockTime ?? Math.floor(Date.now() / 1000));
+          } catch {
+            // Fallback to client time if RPC fails
+            oracleTimestamp = BigInt(Math.floor(Date.now() / 1000));
+          }
+
           const pushIx = buildIx({
             programId,
             keys: buildAccountMetas(ACCOUNTS_PUSH_ORACLE_PRICE, [wallet.publicKey, slabPk]),
             data: encodePushOraclePrice({
               priceE6: priceE6,
-              timestamp: BigInt(Math.floor(Date.now() / 1000)),
+              timestamp: oracleTimestamp,
             }),
           });
           instructions.push(pushIx);
