@@ -196,10 +196,10 @@ export default function GuidePage() {
 
       {/* Market Tiers */}
       <Section id="capacity" tag="capacity" title="Market Tiers">
-        <div className="border border-[var(--warning)]/30 bg-[var(--warning)]/[0.06] px-4 py-3 text-[12px] text-[var(--warning)] leading-relaxed flex items-start gap-2">
-          <span className="mt-0.5 flex-shrink-0">⚠</span>
+        <div className="border border-[var(--accent)]/30 bg-[var(--accent)]/[0.06] px-4 py-3 text-[12px] text-[var(--accent)] leading-relaxed flex items-start gap-2">
+          <span className="mt-0.5 flex-shrink-0">✦</span>
           <span>
-            <strong>Currently only the Large tier is available</strong> for market creation on both devnet and mainnet. Small and Medium tiers are planned for a future release.
+            The <strong>Large</strong> tier is live on devnet. <strong>Small</strong> and <strong>Medium</strong> tiers are configured and will be available once their on-chain programs are deployed (coming soon).
           </span>
         </div>
         <div className={`${cardClass} overflow-x-auto`}>
