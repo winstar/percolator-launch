@@ -208,7 +208,10 @@ export function useEarnStats() {
           const vaultBalance = m.lp_collateral ?? 0;
           const tradingFeeBps = m.trading_fee_bps ?? 10;
           const volume24h = m.volume_24h ?? 0;
-          const insurance = m.insurance_fund ?? 0;
+          const insuranceRaw = m.insurance_fund ?? 0;
+          // Sanity cap: insurance_fund values > 10 billion USDC micro-units ($10M)
+          // are corrupt data from bad slab tier detection — clamp to 0
+          const insurance = insuranceRaw < 1e13 ? insuranceRaw : 0;
 
           // Max OI = vault collateral × max leverage (simplified)
           const vaultUsd = vaultBalance / 1e6; // collateral in USDC (6 decimals)

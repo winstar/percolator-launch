@@ -325,8 +325,9 @@ export class StatsCollector {
             // Sanity-check parsed engine values: if the slab layout detection
             // failed (wrong tier), the parser reads garbage from wrong offsets.
             // Telltale sign: values like 9.8e34 OI or 1.8e25 insurance.
-            // Max sane value: 1e18 (u64::MAX ≈ 1.8e19, so anything near that is suspect)
-            const MAX_SANE_VALUE = 1e18;
+            // Max sane value: 1e13 (~$10M USD in micro-USDC). Previously 1e18 which
+            // let through corrupt values from wrong slab tier detection (see #491).
+            const MAX_SANE_VALUE = 1e13;
             // Max sane counter value: liquidation/force-close counts shouldn't exceed 1e12
             const MAX_SANE_COUNTER = 1e12;
             const isSaneEngine = (
