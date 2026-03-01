@@ -672,6 +672,11 @@ interface MarketConfig {
     authorityTimestamp: bigint;
     oraclePriceCapE2bps: bigint;
     lastEffectivePriceE6: bigint;
+    oiCapMultiplierBps: bigint;
+    maxPnlCap: bigint;
+    adaptiveFundingEnabled: boolean;
+    adaptiveScaleBps: number;
+    adaptiveMaxFundingBps: bigint;
 }
 /**
  * Fetch raw slab account data.
@@ -870,31 +875,31 @@ interface DiscoveredMarket {
  * IMPORTANT: dataSize must match the compiled program's SLAB_LEN for that MAX_ACCOUNTS.
  * The on-chain program has a hardcoded SLAB_LEN — slab account data.len() must equal it exactly.
  *
- * Layout: HEADER(104) + CONFIG(368) + RiskEngine(variable by tier)
- *   ENGINE_OFF = align_up(104 + 368, 8) = 472  (SBF: u128 align = 8)
+ * Layout: HEADER(104) + CONFIG(384) + RiskEngine(variable by tier)
+ *   ENGINE_OFF = align_up(104 + 384, 8) = 488  (SBF: u128 align = 8)
  *   RiskEngine = fixed(608) + bitmap(BW*8) + post_bitmap(18) + next_free(N*2) + pad + accounts(N*248)
  *
- * NOTE: PERC-298 packed skew_factor_bps into oi_cap_multiplier_bps upper bits (CONFIG_LEN unchanged).
- *       RiskEngine grew by 32 bytes (PERC-298: long_oi + short_oi U128 fields).
- *       ENGINE_OFF unchanged at 472. ENGINE_LEN grew +32 bytes. Total growth: +32 bytes per tier.
+ * NOTE: PERC-300 grew CONFIG_LEN from 368→384 (adaptive funding rate fields).
+ *       ENGINE_OFF shifted from 472→488.
+ *       RiskEngine grew by 32 bytes (PERC-298: long_oi + short_oi U128 fields) + 24 (PERC-299: emergency OI).
  *       Values below must be verified against BPF build before deployment.
  */
 declare const SLAB_TIERS: {
     readonly small: {
         readonly maxAccounts: 256;
-        readonly dataSize: 65160;
+        readonly dataSize: 65176;
         readonly label: "Small";
         readonly description: "256 slots · ~0.45 SOL";
     };
     readonly medium: {
         readonly maxAccounts: 1024;
-        readonly dataSize: 257256;
+        readonly dataSize: 257272;
         readonly label: "Medium";
         readonly description: "1,024 slots · ~1.79 SOL";
     };
     readonly large: {
         readonly maxAccounts: 4096;
-        readonly dataSize: 1025640;
+        readonly dataSize: 1025656;
         readonly label: "Large";
         readonly description: "4,096 slots · ~7.14 SOL";
     };
@@ -903,8 +908,8 @@ type SlabTierKey = keyof typeof SLAB_TIERS;
 /** Calculate slab data size for arbitrary account count.
  *
  * Layout (SBF, u128 align = 8):
- *   HEADER(104) + CONFIG(368) → ENGINE_OFF = 472
- *   RiskEngine fixed scalars: 576 bytes (vault through lp_max_abs_sweep)
+ *   HEADER(104) + CONFIG(384) → ENGINE_OFF = 488
+ *   RiskEngine fixed scalars: 632 bytes (PERC-299: +24 emergency OI, +32 long/short OI)
  *   + bitmap: ceil(N/64)*8
  *   + num_used_accounts(u16) + pad(6) + next_account_id(u64) + free_head(u16) = 18
  *   + next_free: N*2

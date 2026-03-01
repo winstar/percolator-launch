@@ -33,19 +33,19 @@ const MAGIC_BYTES = new Uint8Array([0x54, 0x41, 0x4c, 0x4f, 0x43, 0x52, 0x45, 0x
  * IMPORTANT: dataSize must match the compiled program's SLAB_LEN for that MAX_ACCOUNTS.
  * The on-chain program has a hardcoded SLAB_LEN — slab account data.len() must equal it exactly.
  *
- * Layout: HEADER(104) + CONFIG(368) + RiskEngine(variable by tier)
- *   ENGINE_OFF = align_up(104 + 368, 8) = 472  (SBF: u128 align = 8)
+ * Layout: HEADER(104) + CONFIG(384) + RiskEngine(variable by tier)
+ *   ENGINE_OFF = align_up(104 + 384, 8) = 488  (SBF: u128 align = 8)
  *   RiskEngine = fixed(608) + bitmap(BW*8) + post_bitmap(18) + next_free(N*2) + pad + accounts(N*248)
  *
- * NOTE: PERC-298 packed skew_factor_bps into oi_cap_multiplier_bps upper bits (CONFIG_LEN unchanged).
- *       RiskEngine grew by 32 bytes (PERC-298: long_oi + short_oi U128 fields).
- *       ENGINE_OFF unchanged at 472. ENGINE_LEN grew +32 bytes. Total growth: +32 bytes per tier.
+ * NOTE: PERC-300 grew CONFIG_LEN from 368→384 (adaptive funding rate fields).
+ *       ENGINE_OFF shifted from 472→488.
+ *       RiskEngine grew by 32 bytes (PERC-298: long_oi + short_oi U128 fields) + 24 (PERC-299: emergency OI).
  *       Values below must be verified against BPF build before deployment.
  */
 export const SLAB_TIERS = {
-  small:  { maxAccounts: 256,  dataSize: 65_160,    label: "Small",  description: "256 slots · ~0.45 SOL" },
-  medium: { maxAccounts: 1024, dataSize: 257_256,   label: "Medium", description: "1,024 slots · ~1.79 SOL" },
-  large:  { maxAccounts: 4096, dataSize: 1_025_640, label: "Large",  description: "4,096 slots · ~7.14 SOL" },
+  small:  { maxAccounts: 256,  dataSize: 65_176,    label: "Small",  description: "256 slots · ~0.45 SOL" },
+  medium: { maxAccounts: 1024, dataSize: 257_272,   label: "Medium", description: "1,024 slots · ~1.79 SOL" },
+  large:  { maxAccounts: 4096, dataSize: 1_025_656, label: "Large",  description: "4,096 slots · ~7.14 SOL" },
 } as const;
 
 export type SlabTierKey = keyof typeof SLAB_TIERS;
@@ -53,8 +53,8 @@ export type SlabTierKey = keyof typeof SLAB_TIERS;
 /** Calculate slab data size for arbitrary account count.
  *
  * Layout (SBF, u128 align = 8):
- *   HEADER(104) + CONFIG(368) → ENGINE_OFF = 472
- *   RiskEngine fixed scalars: 576 bytes (vault through lp_max_abs_sweep)
+ *   HEADER(104) + CONFIG(384) → ENGINE_OFF = 488
+ *   RiskEngine fixed scalars: 632 bytes (PERC-299: +24 emergency OI, +32 long/short OI)
  *   + bitmap: ceil(N/64)*8
  *   + num_used_accounts(u16) + pad(6) + next_account_id(u64) + free_head(u16) = 18
  *   + next_free: N*2
@@ -64,7 +64,7 @@ export type SlabTierKey = keyof typeof SLAB_TIERS;
  * Must match the on-chain program's SLAB_LEN exactly.
  */
 export function slabDataSize(maxAccounts: number): number {
-  const ENGINE_OFF_LOCAL = 472; // align_up(104 + 368, 8)
+  const ENGINE_OFF_LOCAL = 488; // align_up(104 + 384, 8) — PERC-300
   const ENGINE_FIXED = 632;     // scalars before bitmap (608 + 24 for PERC-299 emergency OI fields)
   const ACCOUNT_SIZE = 248;
   const bitmapBytes = Math.ceil(maxAccounts / 64) * 8;
@@ -98,7 +98,7 @@ const SLAB_DATA_SIZE = SLAB_TIERS.large.dataSize;
 /** We need header(104) + config(368) + engine up to nextAccountId (~1100). Total ~1572. Use 1600 for margin. */
 const HEADER_SLICE_LENGTH = 1600;
 
-const ENGINE_OFF = 472;
+const ENGINE_OFF = 488; // PERC-300: CONFIG_LEN grew 368→384
 
 function dv(data: Uint8Array): DataView {
   return new DataView(data.buffer, data.byteOffset, data.byteLength);
