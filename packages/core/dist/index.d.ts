@@ -688,6 +688,7 @@ interface MarketConfig {
     adaptiveMaxFundingBps: bigint;
     marketCreatedSlot: bigint;
     oiRampSlots: bigint;
+    resolvedSlot: bigint;
 }
 /**
  * Fetch raw slab account data.
@@ -899,31 +900,32 @@ interface DiscoveredMarket {
  * IMPORTANT: dataSize must match the compiled program's SLAB_LEN for that MAX_ACCOUNTS.
  * The on-chain program has a hardcoded SLAB_LEN — slab account data.len() must equal it exactly.
  *
- * Layout: HEADER(104) + CONFIG(400) + RiskEngine(variable by tier)
- *   ENGINE_OFF = align_up(104 + 400, 8) = 504  (SBF: u128 align = 8)
+ * Layout: HEADER(104) + CONFIG(416) + RiskEngine(variable by tier)
+ *   ENGINE_OFF = align_up(104 + 416, 8) = 520  (SBF: u128 align = 8)
  *   RiskEngine = fixed(632) + bitmap(BW*8) + post_bitmap(18) + next_free(N*2) + pad + accounts(N*248)
  *
  * NOTE: PERC-300 grew CONFIG_LEN 368→384 (adaptive funding), PERC-302 grew 384→400 (OI ramp).
- *       ENGINE_OFF shifted from 472→504.
+ *       PERC-301 grew CONFIG_LEN 400→416 (resolved_slot + _reserved).
+ *       ENGINE_OFF shifted from 472→520.
  *       RiskEngine grew by 32 bytes (PERC-298: long_oi + short_oi) + 24 (PERC-299: emergency OI).
  *       Values below must be verified against BPF build before deployment.
  */
 declare const SLAB_TIERS: {
     readonly small: {
         readonly maxAccounts: 256;
-        readonly dataSize: 65192;
+        readonly dataSize: 65208;
         readonly label: "Small";
         readonly description: "256 slots · ~0.45 SOL";
     };
     readonly medium: {
         readonly maxAccounts: 1024;
-        readonly dataSize: 257288;
+        readonly dataSize: 257304;
         readonly label: "Medium";
         readonly description: "1,024 slots · ~1.79 SOL";
     };
     readonly large: {
         readonly maxAccounts: 4096;
-        readonly dataSize: 1025672;
+        readonly dataSize: 1025688;
         readonly label: "Large";
         readonly description: "4,096 slots · ~7.14 SOL";
     };
@@ -932,7 +934,7 @@ type SlabTierKey = keyof typeof SLAB_TIERS;
 /** Calculate slab data size for arbitrary account count.
  *
  * Layout (SBF, u128 align = 8):
- *   HEADER(104) + CONFIG(400) → ENGINE_OFF = 504
+ *   HEADER(104) + CONFIG(416) → ENGINE_OFF = 504
  *   RiskEngine fixed scalars: 632 bytes (PERC-299: +24 emergency OI, +32 long/short OI)
  *   + bitmap: ceil(N/64)*8
  *   + num_used_accounts(u16) + pad(6) + next_account_id(u64) + free_head(u16) = 18

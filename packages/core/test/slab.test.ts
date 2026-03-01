@@ -24,7 +24,7 @@ console.log("Testing slab parsing...\n");
 //   RESERVED_OFF = 80 (nonce at 80, lastThrUpdateSlot at 88)
 //   pending_admin field at offset 48 (32 bytes)
 function createMockSlab(): Buffer {
-  const buf = Buffer.alloc(520);  // HEADER_LEN(104) + CONFIG_LEN(400) = 504 minimum
+  const buf = Buffer.alloc(536);  // HEADER_LEN(104) + CONFIG_LEN(416) = 520 minimum
 
   // Header (104 bytes)
   // magic: "PERCOLAT" = 0x504552434f4c4154
@@ -165,8 +165,8 @@ console.log("\n✅ All basic slab tests passed!");
 console.log("\nTesting account parsing...\n");
 
 // Constants from slab.ts for testing (keep in sync with slab.ts)
-// Updated for PERC-300 + PERC-302: CONFIG_LEN 368→400, ENGINE_OFF 472→504
-const ENGINE_OFF = 504;
+// Updated for PERC-301: CONFIG_LEN 400→416, ENGINE_OFF 504→520
+const ENGINE_OFF = 520;
 const ENGINE_ACCOUNTS_OFF = 9360;  // ENGINE_FIXED(632) + bitmap(512) + postBitmap(18) + nextFree(8192) = 9354 → 9360
 const ACCOUNT_SIZE = 248;
 const ENGINE_BITMAP_OFF = 632;  // Updated for PERC-299
@@ -199,8 +199,8 @@ function writeI128LE(buf: Buffer, offset: number, value: bigint): void {
 }
 
 // Create a full mock slab with accounts
-// Updated for PERC-300 + PERC-302: CONFIG_LEN 400, ENGINE_OFF = 504
-//   HEADER_LEN = 104, RESERVED_OFF = 80, ENGINE_OFF = 504
+// Updated for PERC-301: CONFIG_LEN 416, ENGINE_OFF = 520
+//   HEADER_LEN = 104, RESERVED_OFF = 80, ENGINE_OFF = 520
 //   ENGINE_BITMAP_OFF = 632, ENGINE_ACCOUNTS_OFF = 9360, ACCOUNT_SIZE = 248
 function createFullMockSlab(): Buffer {
   // Need enough space for header + config + engine + bitmap + accounts
