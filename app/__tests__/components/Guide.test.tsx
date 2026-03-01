@@ -120,10 +120,10 @@ describe('Guide Page', () => {
   it('should render Market Tiers table with cost information', () => {
     render(<GuidePage />);
 
-    // Check for tier information
-    expect(screen.getByText(/Small/i)).toBeInTheDocument();
-    expect(screen.getByText(/Medium/i)).toBeInTheDocument();
-    expect(screen.getByText(/Large/i)).toBeInTheDocument();
+    // Check for tier information (multiple elements may match)
+    expect(screen.getAllByText(/Small/i).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText(/Medium/i).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText(/Large/i).length).toBeGreaterThanOrEqual(1);
 
     // Check for slot counts
     expect(screen.getByText('256')).toBeInTheDocument();
