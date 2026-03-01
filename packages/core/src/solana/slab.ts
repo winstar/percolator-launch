@@ -41,10 +41,11 @@ const CONFIG_OFFSET = HEADER_LEN;  // MarketConfig starts right after header
 //               oi_cap_multiplier_bps(8) + max_pnl_cap(8) +
 //               adaptive_funding_enabled(1) + _pad(1) + adaptive_scale_bps(2) + _pad2(4) +
 //               adaptive_max_funding_bps(8) +
-//               market_created_slot(8) + oi_ramp_slots(8)
-//             = 400 bytes (PERC-300 + PERC-302)
+//               market_created_slot(8) + oi_ramp_slots(8) +
+//               resolved_slot(8) + _perc301_reserved(8)
+//             = 416 bytes (PERC-300 + PERC-302 + PERC-301)
 // NOTE: PERC-298 skew_factor_bps is packed into upper bits of oi_cap_multiplier_bps.
-const CONFIG_LEN = 400;
+const CONFIG_LEN = 416;
 // Offset of _reserved field within SlabHeader (magic+version+bump+_padding+admin+pending_admin = 80)
 const RESERVED_OFF = 80;
 
@@ -112,6 +113,8 @@ export interface MarketConfig {
   // Market maturity OI ramp (PERC-302)
   marketCreatedSlot: bigint;
   oiRampSlots: bigint;
+  // Auto-recovery unresolve (PERC-301)
+  resolvedSlot: bigint;
 }
 
 /**
@@ -281,6 +284,11 @@ export function parseConfig(data: Uint8Array): MarketConfig {
   off += 8;
 
   const oiRampSlots = readU64LE(data, off);
+  off += 8;
+
+  // Auto-recovery unresolve (PERC-301)
+  const resolvedSlot = readU64LE(data, off);
+  // off += 8; // + 8 for _perc301_reserved (skipped)
 
   return {
     collateralMint,
@@ -316,6 +324,7 @@ export function parseConfig(data: Uint8Array): MarketConfig {
     adaptiveMaxFundingBps,
     marketCreatedSlot,
     oiRampSlots,
+    resolvedSlot,
   };
 }
 
@@ -386,18 +395,18 @@ export function readLastThrUpdateSlot(data: Uint8Array): bigint {
 }
 
 // =============================================================================
-// RiskEngine Layout Constants (CONFIG_LEN = 400, updated for PERC-300 + PERC-302)
-// ENGINE_OFF = align_up(HEADER_LEN + CONFIG_LEN, 8) = align_up(104 + 400, 8) = 504 (BPF alignment)
+// RiskEngine Layout Constants (CONFIG_LEN = 416, updated for PERC-300 + PERC-302 + PERC-301)
+// ENGINE_OFF = align_up(HEADER_LEN + CONFIG_LEN, 8) = align_up(104 + 416, 8) = 520 (BPF alignment)
 //
 // RiskParams grew from 144 → 288 bytes (added: premium funding, partial liq, dynamic fees).
 // Account grew from 240 → 248 bytes (added: last_partial_liquidation_slot).
 // SlabHeader grew from 72 → 104 bytes (added: pending_admin).
-// MarketConfig grew from 320 → 400 bytes (added: premium funding, oracle authority,
-//   circuit breaker, OI cap fields, adaptive funding, market maturity ramp).
+// MarketConfig grew from 320 → 416 bytes (added: premium funding, oracle authority,
+//   circuit breaker, OI cap fields, adaptive funding, market maturity ramp, auto-unresolve).
 //   PERC-298 skew_factor packed in oi_cap_multiplier_bps.
 // RiskEngine grew by 32 bytes in PERC-298 (added: long_oi, short_oi U128 fields).
 // =============================================================================
-const ENGINE_OFF = 504;
+const ENGINE_OFF = 520;
 // RiskEngine struct layout (repr(C), SBF uses 8-byte alignment for u128):
 // - vault: U128 (16 bytes) at offset 0
 // - insurance_fund: InsuranceFund { balance: U128, fee_revenue: U128 } (32 bytes) at offset 16

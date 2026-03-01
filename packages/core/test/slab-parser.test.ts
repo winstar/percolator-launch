@@ -5,13 +5,13 @@ import {
 } from "../src/solana/slab.js";
 
 /** Build a minimal valid slab buffer for header + config + engine (no accounts).
- *  Updated for PERC-302: CONFIG_LEN 368→384:
- *    HEADER_LEN = 104, CONFIG_OFFSET = 104, ENGINE_OFF = 488
- *    ENGINE_BITMAP_OFF = 576, ACCOUNT_SIZE = 248
+ *  Updated for PERC-301: CONFIG_LEN 400→416:
+ *    HEADER_LEN = 104, CONFIG_OFFSET = 104, ENGINE_OFF = 520
+ *    ENGINE_BITMAP_OFF = 632, ACCOUNT_SIZE = 248
  *    RESERVED_OFF = 80 (nonce at 80, lastThrUpdateSlot at 88)
  */
 function buildMockSlab(): Uint8Array {
-  const size = 1_025_600; // large tier (4096 accounts) with ACCOUNT_SIZE=248, CONFIG_LEN=384
+  const size = 1_025_688; // large tier (4096 accounts) with ACCOUNT_SIZE=248, CONFIG_LEN=416
   const buf = new Uint8Array(size);
   const dv = new DataView(buf.buffer);
 
@@ -34,7 +34,7 @@ function buildMockSlab(): Uint8Array {
   for (let i = 136; i < 168; i++) buf[i] = 3;
 
   // Engine at offset 488 (HEADER=104 + CONFIG=384, aligned to 8)
-  const engineBase = 488;
+  const engineBase = 520;
   // vault = 1000000 (U128)
   dv.setBigUint64(engineBase + 0, 1000000n, true);
   // insurance balance = 500000
@@ -44,12 +44,12 @@ function buildMockSlab(): Uint8Array {
   // cTot = 800000 (at engine offset 432)
   dv.setBigUint64(engineBase + 432, 800000n, true);
   // numUsedAccounts at bitmap(576) + bitmap_words(64*8=512) = offset 1088
-  dv.setUint16(engineBase + 1088, 0, true);
-  // nextAccountId at aligned offset after numUsedAccounts: ceil((1088+2)/8)*8 = 1096
-  dv.setBigUint64(engineBase + 1096, 1n, true);
+  dv.setUint16(engineBase + 1168, 0, true);
+  // nextAccountId at aligned offset after numUsedAccounts: ceil((1168+2)/8)*8 = 1176
+  dv.setBigUint64(engineBase + 1176, 1n, true);
 
-  // RiskParams at engine offset 48
-  const paramsBase = engineBase + 48;
+  // RiskParams at engine offset 72 (PERC-306: InsuranceFund +24)
+  const paramsBase = engineBase + 72;
   dv.setBigUint64(paramsBase + 8, 500n, true);  // maintenanceMarginBps
   dv.setBigUint64(paramsBase + 16, 1000n, true); // initialMarginBps
   dv.setBigUint64(paramsBase + 24, 10n, true);   // tradingFeeBps
