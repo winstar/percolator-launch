@@ -40,10 +40,11 @@ const CONFIG_OFFSET = HEADER_LEN;  // MarketConfig starts right after header
 //               oracle_price_cap_e2bps(8) + last_effective_price_e6(8) +
 //               oi_cap_multiplier_bps(8) + max_pnl_cap(8) +
 //               adaptive_funding_enabled(1) + _pad(1) + adaptive_scale_bps(2) + _pad2(4) +
-//               adaptive_max_funding_bps(8)
-//             = 384 bytes (PERC-300)
+//               adaptive_max_funding_bps(8) +
+//               market_created_slot(8) + oi_ramp_slots(8)
+//             = 400 bytes (PERC-300 + PERC-302)
 // NOTE: PERC-298 skew_factor_bps is packed into upper bits of oi_cap_multiplier_bps.
-const CONFIG_LEN = 384;
+const CONFIG_LEN = 400;
 // Offset of _reserved field within SlabHeader (magic+version+bump+_padding+admin+pending_admin = 80)
 const RESERVED_OFF = 80;
 
@@ -108,6 +109,9 @@ export interface MarketConfig {
   adaptiveFundingEnabled: boolean;
   adaptiveScaleBps: number;
   adaptiveMaxFundingBps: bigint;
+  // Market maturity OI ramp (PERC-302)
+  marketCreatedSlot: bigint;
+  oiRampSlots: bigint;
 }
 
 /**
@@ -270,6 +274,13 @@ export function parseConfig(data: Uint8Array): MarketConfig {
   off += 2;
   off += 4; // _adaptive_pad2
   const adaptiveMaxFundingBps = readU64LE(data, off);
+  off += 8;
+
+  // Market maturity OI ramp (PERC-302)
+  const marketCreatedSlot = readU64LE(data, off);
+  off += 8;
+
+  const oiRampSlots = readU64LE(data, off);
 
   return {
     collateralMint,
@@ -303,7 +314,55 @@ export function parseConfig(data: Uint8Array): MarketConfig {
     adaptiveFundingEnabled,
     adaptiveScaleBps,
     adaptiveMaxFundingBps,
+    marketCreatedSlot,
+    oiRampSlots,
   };
+}
+
+// ========================================
+// PERC-302: Market Maturity OI Ramp
+// ========================================
+
+/** Starting OI cap multiplier for new markets (0.1x LP vault = 1000 bps). */
+export const RAMP_START_BPS = 1000n;
+
+/** Default ramp duration in slots (~2 days at ~2.5 slots/sec). */
+export const DEFAULT_OI_RAMP_SLOTS = 432_000n;
+
+/**
+ * Compute effective OI cap multiplier with market maturity ramp.
+ * Mirrors the Rust `verify::compute_ramp_multiplier()` function exactly.
+ *
+ * @param config - MarketConfig with oiCapMultiplierBps, marketCreatedSlot, oiRampSlots
+ * @param currentSlot - Current Solana slot
+ * @returns Effective multiplier in bps
+ */
+export function computeEffectiveOiCapBps(config: MarketConfig, currentSlot: bigint): bigint {
+  const target = config.oiCapMultiplierBps;
+
+  // OI cap disabled
+  if (target === 0n) return 0n;
+
+  // Ramp disabled: full cap immediately
+  if (config.oiRampSlots === 0n) return target;
+
+  // Target at or below ramp start: no ramp needed
+  if (target <= RAMP_START_BPS) return target;
+
+  // Elapsed slots since market creation
+  const elapsed = currentSlot > config.marketCreatedSlot
+    ? currentSlot - config.marketCreatedSlot
+    : 0n;
+
+  // Ramp complete
+  if (elapsed >= config.oiRampSlots) return target;
+
+  // Linear interpolation
+  const range = target - RAMP_START_BPS;
+  const rampAdd = (range * elapsed) / config.oiRampSlots;
+
+  const result = RAMP_START_BPS + rampAdd;
+  return result < target ? result : target;
 }
 
 /**
@@ -327,17 +386,18 @@ export function readLastThrUpdateSlot(data: Uint8Array): bigint {
 }
 
 // =============================================================================
-// RiskEngine Layout Constants (CONFIG_LEN = 384, updated for PERC-300)
-// ENGINE_OFF = align_up(HEADER_LEN + CONFIG_LEN, 8) = align_up(104 + 384, 8) = 488 (BPF alignment)
+// RiskEngine Layout Constants (CONFIG_LEN = 400, updated for PERC-300 + PERC-302)
+// ENGINE_OFF = align_up(HEADER_LEN + CONFIG_LEN, 8) = align_up(104 + 400, 8) = 504 (BPF alignment)
 //
 // RiskParams grew from 144 → 288 bytes (added: premium funding, partial liq, dynamic fees).
 // Account grew from 240 → 248 bytes (added: last_partial_liquidation_slot).
 // SlabHeader grew from 72 → 104 bytes (added: pending_admin).
-// MarketConfig grew from 320 → 368 bytes (added: premium funding, oracle authority,
-//   circuit breaker, OI cap fields). PERC-298 skew_factor packed in oi_cap_multiplier_bps.
+// MarketConfig grew from 320 → 400 bytes (added: premium funding, oracle authority,
+//   circuit breaker, OI cap fields, adaptive funding, market maturity ramp).
+//   PERC-298 skew_factor packed in oi_cap_multiplier_bps.
 // RiskEngine grew by 32 bytes in PERC-298 (added: long_oi, short_oi U128 fields).
 // =============================================================================
-const ENGINE_OFF = 488;
+const ENGINE_OFF = 504;
 // RiskEngine struct layout (repr(C), SBF uses 8-byte alignment for u128):
 // - vault: U128 (16 bytes) at offset 0
 // - insurance_fund: InsuranceFund { balance: U128, fee_revenue: U128 } (32 bytes) at offset 16

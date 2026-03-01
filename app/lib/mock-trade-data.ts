@@ -83,6 +83,10 @@ export function getMockSlabState(address: string) {
     authorityTimestamp: BigInt(Math.floor(Date.now() / 1000)),
     oraclePriceCapE2bps: 500n,
     lastEffectivePriceE6: priceE6,
+    oiCapMultiplierBps: 0n,
+    maxPnlCap: 0n,
+    marketCreatedSlot: 0n,
+    oiRampSlots: 0n,
   } as MarketConfig;
 
   const engine: EngineState = {

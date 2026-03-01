@@ -5,13 +5,13 @@ import {
 } from "../src/solana/slab.js";
 
 /** Build a minimal valid slab buffer for header + config + engine (no accounts).
- *  Updated for PERC-120/121/122 struct changes:
- *    HEADER_LEN = 104, CONFIG_OFFSET = 104, ENGINE_OFF = 472
+ *  Updated for PERC-302: CONFIG_LEN 368→384:
+ *    HEADER_LEN = 104, CONFIG_OFFSET = 104, ENGINE_OFF = 488
  *    ENGINE_BITMAP_OFF = 576, ACCOUNT_SIZE = 248
  *    RESERVED_OFF = 80 (nonce at 80, lastThrUpdateSlot at 88)
  */
 function buildMockSlab(): Uint8Array {
-  const size = 1_025_584; // large tier (4096 accounts) with ACCOUNT_SIZE=248, CONFIG_LEN=368
+  const size = 1_025_600; // large tier (4096 accounts) with ACCOUNT_SIZE=248, CONFIG_LEN=384
   const buf = new Uint8Array(size);
   const dv = new DataView(buf.buffer);
 
@@ -33,8 +33,8 @@ function buildMockSlab(): Uint8Array {
   // vaultPubkey (32 bytes of 3s)
   for (let i = 136; i < 168; i++) buf[i] = 3;
 
-  // Engine at offset 472 (HEADER=104 + CONFIG=368, aligned to 8)
-  const engineBase = 472;
+  // Engine at offset 488 (HEADER=104 + CONFIG=384, aligned to 8)
+  const engineBase = 488;
   // vault = 1000000 (U128)
   dv.setBigUint64(engineBase + 0, 1000000n, true);
   // insurance balance = 500000

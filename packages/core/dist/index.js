@@ -308,6 +308,15 @@ function encodeUpdateRiskParams(args) {
   ];
   if (args.tradingFeeBps !== void 0) {
     parts.push(encU64(args.tradingFeeBps));
+    if (args.oiCapMultiplierBps !== void 0) {
+      parts.push(encU64(args.oiCapMultiplierBps));
+      if (args.maxPnlCap !== void 0) {
+        parts.push(encU64(args.maxPnlCap));
+        if (args.oiRampSlots !== void 0) {
+          parts.push(encU64(args.oiRampSlots));
+        }
+      }
+    }
   }
   return concatBytes(...parts);
 }
@@ -834,7 +843,7 @@ function readI64LE(data, off) {
 var MAGIC = 0x504552434f4c4154n;
 var HEADER_LEN = 104;
 var CONFIG_OFFSET = HEADER_LEN;
-var CONFIG_LEN = 384;
+var CONFIG_LEN = 400;
 var RESERVED_OFF = 80;
 var FLAG_RESOLVED = 1 << 0;
 async function fetchSlab(connection, slabPubkey) {
@@ -939,6 +948,10 @@ function parseConfig(data) {
   off += 2;
   off += 4;
   const adaptiveMaxFundingBps = readU64LE(data, off);
+  off += 8;
+  const marketCreatedSlot = readU64LE(data, off);
+  off += 8;
+  const oiRampSlots = readU64LE(data, off);
   return {
     collateralMint,
     vaultPubkey,
@@ -970,8 +983,24 @@ function parseConfig(data) {
     maxPnlCap,
     adaptiveFundingEnabled,
     adaptiveScaleBps,
-    adaptiveMaxFundingBps
+    adaptiveMaxFundingBps,
+    marketCreatedSlot,
+    oiRampSlots
   };
+}
+var RAMP_START_BPS = 1000n;
+var DEFAULT_OI_RAMP_SLOTS = 432000n;
+function computeEffectiveOiCapBps(config, currentSlot) {
+  const target = config.oiCapMultiplierBps;
+  if (target === 0n) return 0n;
+  if (config.oiRampSlots === 0n) return target;
+  if (target <= RAMP_START_BPS) return target;
+  const elapsed = currentSlot > config.marketCreatedSlot ? currentSlot - config.marketCreatedSlot : 0n;
+  if (elapsed >= config.oiRampSlots) return target;
+  const range = target - RAMP_START_BPS;
+  const rampAdd = range * elapsed / config.oiRampSlots;
+  const result = RAMP_START_BPS + rampAdd;
+  return result < target ? result : target;
 }
 function readNonce(data) {
   if (data.length < RESERVED_OFF + 8) {
@@ -985,7 +1014,7 @@ function readLastThrUpdateSlot(data) {
   }
   return readU64LE(data, RESERVED_OFF + 8);
 }
-var ENGINE_OFF = 488;
+var ENGINE_OFF = 504;
 var ENGINE_VAULT_OFF = 0;
 var ENGINE_INSURANCE_OFF = 16;
 var ENGINE_PARAMS_OFF = 48;
@@ -1302,12 +1331,12 @@ async function fetchTokenAccount(connection, address, tokenProgramId = TOKEN_PRO
 var ENGINE_BITMAP_OFF2 = 632;
 var MAGIC_BYTES = new Uint8Array([84, 65, 76, 79, 67, 82, 69, 80]);
 var SLAB_TIERS = {
-  small: { maxAccounts: 256, dataSize: 65176, label: "Small", description: "256 slots \xB7 ~0.45 SOL" },
-  medium: { maxAccounts: 1024, dataSize: 257272, label: "Medium", description: "1,024 slots \xB7 ~1.79 SOL" },
-  large: { maxAccounts: 4096, dataSize: 1025656, label: "Large", description: "4,096 slots \xB7 ~7.14 SOL" }
+  small: { maxAccounts: 256, dataSize: 65192, label: "Small", description: "256 slots \xB7 ~0.45 SOL" },
+  medium: { maxAccounts: 1024, dataSize: 257288, label: "Medium", description: "1,024 slots \xB7 ~1.79 SOL" },
+  large: { maxAccounts: 4096, dataSize: 1025672, label: "Large", description: "4,096 slots \xB7 ~7.14 SOL" }
 };
 function slabDataSize(maxAccounts) {
-  const ENGINE_OFF_LOCAL = 488;
+  const ENGINE_OFF_LOCAL = 504;
   const ENGINE_FIXED = 632;
   const ACCOUNT_SIZE2 = 248;
   const bitmapBytes = Math.ceil(maxAccounts / 64) * 8;
@@ -1322,8 +1351,8 @@ function validateSlabTierMatch(dataSize, programSlabLen) {
 }
 var ALL_SLAB_SIZES = Object.values(SLAB_TIERS).map((t) => t.dataSize);
 var SLAB_DATA_SIZE = SLAB_TIERS.large.dataSize;
-var HEADER_SLICE_LENGTH = 1600;
-var ENGINE_OFF2 = 488;
+var HEADER_SLICE_LENGTH = 1700;
+var ENGINE_OFF2 = 504;
 function dv2(data) {
   return new DataView(data.buffer, data.byteOffset, data.byteLength);
 }
@@ -2446,6 +2475,7 @@ export {
   ACCOUNTS_WITHDRAW_INSURANCE_LP,
   AccountKind,
   CTX_VAMM_OFFSET,
+  DEFAULT_OI_RAMP_SLOTS,
   IX_TAG,
   MARK_PRICE_EMA_ALPHA_E6,
   MARK_PRICE_EMA_WINDOW_SLOTS,
@@ -2456,6 +2486,7 @@ export {
   PYTH_PUSH_ORACLE_PROGRAM_ID,
   PYTH_RECEIVER_PROGRAM_ID,
   PYTH_SOLANA_FEEDS,
+  RAMP_START_BPS,
   RAYDIUM_CLMM_PROGRAM_ID,
   SLAB_TIERS,
   STAKE_IX,
@@ -2469,6 +2500,7 @@ export {
   computeDexSpotPriceE6,
   computeDynamicFeeBps,
   computeDynamicTradingFee,
+  computeEffectiveOiCapBps,
   computeEmaMarkPrice,
   computeEstimatedEntryPrice,
   computeFeeSplit,

@@ -481,17 +481,26 @@ export function encodeAdminForceClose(args: AdminForceCloseArgs): Uint8Array {
 }
 
 /**
- * UpdateRiskParams instruction data (17 or 25 bytes)
+ * UpdateRiskParams instruction data (variable length, backwards compatible)
  * Update initial and maintenance margin BPS (admin only).
  *
- * R2-S13: The Rust program uses `data.len() >= 25` to detect the optional
- * tradingFeeBps field, so variable-length encoding is safe. When tradingFeeBps
- * is omitted, the data is 17 bytes (tag + 2×u64). When included, 25 bytes.
+ * The Rust program reads optional trailing fields by checking remaining data length:
+ * - 17 bytes: tag + initial_margin + maintenance_margin
+ * - 25 bytes: + trading_fee_bps
+ * - 33 bytes: + oi_cap_multiplier_bps
+ * - 41 bytes: + max_pnl_cap
+ * - 49 bytes: + oi_ramp_slots (PERC-302)
+ *
+ * Each optional field requires all preceding optional fields to be present.
  */
 export interface UpdateRiskParamsArgs {
   initialMarginBps: bigint | string;
   maintenanceMarginBps: bigint | string;
   tradingFeeBps?: bigint | string;
+  oiCapMultiplierBps?: bigint | string;
+  maxPnlCap?: bigint | string;
+  /** PERC-302: OI ramp duration in slots. 0 = full cap immediately. */
+  oiRampSlots?: bigint | string;
 }
 
 export function encodeUpdateRiskParams(args: UpdateRiskParamsArgs): Uint8Array {
@@ -500,8 +509,18 @@ export function encodeUpdateRiskParams(args: UpdateRiskParamsArgs): Uint8Array {
     encU64(args.initialMarginBps),
     encU64(args.maintenanceMarginBps),
   ];
+  // Each optional field requires all previous optional fields
   if (args.tradingFeeBps !== undefined) {
     parts.push(encU64(args.tradingFeeBps));
+    if (args.oiCapMultiplierBps !== undefined) {
+      parts.push(encU64(args.oiCapMultiplierBps));
+      if (args.maxPnlCap !== undefined) {
+        parts.push(encU64(args.maxPnlCap));
+        if (args.oiRampSlots !== undefined) {
+          parts.push(encU64(args.oiRampSlots));
+        }
+      }
+    }
   }
   return concatBytes(...parts);
 }
