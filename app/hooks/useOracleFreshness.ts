@@ -86,17 +86,23 @@ export function useOracleFreshness(): OracleFreshnessState {
       const ts = config.authorityTimestamp;
       if (ts > 0n) {
         setLastUpdateMs(Number(ts) * 1000);
-      } else if (config.lastEffectivePriceE6 > 0n) {
+      } else {
         // Fallback: admin price is set but timestamp is zero (legacy/static markets).
-        // Reset freshness on each observed price change so the elapsed timer restarts.
-        const currentPrice = config.lastEffectivePriceE6;
-        if (prevPriceRef.current !== null && currentPrice !== prevPriceRef.current) {
-          setLastUpdateMs(Date.now());
-        } else if (prevPriceRef.current === null) {
-          // First load — assume relatively fresh
-          setLastUpdateMs(Date.now());
+        // Use authorityPriceE6 (the canonical admin price, matching resolveMarketPriceE6)
+        // and fall back to lastEffectivePriceE6 only if authority price is zero.
+        const adminPrice = config.authorityPriceE6 > 0n
+          ? config.authorityPriceE6
+          : config.lastEffectivePriceE6;
+        if (adminPrice > 0n) {
+          // Reset freshness on each observed price change so the elapsed timer restarts.
+          if (prevPriceRef.current !== null && adminPrice !== prevPriceRef.current) {
+            setLastUpdateMs(Date.now());
+          } else if (prevPriceRef.current === null) {
+            // First load — assume relatively fresh
+            setLastUpdateMs(Date.now());
+          }
+          prevPriceRef.current = adminPrice;
         }
-        prevPriceRef.current = currentPrice;
       }
     } else {
       // Hyperp / Pyth: track when the price value changes
