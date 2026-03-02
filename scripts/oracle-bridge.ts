@@ -291,10 +291,21 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     res.writeHead(204, {
       "Access-Control-Allow-Origin": "*",
       "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type",
+      "Access-Control-Allow-Headers": "Content-Type, Authorization",
     });
     res.end();
     return;
+  }
+
+  // PERC-367: Bearer token auth for write endpoints.
+  // Set ORACLE_BRIDGE_SECRET env var to require auth on POST /oracle/register.
+  const BRIDGE_SECRET = process.env.ORACLE_BRIDGE_SECRET;
+  if (BRIDGE_SECRET && method === "POST") {
+    const authHeader = req.headers["authorization"] || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
+    if (token !== BRIDGE_SECRET) {
+      return json(res, 401, { error: "Unauthorized — set Authorization: Bearer <ORACLE_BRIDGE_SECRET>" });
+    }
   }
 
   // POST /oracle/register
@@ -452,7 +463,8 @@ async function main() {
 
   // Start HTTP server
   const server = createServer(handleRequest);
-  server.listen(HTTP_PORT, () => {
+  // PERC-367: Bind to localhost only — prevents remote access to oracle registration
+  server.listen(HTTP_PORT, "127.0.0.1", () => {
     log("http", `API listening on http://127.0.0.1:${HTTP_PORT}`);
     log("http", `  POST /oracle/register  { ca, marketAddress, symbol? }`);
     log("http", `  GET  /oracle/markets`);
