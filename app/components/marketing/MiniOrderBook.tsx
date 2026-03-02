@@ -42,26 +42,26 @@ export function MiniOrderBook({ className = "" }: { className?: string }) {
       {[...sells].reverse().map((l, i) => (
         <div key={`s-${i}`} className="relative flex items-center justify-between py-0.5">
           <div
-            className="absolute inset-y-0 right-0 bg-red-500/15 transition-all duration-500"
+            className="absolute inset-y-0 right-0 bg-[var(--short)]/15 transition-all duration-500"
             style={{ width: `${l.width}%` }}
           />
-          <span className="relative z-10 text-white/40">SELL</span>
-          <span className="relative z-10 text-red-400/80">{l.price}</span>
+          <span className="relative z-10 text-[var(--text-muted)]">SELL</span>
+          <span className="relative z-10 text-[var(--short)]/80">{l.price}</span>
         </div>
       ))}
-      <div className="my-1 flex items-center gap-2 text-white/30">
-        <span className="h-px flex-1 bg-white/10" />
+      <div className="my-1 flex items-center gap-2 text-[var(--text-muted)]">
+        <span className="h-px flex-1 bg-[var(--border)]" />
         <span className="text-[10px]">{basePrice.toFixed(2)}</span>
-        <span className="h-px flex-1 bg-white/10" />
+        <span className="h-px flex-1 bg-[var(--border)]" />
       </div>
       {buys.map((l, i) => (
         <div key={`b-${i}`} className="relative flex items-center justify-between py-0.5">
           <div
-            className="absolute inset-y-0 right-0 bg-green-500/15 transition-all duration-500"
+            className="absolute inset-y-0 right-0 bg-[var(--long)]/15 transition-all duration-500"
             style={{ width: `${l.width}%` }}
           />
-          <span className="relative z-10 text-white/40">BUY</span>
-          <span className="relative z-10 text-green-400/80">{l.price}</span>
+          <span className="relative z-10 text-[var(--text-muted)]">BUY</span>
+          <span className="relative z-10 text-[var(--long)]/80">{l.price}</span>
         </div>
       ))}
     </div>
