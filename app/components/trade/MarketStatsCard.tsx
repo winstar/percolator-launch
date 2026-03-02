@@ -7,7 +7,7 @@ import { useSlabState } from "@/components/providers/SlabProvider";
 import { useUsdToggle } from "@/components/providers/UsdToggleProvider";
 import { useTokenMeta } from "@/hooks/useTokenMeta";
 import { formatTokenAmount, formatCompactTokenAmount, formatUsd, formatBps } from "@/lib/format";
-import { sanitizeOnChainValue, sanitizeAccountCount } from "@/lib/health";
+import { sanitizeOnChainValue, sanitizeAccountCount, sanitizeBps } from "@/lib/health";
 import { useLivePrice } from "@/hooks/useLivePrice";
 import { resolveMarketPriceE6 } from "@/lib/oraclePrice";
 import { FundingRateCard } from "./FundingRateCard";
@@ -62,8 +62,8 @@ export const MarketStatsCard: FC = () => {
     { label: `${symbol} Price`, value: formatUsd(livePriceE6 ?? (mktConfig ? resolveMarketPriceE6(mktConfig) : 0n)), tooltip: "" },
     { label: "Open Interest", value: oiDisplay, tooltip: oiFullDisplay },
     { label: "Vault", value: vaultDisplay, tooltip: vaultFullDisplay },
-    { label: "Trading Fee", value: formatBps(params.tradingFeeBps), tooltip: "" },
-    { label: "Init. Margin", value: formatBps(params.initialMarginBps), tooltip: "" },
+    { label: "Trading Fee", value: sanitizeBps(params.tradingFeeBps, 5_000) != null ? formatBps(sanitizeBps(params.tradingFeeBps, 5_000)!) : "—", tooltip: "" },
+    { label: "Init. Margin", value: sanitizeBps(params.initialMarginBps) != null ? formatBps(sanitizeBps(params.initialMarginBps)!) : "—", tooltip: "" },
     { label: "Accounts", value: sanitizeAccountCount(engine.numUsedAccounts ?? 0, params ? Number(params.maxAccounts) : undefined).toString(), tooltip: "" },
   ];
 

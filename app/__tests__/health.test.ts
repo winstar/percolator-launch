@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { computeMarketHealth } from "../lib/health";
+import { computeMarketHealth, sanitizeBps } from "../lib/health";
 import type { EngineState } from "@percolator/sdk";
 
 function makeEngine(overrides: Partial<EngineState> = {}): EngineState {
@@ -65,5 +65,30 @@ describe("computeMarketHealth", () => {
       insuranceFund: { balance: 100000n, feeRevenue: 0n },
     }));
     expect(h.level).toBe("warning");
+  });
+});
+
+describe("sanitizeBps", () => {
+  it("returns valid bps values", () => {
+    expect(sanitizeBps(10)).toBe(10);
+    expect(sanitizeBps(500)).toBe(500);
+    expect(sanitizeBps(10_000)).toBe(10_000);
+    expect(sanitizeBps(0)).toBe(0);
+  });
+
+  it("returns null for garbage / sentinel values", () => {
+    expect(sanitizeBps(444301198)).toBeNull();
+    expect(sanitizeBps(18446744073709551615n)).toBeNull();
+    expect(sanitizeBps(-1)).toBeNull();
+  });
+
+  it("respects custom maxBps", () => {
+    expect(sanitizeBps(3000, 5_000)).toBe(3000);
+    expect(sanitizeBps(6000, 5_000)).toBeNull();
+  });
+
+  it("handles null/undefined", () => {
+    expect(sanitizeBps(null)).toBeNull();
+    expect(sanitizeBps(undefined)).toBeNull();
   });
 });

@@ -32,6 +32,21 @@ export function sanitizeOnChainValue(v: bigint): bigint {
 }
 
 /**
+ * Sanitize a basis-point parameter from on-chain risk params.
+ * Valid BPS values are in [0, maxBps]. Anything above is treated as garbage
+ * (uninitialized on-chain data) and returns null so the UI can show "—".
+ */
+export function sanitizeBps(
+  bps: bigint | number | null | undefined,
+  maxBps: number = 10_000, // 100%
+): number | null {
+  if (bps == null) return null;
+  const n = typeof bps === "bigint" ? Number(bps) : bps;
+  if (n < 0 || n > maxBps || !Number.isFinite(n)) return null;
+  return n;
+}
+
+/**
  * Maximum possible account slots across all slab tiers (large slab = 4096).
  * Any numUsedAccounts value above this is garbage data from an uninitialized slab.
  */
