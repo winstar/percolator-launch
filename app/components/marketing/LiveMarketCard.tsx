@@ -18,31 +18,35 @@ export function LiveMarketCard({ className = "", animate = true }: { className?:
 
       {/* Floating card */}
       <div
-        className="w-full max-w-[380px] overflow-hidden rounded-2xl border border-white/10 bg-[#111118] shadow-[0_32px_80px_rgba(0,0,0,0.6)]"
+        className="w-full max-w-[380px] overflow-hidden border border-[var(--border)] bg-[var(--panel-bg)]"
         style={{
           animation: "market-card-float 4s ease-in-out infinite",
           willChange: "transform",
+          boxShadow: "0 0 40px rgba(153,69,255,0.08), 0 0 80px rgba(20,241,149,0.04)",
         }}
       >
         {/* Card header */}
-        <div className="flex items-center justify-between border-b border-white/5 px-5 py-3.5">
+        <div className="flex items-center justify-between border-b border-[var(--border-subtle)] px-5 py-3.5">
           <div className="flex items-center gap-3">
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-purple-500 to-violet-600 text-xs font-bold text-white">
+            <div
+              className="flex h-8 w-8 items-center justify-center bg-[var(--accent)]/[0.10] border border-[var(--accent)]/20 text-xs font-bold text-[var(--accent)]"
+              style={{ fontFamily: "var(--font-heading)" }}
+            >
               S
             </div>
             <div>
-              <div className="text-sm font-semibold text-white">SOL-PERP</div>
-              <div className="text-[10px] text-white/40">
+              <div className="text-sm font-semibold text-[var(--text)]" style={{ fontFamily: "var(--font-heading)" }}>SOL-PERP</div>
+              <div className="text-[10px] text-[var(--text-muted)]">
                 Perpetual · 20x max
               </div>
             </div>
           </div>
           <div className="text-right">
-            <div className="inline-flex items-center gap-1 rounded-full border border-green-400/30 bg-green-400/10 px-2 py-0.5 text-[10px] font-medium text-green-400">
-              <span className="h-1.5 w-1.5 rounded-full bg-green-400 animate-pulse" />
+            <div className="inline-flex items-center gap-1 border border-[var(--long)]/30 bg-[var(--long)]/10 px-2 py-0.5 text-[10px] font-medium text-[var(--long)]">
+              <span className="h-1.5 w-1.5 bg-[var(--long)] animate-pulse" />
               LIVE
             </div>
-            <div className="mt-0.5 text-[11px] font-medium text-green-400">
+            <div className="mt-0.5 text-[11px] font-medium text-[var(--long)]" style={{ fontFamily: "var(--font-heading)" }}>
               +3.24% ↑
             </div>
           </div>
@@ -62,20 +66,20 @@ export function LiveMarketCard({ className = "", animate = true }: { className?:
         <div className="grid grid-cols-2 gap-2 px-5 pb-3">
           <Link
             href="/markets"
-            className="flex h-10 items-center justify-center rounded-lg border border-green-500/40 bg-green-500/20 text-sm font-semibold text-green-400 transition-colors hover:bg-green-500/30"
+            className="flex h-10 items-center justify-center border border-[var(--long)]/40 bg-[var(--long)]/[0.12] text-sm font-bold text-[var(--long)] transition-colors hover:bg-[var(--long)]/[0.20]"
           >
             LONG
           </Link>
           <Link
             href="/markets"
-            className="flex h-10 items-center justify-center rounded-lg border border-red-500/40 bg-red-500/20 text-sm font-semibold text-red-400 transition-colors hover:bg-red-500/30"
+            className="flex h-10 items-center justify-center border border-[var(--short)]/40 bg-[var(--short)]/[0.12] text-sm font-bold text-[var(--short)] transition-colors hover:bg-[var(--short)]/[0.20]"
           >
             SHORT
           </Link>
         </div>
 
         {/* Card footer */}
-        <div className="border-t border-white/5 px-5 py-2.5 text-center text-[11px] text-white/40">
+        <div className="border-t border-[var(--border-subtle)] px-5 py-2.5 text-center text-[11px] text-[var(--text-muted)]">
           8% Creator Fee · $2,500 seed · Launch in 60s
         </div>
       </div>

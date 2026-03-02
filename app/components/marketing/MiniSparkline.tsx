@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback, useId } from "react";
 
 /** Generate a seeded random-walk price series */
 function generatePriceSeries(length: number, seed: number, base: number): number[] {
@@ -65,16 +65,19 @@ export function MiniSparkline({
   const areaPoints = `0,${height} ${points} ${width},${height}`;
   const currentPrice = prices[prices.length - 1];
 
+  const gradientId = useId();
+  const fillId = `sparkFill-${gradientId}`;
+
   return (
     <div className={className}>
       <div className="mb-2 flex items-baseline gap-2">
         <span
-          className="text-[28px] font-semibold tracking-tight text-white"
+          className="text-[28px] font-semibold tracking-tight text-[var(--text)]"
           style={{ fontFamily: "var(--font-heading)" }}
         >
           ${currentPrice.toFixed(2)}
         </span>
-        <span className={`text-xs ${currentPrice >= basePrice ? "text-green-400" : "text-red-400"}`}>
+        <span className={`text-xs ${currentPrice >= basePrice ? "text-[var(--long)]" : "text-[var(--short)]"}`}>
           {currentPrice >= basePrice ? "+" : ""}{((currentPrice / basePrice - 1) * 100).toFixed(2)}%
         </span>
       </div>
@@ -86,16 +89,16 @@ export function MiniSparkline({
         preserveAspectRatio="none"
       >
         <defs>
-          <linearGradient id="sparkFill" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="rgb(124,58,237)" stopOpacity="0.15" />
-            <stop offset="100%" stopColor="rgb(124,58,237)" stopOpacity="0" />
+          <linearGradient id={fillId} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#14F195" stopOpacity="0.12" />
+            <stop offset="100%" stopColor="#14F195" stopOpacity="0" />
           </linearGradient>
         </defs>
-        <polygon points={areaPoints} fill="url(#sparkFill)" />
+        <polygon points={areaPoints} fill={`url(#${fillId})`} />
         <polyline
           points={points}
           fill="none"
-          stroke="rgb(124,58,237)"
+          stroke="var(--long)"
           strokeWidth="2"
           strokeLinejoin="round"
           strokeLinecap="round"

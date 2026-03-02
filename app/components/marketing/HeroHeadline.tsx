@@ -42,7 +42,7 @@ export function HeroHeadline() {
           Any Market.
         </span>
         <span
-          className={`hero-line block bg-gradient-to-r from-purple-400 via-violet-300 to-cyan-400 bg-clip-text text-transparent ${prefersReduced ? '' : 'gsap-fade'}`}
+          className={`hero-line block bg-gradient-to-r from-[var(--accent)] via-violet-400 to-[var(--cyan)] bg-clip-text text-transparent ${prefersReduced ? '' : 'gsap-fade'}`}
         >
           Permissionless.
         </span>

@@ -36,7 +36,7 @@ export function HeroDataChip({
   return (
     <div
       ref={ref}
-      className={`hidden md:flex items-center gap-2 rounded-lg border border-white/10 bg-black/60 px-3 py-2 text-xs text-white/60 backdrop-blur-sm ${prefersReduced ? '' : 'gsap-fade'} ${className}`}
+      className={`hidden md:flex items-center gap-2 border border-[var(--border)] bg-[var(--panel-bg)]/90 px-3 py-2 text-xs text-[var(--text-secondary)] backdrop-blur-sm ${prefersReduced ? '' : 'gsap-fade'} ${className}`}
       style={{
         animation: prefersReduced
           ? undefined
