@@ -278,7 +278,13 @@ async function fetchPrice(symbol: string): Promise<PriceSource | null> {
 /** Infer symbol from on-chain market config (best-effort). */
 function inferSymbol(market: DiscoveredMarket): string {
   // Try to match against known Pyth feed IDs
-  const feedHex = Buffer.from(market.config.indexFeedId).toString("hex");
+  // indexFeedId is stored as a PublicKey (32 bytes) — convert to hex
+  const feedId = market.config.indexFeedId;
+  const feedHex = typeof feedId === "string"
+    ? feedId
+    : feedId instanceof PublicKey
+      ? Buffer.from(feedId.toBytes()).toString("hex")
+      : Buffer.from(feedId as any).toString("hex");
   const KNOWN_FEEDS: Record<string, string> = {
     // Pyth SOL/USD (mainnet) — ef0d8b6fda2ceba41da15d4095d1da392a0d2f8ed0c6c7bc0f4cfac8c280b56d
     ef0d8b6fda2ceba41da15d4095d1da392a0d2f8ed0c6c7bc0f4cfac8c280b56d: "SOL",
@@ -381,6 +387,8 @@ async function setupMarket(
       log("setup", `[DRY RUN] Would create LP account on ${symbol}`);
     } else {
       log("setup", `Creating LP account on ${symbol}...`);
+
+      // Step 1: Create LP account (separate tx to get the assigned index)
       const initLpData = encodeInitLP({
         matcherProgram: MATCHER_ID,
         matcherContext: PublicKey.default,
@@ -398,10 +406,23 @@ async function setupMarket(
         keys: initLpKeys,
         data: initLpData,
       });
+      await sendTx([initLpIx], [makerWallet]);
 
-      // Deposit LP collateral
+      // Refetch to find our new LP account index
+      const postLpSlabInfo = await connection.getAccountInfo(slabAddress);
+      if (!postLpSlabInfo) throw new Error("Slab refetch failed after InitLP");
+      const postLpAccounts = parseAllAccounts(postLpSlabInfo.data);
+      lpAccount = postLpAccounts.find(
+        (a) =>
+          a.account.kind === 1 &&
+          a.account.owner.equals(makerWallet.publicKey),
+      );
+      if (!lpAccount) throw new Error("LP account not found after InitLP");
+      log("setup", `LP account created at index ${lpAccount.idx}`);
+
+      // Step 2: Deposit collateral into OUR LP account
       const depositData = encodeDepositCollateral({
-        userIdx: 0,
+        userIdx: lpAccount.idx,
         amount: INITIAL_COLLATERAL.toString(),
       });
       const depositKeys = buildAccountMetas(ACCOUNTS_DEPOSIT_COLLATERAL, [
@@ -417,10 +438,10 @@ async function setupMarket(
         keys: depositKeys,
         data: depositData,
       });
+      await sendTx([depositIx], [makerWallet]);
+      log("setup", `Deposited $${Number(INITIAL_COLLATERAL) / 1_000_000} collateral to LP`);
 
-      await sendTx([initLpIx, depositIx], [makerWallet]);
-
-      // Refetch accounts
+      // Refetch accounts again
       const newSlabInfo = await connection.getAccountInfo(slabAddress);
       if (!newSlabInfo) throw new Error("Slab refetch failed");
       const newAccounts = parseAllAccounts(newSlabInfo.data);
@@ -438,6 +459,8 @@ async function setupMarket(
       log("setup", `[DRY RUN] Would create user account on ${symbol}`);
     } else {
       log("setup", `Creating user account on ${symbol}...`);
+
+      // Step 1: Create user account
       const initUserData = encodeInitUser({ feePayment: "1000000" });
       const initUserKeys = buildAccountMetas(ACCOUNTS_INIT_USER, [
         makerWallet.publicKey,
@@ -451,10 +474,23 @@ async function setupMarket(
         keys: initUserKeys,
         data: initUserData,
       });
+      await sendTx([initUserIx], [makerWallet]);
 
-      // Deposit trading collateral
+      // Refetch to find our user index
+      const postUserSlabInfo = await connection.getAccountInfo(slabAddress);
+      if (!postUserSlabInfo) throw new Error("Slab refetch failed after InitUser");
+      const postUserAccounts = parseAllAccounts(postUserSlabInfo.data);
+      userAccount = postUserAccounts.find(
+        (a) =>
+          a.account.kind === 0 &&
+          a.account.owner.equals(makerWallet.publicKey),
+      );
+      if (!userAccount) throw new Error("User account not found after InitUser");
+      log("setup", `User account created at index ${userAccount.idx}`);
+
+      // Step 2: Deposit trading collateral
       const depositData = encodeDepositCollateral({
-        userIdx: 1,
+        userIdx: userAccount.idx,
         amount: INITIAL_COLLATERAL.toString(),
       });
       const depositKeys = buildAccountMetas(ACCOUNTS_DEPOSIT_COLLATERAL, [
@@ -470,8 +506,8 @@ async function setupMarket(
         keys: depositKeys,
         data: depositData,
       });
-
-      await sendTx([initUserIx, depositIx], [makerWallet]);
+      await sendTx([depositIx], [makerWallet]);
+      log("setup", `Deposited $${Number(INITIAL_COLLATERAL) / 1_000_000} collateral to user`);
 
       // Refetch
       const newSlabInfo = await connection.getAccountInfo(slabAddress);
