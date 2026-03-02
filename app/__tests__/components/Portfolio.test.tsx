@@ -363,9 +363,12 @@ describe("Portfolio Component Tests", () => {
 
       render(<PortfolioPage />);
 
-      // Should show loading skeletons
+      // Should show loading skeletons (ShimmerSkeleton uses shimmer-sweep animation,
+      // rendered as a bg-[var(--border)] div with an inner shimmer overlay)
       const skeletons = screen.getAllByRole("generic").filter(
-        (el) => el.className.includes("animate-pulse")
+        (el) =>
+          el.className.includes("animate-pulse") ||
+          el.className.includes("bg-[var(--border)]")
       );
       expect(skeletons.length).toBeGreaterThan(0);
     });
