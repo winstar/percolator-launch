@@ -202,12 +202,18 @@ export function useEarnStats() {
           const oiLongRaw = m.open_interest_long ?? 0;
           const oiShortRaw = m.open_interest_short ?? 0;
           const totalOIRaw = m.total_open_interest ?? oiLongRaw + oiShortRaw;
+          // Sentinel filter: u64::MAX (≈1.84e19) leaks from uninitialized on-chain fields.
+          // Any value above 1e18 is garbage — treat as 0.
+          const isSentinel = (v: number) => v > 1e18;
           // OI values are stored in USDC micro-units (6 decimals) — convert to USD
-          const totalOI = totalOIRaw / 1e6;
+          const totalOI = isSentinel(totalOIRaw) ? 0 : totalOIRaw / 1e6;
           const maxLeverage = m.max_leverage ?? 10;
-          const vaultBalance = m.lp_collateral ?? 0;
-          const tradingFeeBps = m.trading_fee_bps ?? 10;
-          const volume24h = m.volume_24h ?? 0;
+          const vaultBalanceRaw = m.lp_collateral ?? 0;
+          const vaultBalance = isSentinel(vaultBalanceRaw) ? 0 : vaultBalanceRaw;
+          const tradingFeeBpsRaw = m.trading_fee_bps ?? 10;
+          const tradingFeeBps = tradingFeeBpsRaw > 5_000 ? 0 : tradingFeeBpsRaw;
+          const volume24hRaw = m.volume_24h ?? 0;
+          const volume24h = isSentinel(volume24hRaw) ? 0 : volume24hRaw;
           const insuranceRaw = m.insurance_fund ?? 0;
           // Sanity cap: insurance_fund values > 10 billion USDC micro-units ($10M)
           // are corrupt data from bad slab tier detection — clamp to 0
