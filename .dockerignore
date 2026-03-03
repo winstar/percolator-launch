@@ -63,6 +63,7 @@ playwright.config.ts
 # services
 supabase
 scripts
+!scripts/oracle-keeper.ts
 render-*.cjs
 render-*.mjs
 *.pdf
