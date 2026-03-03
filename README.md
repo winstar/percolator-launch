@@ -4,7 +4,7 @@
 
 Built on [Percolator](https://github.com/winstar/percolator) by Anatoly Yakovenko. Permissionless, coin-margined, fully on-chain.
 
-[![Live on Devnet](https://img.shields.io/badge/Devnet-Live-14F195?style=flat&logo=solana)](https://percolatorlaunch.com)
+[![Live on Devnet](https://img.shields.io/badge/Devnet-Live-14F195?style=flat&logo=solana)](https://percolator.launch.com)
 [![Tests](https://img.shields.io/badge/Tests-381%20passing-14F195?style=flat)]()
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict-3178C6?style=flat&logo=typescript)](/)
 
@@ -488,7 +488,7 @@ All backend services share a single `.env` file (root or per-package). Copy `.en
 
 ### Frontend — Vercel
 
-Auto-deploys from `main` via Vercel. Set env vars in the Vercel dashboard. Production: https://percolatorlaunch.com
+Auto-deploys from `main` via Vercel. Set env vars in the Vercel dashboard. Production: https://percolator.launch.com
 
 ### Backend — Railway
 
