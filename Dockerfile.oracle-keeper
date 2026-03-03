@@ -13,20 +13,20 @@ RUN groupadd -r keeper && useradd -r -g keeper -d /app keeper
 # Copy workspace config + package manifests
 COPY package.json pnpm-lock.yaml* pnpm-workspace.yaml ./
 COPY packages/core/package.json packages/core/
+COPY bots/oracle-keeper/package.json bots/oracle-keeper/
 
-# Install workspace dependencies (only what oracle-keeper needs)
-RUN pnpm install --frozen-lockfile --filter @percolator/core...
+# Install dependencies
+RUN pnpm install --frozen-lockfile --filter @percolator/oracle-keeper...
 
-# Copy SDK + script
+# Copy SDK + bot source
 COPY packages/core/ packages/core/
-COPY scripts/oracle-keeper.ts scripts/oracle-keeper.ts
-
-# Install tsx globally for running .ts scripts directly
-RUN pnpm add -g tsx
+COPY bots/oracle-keeper/ bots/oracle-keeper/
 
 # Set ownership and switch to non-root
 RUN chown -R keeper:keeper /app
 USER keeper
+
+WORKDIR /app/bots/oracle-keeper
 
 EXPOSE 18810
 
@@ -41,4 +41,4 @@ ENV HEALTH_HOST=0.0.0.0
 ENV MAX_PRICE_MOVE_PCT=10
 ENV STALE_THRESHOLD_S=30
 
-CMD ["npx", "tsx", "scripts/oracle-keeper.ts"]
+CMD ["npx", "tsx", "index.ts"]
