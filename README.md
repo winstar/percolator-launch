@@ -2,7 +2,7 @@
 
 **Pump.fun for Perps** — Launch perpetual futures markets for any Solana token in one click.
 
-Built on [Percolator](https://github.com/aeyakovenko/percolator) by Anatoly Yakovenko. Permissionless, coin-margined, fully on-chain.
+Built on [Percolator](https://github.com/winstar/percolator) by Anatoly Yakovenko. Permissionless, coin-margined, fully on-chain.
 
 [![Live on Devnet](https://img.shields.io/badge/Devnet-Live-14F195?style=flat&logo=solana)](https://percolatorlaunch.com)
 [![Tests](https://img.shields.io/badge/Tests-381%20passing-14F195?style=flat)]()
@@ -54,7 +54,7 @@ Percolator is a **permissionless perpetual futures protocol** on Solana. Anyone 
 ### 1. Clone & Install
 
 ```bash
-git clone https://github.com/dcccrypto/percolator-launch.git
+git clone https://github.com/winstar/percolator-launch.git
 cd percolator-launch
 pnpm install
 ```
@@ -209,7 +209,7 @@ percolator-launch/
 │   ├── src/lib.rs                # All instruction handlers (Tags 0-28)
 │   └── Cargo.toml                # Feature flags: small, medium, large (default)
 │
-├── percolator/                   # Risk engine (Rust crate, from aeyakovenko/percolator)
+├── percolator/                   # Risk engine (Rust crate, from winstar/percolator)
 │
 ├── tests/                        # Integration tests (devnet)
 │   ├── t1-market-boot.ts
@@ -572,7 +572,7 @@ solana program deploy target/deploy/percolator.so \
 
 ## Acknowledgements
 
-- [Anatoly Yakovenko](https://github.com/aeyakovenko) — Percolator protocol design and risk engine
+- [Winstar](https://github.com/winstar) — Percolator protocol design and risk engine
 - [Helius](https://helius.dev) — RPC, Geyser WebSocket, webhooks
 
 ---
@@ -581,13 +581,13 @@ solana program deploy target/deploy/percolator.so \
 
 | Repository | Description |
 |-----------|-------------|
-| [percolator](https://github.com/dcccrypto/percolator) | Core risk engine crate (Rust) |
-| [percolator-prog](https://github.com/dcccrypto/percolator-prog) | Solana on-chain program (wrapper) |
-| [percolator-matcher](https://github.com/dcccrypto/percolator-matcher) | Reference matcher program for LP pricing |
-| [percolator-stake](https://github.com/dcccrypto/percolator-stake) | Insurance LP staking program |
-| [percolator-sdk](https://github.com/dcccrypto/percolator-sdk) | TypeScript SDK for client integration |
-| [percolator-ops](https://github.com/dcccrypto/percolator-ops) | Operations dashboard |
-| [percolator-mobile](https://github.com/dcccrypto/percolator-mobile) | Solana Seeker mobile trading app |
+| [percolator](https://github.com/winstar/percolator) | Core risk engine crate (Rust) |
+| [percolator-prog](https://github.com/winstar/percolator-prog) | Solana on-chain program (wrapper) |
+| [percolator-matcher](https://github.com/winstar/percolator-matcher) | Reference matcher program for LP pricing |
+| [percolator-stake](https://github.com/winstar/percolator-stake) | Insurance LP staking program |
+| [percolator-sdk](https://github.com/winstar/percolator-sdk) | TypeScript SDK for client integration |
+| [percolator-ops](https://github.com/winstar/percolator-ops) | Operations dashboard |
+| [percolator-mobile](https://github.com/winstar/percolator-mobile) | Solana Seeker mobile trading app |
 
 ---
 

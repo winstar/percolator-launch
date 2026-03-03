@@ -105,7 +105,7 @@ export const DEFAULT_LANGUAGE_COLOR = "rgba(255,255,255,0.25)";
 async function fetchRepo(repo: string): Promise<RepoData | null> {
   try {
     const res = await fetch(
-      `https://api.github.com/repos/dcccrypto/${repo}`,
+      `https://api.github.com/repos/winstar/${repo}`,
       { next: { revalidate: 300 } } // ISR: 5-min cache
     );
     if (!res.ok) return null;
@@ -141,7 +141,7 @@ export async function getAllRepos(): Promise<RepoData[]> {
       forks_count: 0,
       open_issues_count: 0,
       updated_at: "", // empty signals "no live data available"
-      html_url: `https://github.com/dcccrypto/${name}`,
+      html_url: `https://github.com/winstar/${name}`,
     };
   });
 }
@@ -182,7 +182,7 @@ export async function getContributorStats(): Promise<ContributorStats> {
     REPOS.map(async (repo) => {
       // Fetch contributor stats (which includes commit counts)
       const res = await fetch(
-        `https://api.github.com/repos/dcccrypto/${repo}/stats/contributors`,
+        `https://api.github.com/repos/winstar/${repo}/stats/contributors`,
         { headers: githubHeaders, next: { revalidate: 600 } }
       );
 
@@ -190,7 +190,7 @@ export async function getContributorStats(): Promise<ContributorStats> {
       if (res.status === 202) {
         await new Promise((r) => setTimeout(r, 2000));
         const retry = await fetch(
-          `https://api.github.com/repos/dcccrypto/${repo}/stats/contributors`,
+          `https://api.github.com/repos/winstar/${repo}/stats/contributors`,
           { headers: githubHeaders, next: { revalidate: 600 } }
         );
         if (!retry.ok) return [];
@@ -205,7 +205,7 @@ export async function getContributorStats(): Promise<ContributorStats> {
   // Also fetch repo metadata for open_issues and pushed_at
   const repoResults = await Promise.allSettled(
     REPOS.map((repo) =>
-      fetch(`https://api.github.com/repos/dcccrypto/${repo}`, {
+      fetch(`https://api.github.com/repos/winstar/${repo}`, {
         headers: githubHeaders,
         next: { revalidate: 600 },
       }).then((r) => (r.ok ? r.json() : null))
@@ -249,7 +249,7 @@ export async function getAllCommitActivity(): Promise<CommitActivityMap> {
   const results = await Promise.allSettled(
     REPOS.map(async (repo) => {
       const res = await fetch(
-        `https://api.github.com/repos/dcccrypto/${repo}/stats/commit_activity`,
+        `https://api.github.com/repos/winstar/${repo}/stats/commit_activity`,
         { headers: githubHeaders, next: { revalidate: 600 } }
       );
 
@@ -257,7 +257,7 @@ export async function getAllCommitActivity(): Promise<CommitActivityMap> {
       if (res.status === 202) {
         await new Promise((r) => setTimeout(r, 2000));
         const retry = await fetch(
-          `https://api.github.com/repos/dcccrypto/${repo}/stats/commit_activity`,
+          `https://api.github.com/repos/winstar/${repo}/stats/commit_activity`,
           { headers: githubHeaders, next: { revalidate: 600 } }
         );
         if (!retry.ok) return { repo, data: [] };
@@ -284,7 +284,7 @@ export async function getAllCommitActivity(): Promise<CommitActivityMap> {
 export async function getGoodFirstIssues(): Promise<GoodFirstIssue[]> {
   try {
     const res = await fetch(
-      `https://api.github.com/search/issues?q=org:dcccrypto+label:"good+first+issue"+state:open&sort=created&order=desc&per_page=6`,
+      `https://api.github.com/search/issues?q=org:winstar+label:"good+first+issue"+state:open&sort=created&order=desc&per_page=6`,
       { headers: githubHeaders, next: { revalidate: 300 } }
     );
     if (!res.ok) return [];
@@ -317,7 +317,7 @@ export async function getRepoCIStatus(
 ): Promise<RepoCIStatus> {
   try {
     const res = await fetch(
-      `https://api.github.com/repos/dcccrypto/${repo}/actions/runs?per_page=1&status=completed`,
+      `https://api.github.com/repos/winstar/${repo}/actions/runs?per_page=1&status=completed`,
       { headers: githubHeaders, next: { revalidate: 600 } }
     );
     if (!res.ok) return { passing: null };

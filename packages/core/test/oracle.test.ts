@@ -4,7 +4,7 @@
  * Tests for parseChainlinkPrice() which extracts price data from
  * Chainlink aggregator account buffers with proper validation.
  *
- * Ported from Toly's percolator-cli (aeyakovenko/percolator-cli, Feb 16 2026)
+ * Ported from Toly's percolator-cli (winstar/percolator-cli, Feb 16 2026)
  * with adaptations for browser-compatible Uint8Array API.
  */
 

@@ -2,7 +2,7 @@
 
 **Auditor:** Cobra (automated deep audit)  
 **Date:** 2026-02-17  
-**PR:** [aeyakovenko/percolator-prog#3](https://github.com/aeyakovenko/percolator-prog/pull/3)  
+**PR:** [winstar/percolator-prog#3](https://github.com/winstar/percolator-prog/pull/3)  
 **Scope:** Tags 24 (InitInsuranceLPConfig), 25 (DepositInsuranceLP), 26 (WithdrawInsuranceLP)  
 **Diff:** +1507 lines (src/percolator.rs + tests/unit.rs)
 

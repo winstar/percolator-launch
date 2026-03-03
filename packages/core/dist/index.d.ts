@@ -1114,7 +1114,7 @@ declare function isStandardToken(tokenProgramId: PublicKey): boolean;
  * @module stake
  * Percolator Insurance LP Staking program — instruction encoders, PDA derivation, and account specs.
  *
- * Program: percolator-stake (dcccrypto/percolator-stake)
+ * Program: percolator-stake (winstar/percolator-stake)
  * Deployed devnet: 4mJ8Cas... (TODO: confirm full address from devops)
  */
 

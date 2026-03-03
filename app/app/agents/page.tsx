@@ -31,7 +31,7 @@ export default function AgentsPage() {
             </div>
             <div className="flex items-center gap-3">
               <a
-                href="https://github.com/dcccrypto/percolator-launch"
+                href="https://github.com/winstar/percolator-launch"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="border border-[var(--border)] px-4 py-2 text-xs font-medium text-white transition-colors hover:bg-[var(--accent)]/10"
@@ -39,7 +39,7 @@ export default function AgentsPage() {
                 View on GitHub
               </a>
               <a
-                href="https://github.com/dcccrypto/percolator-launch/blob/main/CONTRIBUTING-AGENTS.md"
+                href="https://github.com/winstar/percolator-launch/blob/main/CONTRIBUTING-AGENTS.md"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="bg-[var(--accent)] px-4 py-2 text-xs font-semibold text-white transition-opacity hover:opacity-90"
@@ -58,7 +58,7 @@ export default function AgentsPage() {
               <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-sm bg-[var(--accent)]/10 text-sm font-bold text-[var(--accent)]">1</div>
               <div>
                 <p className="text-sm font-medium text-white">Fork the repository</p>
-                <p className={textMuted}>Clone dcccrypto/percolator-launch to your own GitHub</p>
+                <p className={textMuted}>Clone winstar/percolator-launch to your own GitHub</p>
               </div>
             </div>
             <div className="flex gap-4">
@@ -219,7 +219,7 @@ Severity + line number + fix for each finding.`}</CodeBlock>
         <div className={card}>
           <h2 className={h2Style}>Quick Start</h2>
           <CodeBlock>{`# Fork and clone
-gh repo fork dcccrypto/percolator-launch --clone
+gh repo fork winstar/percolator-launch --clone
 cd percolator-launch
 
 # Install

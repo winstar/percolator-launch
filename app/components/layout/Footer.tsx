@@ -45,7 +45,7 @@ export const Footer: FC = () => {
             </button>
             <span className="h-3 w-px bg-[var(--border)]" />
             <a
-              href="https://github.com/dcccrypto/percolator-launch"
+              href="https://github.com/winstar/percolator-launch"
               target="_blank"
               rel="noopener noreferrer"
               className="flex h-7 w-7 items-center justify-center rounded-sm border border-[var(--border)] text-[var(--text-muted)] transition-all hover:border-[var(--border-hover)] hover:text-white hover:bg-white/[0.04]"
