@@ -1,0 +1,44 @@
+# PERC-380: Oracle Keeper — mirrors Binance spot prices to Percolator devnet markets
+FROM node:22-slim AS base
+WORKDIR /app
+
+# Install pnpm + curl for healthcheck
+RUN corepack enable && corepack prepare pnpm@9 --activate && \
+    apt-get update && apt-get install -y --no-install-recommends curl && \
+    rm -rf /var/lib/apt/lists/*
+
+# Create non-root user
+RUN groupadd -r keeper && useradd -r -g keeper -d /app keeper
+
+# Copy workspace config + package manifests
+COPY package.json pnpm-lock.yaml* pnpm-workspace.yaml ./
+COPY packages/core/package.json packages/core/
+
+# Install workspace dependencies (only what oracle-keeper needs)
+RUN pnpm install --frozen-lockfile --filter @percolator/core...
+
+# Copy SDK + script
+COPY packages/core/ packages/core/
+COPY scripts/oracle-keeper.ts scripts/oracle-keeper.ts
+
+# Install tsx globally for running .ts scripts directly
+RUN pnpm add -g tsx
+
+# Set ownership and switch to non-root
+RUN chown -R keeper:keeper /app
+USER keeper
+
+EXPOSE 18810
+
+HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
+  CMD curl -f http://localhost:${HEALTH_PORT:-18810}/health || exit 1
+
+# Environment defaults (override via Railway vars)
+ENV RPC_URL=https://api.devnet.solana.com
+ENV PUSH_INTERVAL_MS=3000
+ENV HEALTH_PORT=18810
+ENV HEALTH_HOST=0.0.0.0
+ENV MAX_PRICE_MOVE_PCT=10
+ENV STALE_THRESHOLD_S=30
+
+CMD ["npx", "tsx", "scripts/oracle-keeper.ts"]

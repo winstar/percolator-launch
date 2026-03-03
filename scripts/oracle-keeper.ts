@@ -48,9 +48,11 @@ const ADMIN_KP_PATH = process.env.ADMIN_KEYPAIR_PATH ??
 const RPC_URL = process.env.RPC_URL ?? "https://api.devnet.solana.com";
 
 const conn = new Connection(RPC_URL, "confirmed");
-const admin = Keypair.fromSecretKey(
-  Uint8Array.from(JSON.parse(fs.readFileSync(ADMIN_KP_PATH, "utf8")))
-);
+// Support inline keypair via ADMIN_KEYPAIR env var (JSON array) for Railway/Docker deployments
+const adminSecretKey = process.env.ADMIN_KEYPAIR
+  ? Uint8Array.from(JSON.parse(process.env.ADMIN_KEYPAIR))
+  : Uint8Array.from(JSON.parse(fs.readFileSync(ADMIN_KP_PATH, "utf8")));
+const admin = Keypair.fromSecretKey(adminSecretKey);
 
 // ── Types ───────────────────────────────────────────────────
 interface MarketInfo {
